@@ -193,6 +193,15 @@ La **vista previa** va en un `<iframe sandbox>` con el CSS del micrositio y las
 imágenes reales del zip como `blob:`, así ves el resultado tal cual. El sandbox
 sin `allow-scripts` evita que ese CSS toque los estilos del panel.
 
+El toggle **Vista previa con tu CSS de Moodle** convierte esa previa en un
+WYSIWYG real: usa la hoja que pegaste en la pestaña CSS **y quita la del
+micrositio** (como hace Moodle), y marca `data-bs-theme="light"` para activar tus
+tokens. Así el preview reproduce lo que Moodle mostrará —incluidos los fallos:
+íconos en flex que colapsan porque su tamaño vivía en el CSS del micrositio, o
+clases sin definir— *antes* de subir. Pega **CSS compilado** (no el SCSS fuente)
+para máxima fidelidad. Ojo: el colapso depende del ancho, así que revísalo también
+angostando la ventana. Editar el CSS refresca la previa sola (con un respiro).
+
 #### El flujo en Moodle (el truco importante)
 
 1. Crea el recurso **Página**.

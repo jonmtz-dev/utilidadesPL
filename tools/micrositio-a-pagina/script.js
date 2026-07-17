@@ -506,7 +506,8 @@ function initMicrositio() {
         quitarJs: document.getElementById('opt-quitar-js'),
         tabla: document.getElementById('opt-tabla'),
         svgPng: document.getElementById('opt-svg-png'),
-        colorear: document.getElementById('opt-colorear')
+        colorear: document.getElementById('opt-colorear'),
+        previewMoodle: document.getElementById('opt-preview-moodle')
     };
     const btnDescargarImgs = document.getElementById('btn-descargar-imgs');
 
@@ -1159,12 +1160,20 @@ function initMicrositio() {
             if (nuevo !== estilo) el.setAttribute('style', nuevo);
         });
 
-        // srcdoc + sandbox sin allow-scripts: el CSS del micrositio queda
-        // encerrado y no puede tocar los estilos del panel.
-        previewFrame.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8">
+        // "Modo Moodle": si pegaste tu hoja de Moodle y activaste el toggle,
+        // mostramos el resultado REAL de la conversión — el CSS del micrositio se
+        // quita (Moodle lo hace) y aplicamos el tuyo. Así el preview cacha lo que
+        // falta (íconos que colapsan, clases sin definir) antes de subir.
+        // data-bs-theme="light" activa tus tokens de tema claro.
+        const cssMoodle = inputCssMoodle.value.trim();
+        const modoMoodle = opt.previewMoodle.checked && cssMoodle;
+
+        // srcdoc + sandbox sin allow-scripts: el CSS queda encerrado y no puede
+        // tocar los estilos del panel.
+        previewFrame.srcdoc = `<!DOCTYPE html><html${modoMoodle ? ' data-bs-theme="light"' : ''}><head><meta charset="utf-8">
             <style>body{margin:0;padding:16px;font-family:system-ui,sans-serif;background:#fff;color:#1d1d1f}
             img{max-width:100%;height:auto}</style>
-            <style>${css}</style></head>
+            <style>${modoMoodle ? cssMoodle : css}</style></head>
             <body>${copia.body.innerHTML}</body></html>`;
 
         previewEmpty.classList.add('hidden');
@@ -1259,6 +1268,15 @@ function initMicrositio() {
     }
 
     btnComparar.addEventListener('click', pintarComparacion);
+
+    // Al pegar/editar tu CSS de Moodle, si el preview está en "modo Moodle" lo
+    // refrescamos (con un respiro para no re-renderizar en cada tecla).
+    let tempCssPreview = null;
+    inputCssMoodle.addEventListener('input', () => {
+        if (!opt.previewMoodle.checked || !ARCHIVOS.size) return;
+        clearTimeout(tempCssPreview);
+        tempCssPreview = setTimeout(convertir, 500);
+    });
 
     /* ----------------------------------------------------------- Varios */
 
