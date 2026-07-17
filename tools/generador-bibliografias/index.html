@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Bibliografías - Moodle</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../assets/shared.css">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Iconos Phosphor -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Sin defer: aplica el tema antes del primer pintado -->
+    <script src="../../assets/theme.js"></script>
+</head>
+<body>
+    <div class="background-mesh">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+    </div>
+
+    <main class="app-container glass-panel">
+        <header class="app-header">
+            <div class="logo logo--biblio">
+                <i class="ph ph-books"></i>
+            </div>
+            <div>
+                <h1>Generador de Bibliografías</h1>
+                <p>Convierte fuentes de consulta en párrafos HTML listos para la plataforma</p>
+            </div>
+            <a class="btn-back" href="../../index.html">
+                <i class="ph ph-arrow-left"></i> Panel
+            </a>
+        </header>
+
+        <div class="workspace">
+            <!-- Columna Izquierda: Input y Opciones -->
+            <section class="panel-section glass-panel">
+                <div class="section-header">
+                    <h2><i class="ph ph-clipboard-text"></i> 1. Pega tus fuentes</h2>
+                </div>
+
+                <textarea id="input-text" class="plain-input" placeholder="Pega aquí tu lista de fuentes de consulta, una por renglón..."></textarea>
+
+                <div class="options-group mt-4">
+                    <h3><i class="ph ph-sliders"></i> Opciones de Formato</h3>
+
+                    <div class="field-row">
+                        <label for="num-modulo"><i class="ph ph-hash"></i> Módulo</label>
+                        <input type="number" id="num-modulo" value="3" min="0" max="25">
+                        <span class="field-hint">Genera la clase <code>prepa-M<span id="modulo-echo">3</span>-textosParrafo</code></span>
+                    </div>
+
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="opt-sangria" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Sangría francesa (30px)</span>
+                    </label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="opt-nolink" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Bloquear vista previa de YouTube</span>
+                    </label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="opt-break" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Cortar URLs largas (word-break)</span>
+                    </label>
+                </div>
+
+                <button id="btn-generate" class="btn-primary mt-4" disabled>
+                    <i class="ph ph-magic-wand"></i> Generar Párrafos
+                </button>
+
+                <button id="btn-example" class="btn-secondary mt-4" type="button">
+                    <i class="ph ph-eye"></i> Ver ejemplo del maquetado
+                </button>
+            </section>
+
+            <!-- Columna Derecha: Vista Previa y Código -->
+            <section class="panel-section glass-panel">
+                <div class="tabs">
+                    <button class="tab-btn active" data-target="preview"><i class="ph ph-eye"></i> Vista Previa</button>
+                    <button class="tab-btn" data-target="code"><i class="ph ph-code"></i> Código HTML</button>
+                </div>
+
+                <div class="tab-content active" id="preview-content">
+                    <div class="empty-state" id="preview-empty">
+                        <i class="ph ph-books"></i>
+                        <p>Pega tus fuentes y genera para ver la vista previa</p>
+                    </div>
+                    <div id="preview-container" class="preview-container hidden"></div>
+                </div>
+
+                <div class="tab-content" id="code-content">
+                    <div class="code-wrapper">
+                        <button id="btn-copy" class="btn-icon" title="Copiar código">
+                            <i class="ph ph-copy"></i>
+                        </button>
+                        <textarea id="output-code" class="code-output" readonly placeholder="Los párrafos <p> generados aparecerán aquí..."></textarea>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Modal del ejemplo de maquetado -->
+    <div id="modal-example" class="modal hidden">
+        <div class="modal-content glass-panel">
+            <button class="modal-close" id="modal-close" title="Cerrar" aria-label="Cerrar">
+                <i class="ph ph-x"></i>
+            </button>
+            <h3><i class="ph ph-brackets-angle"></i> Ejemplo de estructura del maquetado</h3>
+            <p class="modal-intro">
+                Así debería verse el código en la plataforma. Observa los <strong>colores</strong> para saber qué cambiar.
+            </p>
+            <p class="modal-warning">
+                <i class="ph ph-warning"></i>
+                <span>Este ejemplo sigue los ajustes generales del recurso; <strong>verifica siempre</strong> la configuración del tuyo.</span>
+            </p>
+            <div id="example-code" class="code-output example-code"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

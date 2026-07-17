@@ -1,0 +1,121 @@
+/* ==========================================================================
+   Convertidor de Tablas — estilos propios de la herramienta.
+   Los tokens, el fondo, los paneles glass y los componentes de UI
+   (toggles, botones, pestañas, salida de código) vienen de /assets/shared.css.
+   ========================================================================== */
+
+/* Paste Area */
+.paste-area {
+    flex-grow: 1;
+    /* Crece con la ventana, pero nunca por debajo de un alto usable: si no cabe,
+       el panel scrollea en vez de aplastar el área de pegado. */
+    min-height: 140px;
+    background: var(--input-bg);
+    border: 2px dashed var(--input-border);
+    border-radius: 16px;
+    padding: 20px;
+    overflow: auto; /* Permite scroll horizontal y vertical */
+    overflow-wrap: break-word; /* Evita que el código crudo rompa el contenedor */
+    transition: all 0.3s ease;
+    cursor: text;
+    position: relative;
+}
+
+.paste-area:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--input-bg-focus);
+    box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.1);
+}
+
+.paste-area:empty::before {
+    content: attr(data-placeholder);
+    color: var(--text-muted);
+    font-style: italic;
+    position: absolute;
+    pointer-events: none;
+}
+
+.paste-area table {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-collapse: collapse;
+}
+
+.paste-area td, .paste-area th {
+    border: 1px solid var(--input-border);
+    padding: 5px;
+}
+
+/* Banner del paso 2 (lo inyecta script.js) */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.75; }
+}
+
+/* Preview Area
+   Isla clara a propósito: replica cómo se verá la tabla en Moodle, que es una
+   página clara. Por eso fija color y fondo en vez de heredar el tema. */
+.preview-container {
+    background: var(--preview-bg);
+    color: var(--preview-text);
+    border-radius: 12px;
+    padding: 20px;
+    overflow: auto;
+    border: 1px solid var(--control-border);
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.preview-container table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.preview-container th, .preview-container td {
+    padding: 12px;
+    border: 1px solid var(--preview-border);
+}
+
+.preview-container th {
+    background: var(--prepa-primary-20);
+    font-weight: 700;
+}
+
+.preview-container td.bg-primary-10 { background-color: var(--prepa-primary-10); }
+.preview-container td.bg-secondary-10 { background-color: var(--prepa-secondary-10); }
+
+/* Interactive Selection Table */
+.selection-table tr {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.selection-table tr:hover {
+    background-color: var(--accent) !important;
+    color: white !important;
+    transform: scale(1.01);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    position: relative;
+    z-index: 10;
+}
+
+.selection-table tr:hover td, .selection-table tr:hover th {
+    background-color: transparent !important;
+    color: white !important;
+}
+
+/* Con las columnas apiladas el alto ya no lo manda la ventana, así que el área
+   de pegado necesita un alto propio para no quedar aplastada. */
+@media (max-width: 1024px), (max-height: 620px) {
+    .paste-area {
+        min-height: 220px;
+    }
+}
+
+@media (max-width: 640px) {
+    .panel-section {
+        padding: 20px;
+    }
+}

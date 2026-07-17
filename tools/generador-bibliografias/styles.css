@@ -1,0 +1,224 @@
+/* ==========================================================================
+   Generador de Bibliografías — estilos propios de la herramienta.
+   Los tokens, el fondo, los paneles glass y los componentes de UI
+   (toggles, botones, pestañas, salida de código) vienen de /assets/shared.css.
+   ========================================================================== */
+
+.logo--biblio {
+    background: linear-gradient(135deg, #8C6793, #D98522);
+    box-shadow: 0 4px 12px rgba(140, 103, 147, 0.35);
+}
+
+/* Entrada de texto plano */
+.plain-input {
+    flex-grow: 1;
+    /* Crece con la ventana, pero nunca por debajo de un alto usable: si no cabe,
+       el panel scrollea en vez de aplastar el campo. */
+    min-height: 140px;
+    width: 100%;
+    background: var(--input-bg);
+    border: 2px dashed var(--input-border);
+    border-radius: 16px;
+    padding: 20px;
+    font-family: inherit;
+    font-size: 15px;
+    color: var(--text-main);
+    resize: vertical;
+    transition: all 0.3s ease;
+}
+
+.plain-input::placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.plain-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--input-bg-focus);
+    box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.1);
+}
+
+/* Campo del número de módulo */
+.field-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.field-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.field-row input[type="number"] {
+    width: 72px;
+    padding: 8px 10px;
+    text-align: center;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main);
+    background: var(--surface-translucent);
+    border: 1px solid var(--control-border);
+    border-radius: 10px;
+    transition: all 0.2s ease;
+}
+
+.field-row input[type="number"]:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.12);
+}
+
+.field-hint {
+    font-size: 13px;
+    color: var(--text-muted);
+    flex-basis: 100%;
+}
+
+.field-hint code {
+    font-family: 'Courier New', Courier, monospace;
+    background: var(--control-bg);
+    border-radius: 4px;
+    padding: 1px 5px;
+}
+
+/* Vista previa de los párrafos generados
+   Isla clara a propósito: replica cómo se verán en Moodle, que es una página
+   clara. Por eso fija color y fondo en vez de heredar el tema. */
+.preview-container {
+    background: var(--preview-bg);
+    color: var(--preview-text);
+    border-radius: 12px;
+    padding: 24px;
+    border: 1px solid var(--control-border);
+    flex-grow: 1;
+    overflow-y: auto;
+    min-height: 0;
+    font-size: 14px;
+}
+
+.preview-container p {
+    margin-bottom: 14px;
+}
+
+.preview-container a {
+    color: #0066cc; /* Fijo: la isla de vista previa siempre es clara */
+}
+
+/* Modal */
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: var(--modal-backdrop);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeIn 0.25s ease;
+}
+
+.modal-content {
+    position: relative;
+    /* Translúcido a propósito: .glass-panel le aplica backdrop-filter y con un
+       fondo opaco el desenfoque no haría nada. */
+    background: var(--modal-bg);
+    width: 100%;
+    max-width: 760px;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.modal-content h3 {
+    font-size: 20px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 40px;
+}
+
+.modal-intro {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.modal-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 14px;
+    background: rgba(255, 149, 0, 0.12);
+    border-left: 3px solid var(--warning);
+    border-radius: 8px;
+    padding: 12px 14px;
+}
+
+.modal-warning i {
+    color: var(--warning);
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.modal-close {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: var(--control-bg);
+    color: var(--text-main);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+    background: var(--control-border);
+}
+
+.example-code {
+    min-height: 0;
+    height: 340px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    line-height: 1.6;
+    background: rgba(30, 30, 30, 0.95);
+}
+
+/* Resaltados del ejemplo */
+.resaltado-url { background-color: #00ffff; color: #000; font-weight: bold; padding: 2px 4px; border-radius: 3px; }
+.resaltado-titulo { background-color: #ff00ff; color: #fff; font-weight: bold; padding: 2px 4px; border-radius: 3px; }
+.resaltado-parrafos { background-color: #00ff00; color: #000; font-weight: bold; padding: 4px 8px; border-radius: 3px; display: inline-block; margin: 5px 0; }
+.codigo-gris { color: #8be9fd; }
+
+/* Con las columnas apiladas el alto ya no lo manda la ventana, así que la
+   entrada de texto necesita un alto propio para no quedar aplastada. */
+@media (max-width: 1024px), (max-height: 620px) {
+    .plain-input {
+        min-height: 220px;
+    }
+}
+
+@media (max-width: 640px) {
+    .panel-section { padding: 20px; }
+    .modal-content { padding: 22px; }
+}

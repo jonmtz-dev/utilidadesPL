@@ -1,0 +1,222 @@
+/* ==========================================================================
+   Launcher (cajón de apps)
+   ========================================================================== */
+
+.launcher-toolbar {
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.search-field {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 520px;
+    padding: 14px 18px;
+    border-radius: 16px;
+    transition: all 0.2s ease;
+}
+
+.search-field:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.12);
+}
+
+.search-field i {
+    font-size: 20px;
+    color: var(--text-muted);
+}
+
+.search-field input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 15px;
+    color: var(--text-main);
+    min-width: 0;
+}
+
+.search-field input:focus {
+    outline: none;
+}
+
+.search-field kbd {
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--control-bg);
+    border: 1px solid var(--control-border);
+    border-radius: 6px;
+    padding: 2px 8px;
+}
+
+/* Rejilla de tarjetas */
+.tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 24px;
+    align-content: start; /* Sin esto las filas se estiran al alto de la ventana */
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    /* El padding evita que el scroll recorte la sombra y el -6px del hover */
+    padding: 8px;
+    margin: -8px;
+}
+
+.tool-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 26px;
+    border-radius: 24px;
+    text-decoration: none;
+    color: inherit;
+    overflow: hidden;
+    animation: fadeIn 0.4s ease backwards;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Brillo que sigue al cursor */
+.tool-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+        420px circle at var(--mouse-x, 50%) var(--mouse-y, 0%),
+        var(--card-glow),
+        transparent 45%
+    );
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.tool-card--ready:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 18px 40px rgba(31, 38, 135, 0.18);
+}
+
+.tool-card--ready:hover::before {
+    opacity: 1;
+}
+
+.tool-card--ready:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.35);
+}
+
+.tool-card--soon {
+    cursor: default;
+    opacity: 0.6;
+    border-style: dashed;
+    box-shadow: none;
+}
+
+.tool-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 28px;
+    flex-shrink: 0;
+    /* --accent-from / --accent-to los inyecta launcher.js por tarjeta */
+    background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
+}
+
+.tool-card--soon .tool-icon {
+    background: var(--slider-off);
+    box-shadow: none;
+}
+
+.tool-card h2 {
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+}
+
+.tool-card p {
+    font-size: 14px;
+    color: var(--text-muted);
+    flex-grow: 1;
+}
+
+.tool-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.tool-tag {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--control-bg);
+    border-radius: 999px;
+    padding: 3px 10px;
+}
+
+.tool-footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.tool-card--ready .tool-footer i {
+    transition: transform 0.25s ease;
+}
+
+.tool-card--ready:hover .tool-footer i {
+    transform: translateX(4px);
+}
+
+.tool-card--soon .tool-footer {
+    color: var(--text-muted);
+}
+
+.no-results {
+    text-align: center;
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 40px 0;
+}
+
+.no-results i {
+    font-size: 40px;
+    opacity: 0.5;
+}
+
+@media (max-width: 640px) {
+    .tools-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .tool-card { padding: 20px; }
+    .search-field kbd { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tool-card,
+    .tool-card::before,
+    .tool-footer i,
+    .shape {
+        animation: none !important;
+        transition: none !important;
+    }
+}

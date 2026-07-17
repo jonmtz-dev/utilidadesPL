@@ -1,0 +1,600 @@
+/* ==========================================================================
+   Shared design tokens + shell
+   Lo usan tanto el launcher (raíz) como cada herramienta de /tools.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Tema claro (por defecto). El tema se aplica con data-theme en <html>, lo
+   pone assets/theme.js antes de pintar. Regla al tocar colores: si un valor
+   debe cambiar entre claro y oscuro, va como token aquí; nunca hardcodeado
+   en un componente.
+   -------------------------------------------------------------------------- */
+:root {
+    --bg-color: #f0f2f5;
+    --mesh-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+    --shape-opacity: 0.6;
+
+    --glass-bg: rgba(255, 255, 255, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.8);
+    --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+
+    --text-main: #1d1d1f;
+    --text-muted: #86868b;
+
+    --accent: #0066cc;
+    --accent-hover: #004499;
+    --success: #34c759;
+    --danger: #ff3b30;
+    --warning: #ff9500;
+
+    /* Superficies y controles */
+    --surface-raised: #ffffff;           /* Sólido: pestaña activa */
+    --surface-translucent: rgba(255, 255, 255, 0.7); /* Botones fantasma */
+    --modal-bg: rgba(255, 255, 255, 0.9); /* Translúcido: deja trabajar al blur */
+    --modal-backdrop: rgba(0, 0, 0, 0.45);
+    --control-bg: rgba(0, 0, 0, 0.05);   /* Riel de pestañas, etiquetas, kbd */
+    --control-border: rgba(0, 0, 0, 0.08);
+    --input-bg: rgba(255, 255, 255, 0.5);
+    --input-bg-focus: rgba(255, 255, 255, 0.8);
+    --input-border: rgba(0, 0, 0, 0.1);
+    --slider-off: #e9e9ea;
+    --disabled-bg: #ccc;
+    --card-glow: rgba(255, 255, 255, 0.55);
+    --hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+    /* Colores Moodle para las vistas previas.
+       NO cambian con el tema: la vista previa imita la página real de Moodle,
+       que siempre es clara. Ver --preview-*. */
+    --prepa-primary-10: #fce4ec; /* Rosa */
+    --prepa-secondary-10: #e8f5e9; /* Verde */
+    --prepa-primary-20: #f48fb1;
+    --preview-bg: #ffffff;
+    --preview-text: #1d1d1f;
+    --preview-border: #e0e0e0;
+}
+
+/* --------------------------------------------------------------------------
+   Tema oscuro
+   -------------------------------------------------------------------------- */
+:root[data-theme="dark"] {
+    --bg-color: #0f1115;
+    --mesh-gradient: linear-gradient(135deg, #15171e 0%, #0c0e13 100%);
+    --shape-opacity: 0.22;
+
+    --glass-bg: rgba(32, 35, 43, 0.62);
+    --glass-border: rgba(255, 255, 255, 0.09);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+
+    --text-main: #e9e9ec;
+    --text-muted: #9b9ba4;
+
+    --accent: #4da3ff;
+    --accent-hover: #7cbcff;
+
+    --surface-raised: #2b2f39;
+    --surface-translucent: rgba(255, 255, 255, 0.07);
+    --modal-bg: rgba(38, 41, 50, 0.92);
+    --modal-backdrop: rgba(0, 0, 0, 0.6);
+    --control-bg: rgba(255, 255, 255, 0.07);
+    --control-border: rgba(255, 255, 255, 0.12);
+    --input-bg: rgba(255, 255, 255, 0.04);
+    --input-bg-focus: rgba(255, 255, 255, 0.08);
+    --input-border: rgba(255, 255, 255, 0.14);
+    --slider-off: #4a4e59;
+    --disabled-bg: #3a3e48;
+    --card-glow: rgba(255, 255, 255, 0.09);
+    --hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text-main);
+    background-color: var(--bg-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    min-height: 100dvh;
+    /* El gutter va aquí y no como margen del contenedor: un margen del hijo
+       colapsaría con el del body y empujaría la página 16px de más. */
+    padding: 16px;
+    overflow-x: hidden;
+    position: relative;
+    line-height: 1.5;
+}
+
+/* Fondo con manchas difuminadas */
+.background-mesh {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    overflow: hidden;
+    background: var(--mesh-gradient);
+    transition: background 0.3s ease;
+}
+
+.shape {
+    position: absolute;
+    filter: blur(80px);
+    border-radius: 50%;
+    animation: float 20s infinite alternate;
+    opacity: var(--shape-opacity);
+    transition: opacity 0.3s ease;
+}
+
+.shape-1 {
+    width: 600px;
+    height: 600px;
+    background: #ffb6c1;
+    top: -100px;
+    left: -100px;
+}
+
+.shape-2 {
+    width: 500px;
+    height: 500px;
+    background: #add8e6;
+    bottom: -100px;
+    right: -50px;
+    animation-delay: -5s;
+}
+
+.shape-3 {
+    width: 400px;
+    height: 400px;
+    background: #e0ffff;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation-delay: -10s;
+}
+
+@keyframes float {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    100% { transform: translate(50px, 30px) rotate(10deg); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Superficies */
+.glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    box-shadow: var(--glass-shadow);
+}
+
+/* La app ocupa exactamente el alto de la ventana: el gutter de 16px arriba y
+   abajo se descuenta del 100dvh para que la página nunca saque scroll propio.
+   Lo que crece de más scrollea dentro de su panel, no en el body. */
+.app-container {
+    max-width: 1400px;
+    height: calc(100dvh - 32px); /* 32px = el padding del body */
+    margin: 0 auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow: hidden;
+}
+
+.app-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 20px 30px;
+    flex-shrink: 0;
+}
+
+.logo {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, var(--accent), #00c6ff);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 32px;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
+}
+
+.app-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.app-header p {
+    color: var(--text-muted);
+    font-size: 15px;
+}
+
+/* Botón de regreso al launcher, presente en cada herramienta */
+.btn-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 12px;
+    background: var(--surface-translucent);
+    border: 1px solid var(--glass-border);
+    color: var(--text-main);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.btn-back:hover {
+    background: var(--surface-raised);
+    transform: translateY(-2px);
+    box-shadow: var(--hover-shadow);
+}
+
+/* Acciones de la derecha del header (tema + regreso). Lo inyecta theme.js. */
+.header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+/* Switch de tema claro/oscuro */
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px;
+    border-radius: 999px;
+    background: var(--control-bg);
+    border: 1px solid var(--control-border);
+    flex-shrink: 0;
+}
+
+.theme-toggle button {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 17px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.theme-toggle button:hover {
+    color: var(--text-main);
+}
+
+.theme-toggle button[aria-pressed="true"] {
+    background: var(--surface-raised);
+    color: var(--text-main);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* ==========================================================================
+   Componentes compartidos por las herramientas
+   ========================================================================== */
+
+.workspace {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    flex: 1;
+    min-height: 0; /* Deja que la rejilla encoja dentro del alto de la ventana */
+}
+
+.panel-section {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;  /* Previene el "Grid Blowout" (expansión por contenido ancho) */
+    min-height: 0; /* Idem en vertical: sin esto el panel no baja de su contenido */
+    overflow-y: auto; /* Si la columna no cabe, scrollea aquí dentro */
+}
+
+.section-header {
+    flex-shrink: 0;
+}
+
+.section-header h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mt-4 { margin-top: 24px; }
+
+.options-group h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Toggle switches */
+.toggle-switch {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    margin-bottom: 12px;
+    user-select: none;
+}
+
+.toggle-switch input {
+    display: none;
+}
+
+.slider {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    background-color: var(--slider-off);
+    border-radius: 24px;
+    transition: 0.3s;
+    flex-shrink: 0;
+}
+
+.slider::before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    border-radius: 50%;
+    transition: 0.3s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.toggle-switch input:checked + .slider {
+    background-color: var(--success);
+}
+
+.toggle-switch input:checked + .slider::before {
+    transform: translateX(20px);
+}
+
+.label-text {
+    font-size: 15px;
+}
+
+/* Botones */
+.btn-primary {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    width: 100%;
+    font-family: inherit;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
+}
+
+.btn-primary:disabled {
+    background: var(--disabled-bg);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.btn-secondary {
+    background: var(--surface-translucent);
+    color: var(--text-main);
+    border: 1px solid var(--glass-border);
+    padding: 12px 22px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.btn-secondary:hover {
+    background: var(--surface-raised);
+    transform: translateY(-2px);
+    box-shadow: var(--hover-shadow);
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 10px;
+    background: var(--control-bg);
+    padding: 6px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+}
+
+.tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: inherit;
+}
+
+.tab-btn.active {
+    background: var(--surface-raised);
+    color: var(--text-main);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.tab-content {
+    display: none;
+    flex-grow: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.tab-content.active {
+    display: flex;
+    animation: fadeIn 0.3s ease;
+}
+
+/* Estado vacío */
+.empty-state {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    text-align: center;
+    gap: 12px;
+    min-height: 0;
+}
+
+.empty-state i {
+    font-size: 48px;
+    opacity: 0.5;
+}
+
+/* Salida de código */
+.code-wrapper {
+    position: relative;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.code-output {
+    flex-grow: 1;
+    width: 100%;
+    border: none;
+    background: rgba(30, 30, 30, 0.9);
+    color: #d4d4d4;
+    border-radius: 12px;
+    padding: 20px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    resize: none;
+    min-height: 0;
+}
+
+.code-output:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
+.btn-icon {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-icon:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Con las columnas apiladas, o en pantallas muy bajitas, forzar el alto de la
+   ventana apretaría todo hasta lo ilegible: ahí sí devolvemos el scroll normal
+   de la página y dejamos que cada bloque tome su alto natural. */
+@media (max-width: 1024px), (max-height: 620px) {
+    .app-container {
+        height: auto;
+        min-height: calc(100dvh - 32px);
+        overflow: visible;
+    }
+
+    .workspace {
+        grid-template-columns: 1fr;
+    }
+
+    .panel-section {
+        overflow-y: visible;
+    }
+
+    .code-output {
+        min-height: 280px;
+    }
+
+    .empty-state {
+        min-height: 240px;
+    }
+}
+
+@media (max-width: 640px) {
+    .app-container {
+        padding: 16px;
+    }
+
+    .app-header {
+        padding: 16px;
+        flex-wrap: wrap;
+        gap: 14px;
+    }
+
+    .app-header h1 { font-size: 22px; }
+    .btn-back { margin-left: 0; }
+}

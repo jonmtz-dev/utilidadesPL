@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convertidor de Tablas a Moodle</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../assets/shared.css">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Iconos Phosphor -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Sin defer: aplica el tema antes del primer pintado -->
+    <script src="../../assets/theme.js"></script>
+</head>
+<body>
+    <div class="background-mesh">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+    </div>
+
+    <main class="app-container glass-panel">
+        <header class="app-header">
+            <div class="logo">
+                <i class="ph ph-table"></i>
+            </div>
+            <div>
+                <h1>Convertidor a Tablas Moodle</h1>
+                <p>Transforma tablas de Word a formato responsivo (Tarjetas móviles)</p>
+            </div>
+            <a class="btn-back" href="../../index.html">
+                <i class="ph ph-arrow-left"></i> Panel
+            </a>
+        </header>
+
+        <div class="workspace">
+            <!-- Columna Izquierda: Input y Opciones -->
+            <section class="panel-section glass-panel input-section">
+                <div class="section-header">
+                    <h2><i class="ph ph-clipboard-text"></i> 1. Pega tu tabla aquí</h2>
+                </div>
+                
+                <div id="paste-area" class="paste-area" contenteditable="true" data-placeholder="Haz clic aquí y presiona Ctrl+V para pegar tu tabla desde Word o código HTML crudo..."></div>
+
+                <div class="options-group mt-4">
+                    <h3><i class="ph ph-sliders"></i> Opciones de Formato</h3>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="opt-bordered" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Bordes de tabla (table-bordered)</span>
+                    </label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="opt-alt-colors" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Colorear 1ra columna (Rosa/Verde)</span>
+                    </label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="opt-moodle-wrap" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Envolver en contenedores Moodle (row > col-12)</span>
+                    </label>
+                </div>
+
+                <button id="btn-process" class="btn-primary mt-4" disabled>
+                    <i class="ph ph-magic-wand"></i> Cargar Tabla (Paso 1)
+                </button>
+            </section>
+
+            <!-- Columna Derecha: Vista Previa y Código -->
+            <section class="panel-section glass-panel output-section">
+                
+                <div class="tabs">
+                    <button class="tab-btn active" data-target="preview"><i class="ph ph-eye"></i> Vista Previa</button>
+                    <button class="tab-btn" data-target="code"><i class="ph ph-code"></i> Código Moodle</button>
+                </div>
+
+                <div class="tab-content active" id="preview-content">
+                    <div class="empty-state" id="preview-empty">
+                        <i class="ph ph-table"></i>
+                        <p>Pega y procesa una tabla para ver la vista previa</p>
+                    </div>
+                    <div id="preview-container" class="preview-container hidden">
+                        <!-- Tabla previsualizada aquí -->
+                    </div>
+                </div>
+
+                <div class="tab-content" id="code-content">
+                    <div class="code-wrapper">
+                        <button id="btn-copy" class="btn-icon" title="Copiar código">
+                            <i class="ph ph-copy"></i>
+                        </button>
+                        <textarea id="output-code" class="code-output" readonly placeholder="El código HTML generado aparecerá aquí..."></textarea>
+                    </div>
+                </div>
+
+            </section>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
+

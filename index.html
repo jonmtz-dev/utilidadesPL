@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Herramientas Moodle</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/shared.css">
+    <link rel="stylesheet" href="assets/launcher.css">
+    <!-- Iconos Phosphor -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Sin defer: aplica el tema antes del primer pintado -->
+    <script src="assets/theme.js"></script>
+</head>
+<body>
+    <div class="background-mesh">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+    </div>
+
+    <main class="app-container">
+        <header class="app-header glass-panel">
+            <div class="logo">
+                <i class="ph ph-squares-four"></i>
+            </div>
+            <div>
+                <h1>Panel de Herramientas</h1>
+                <p>Tu cajón de utilidades para Moodle</p>
+            </div>
+        </header>
+
+        <div class="launcher-toolbar">
+            <div class="search-field glass-panel">
+                <i class="ph ph-magnifying-glass"></i>
+                <input type="search" id="search-input" placeholder="Buscar herramienta…" autocomplete="off" aria-label="Buscar herramienta">
+                <kbd>/</kbd>
+            </div>
+        </div>
+
+        <section class="tools-grid" id="tools-grid" aria-label="Herramientas disponibles"></section>
+
+        <p class="no-results hidden" id="no-results">
+            <i class="ph ph-ghost"></i>
+            No hay herramientas que coincidan con tu búsqueda.
+        </p>
+    </main>
+
+    <script src="assets/tools.js"></script>
+    <script src="assets/launcher.js"></script>
+</body>
+</html>
