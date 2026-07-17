@@ -272,6 +272,28 @@ function compararCSS(cssMicrositio, cssMoodle) {
     return { faltantes, diferentes, iguales, totalMicrositio: A.size, totalMoodle: B.size };
 }
 
+/* -------------------------------------------------- URL de borrador --- */
+
+/**
+ * Al arrastrar una imagen al editor, Moodle la guarda en un "área de borrador"
+ * y la inserta con una URL así:
+ *   https://sitio/draftfile.php/5/user/draft/123456789/clic.svg
+ *
+ * Todas las imágenes de ese mismo editor comparten esa carpeta. Si apuntamos el
+ * HTML ahí, al guardar Moodle convierte esas URLs a @@PLUGINFILE@@ él solo, que
+ * es exactamente su flujo normal. Es más seguro que escribir @@PLUGINFILE@@ a
+ * mano, porque el editor nunca ve un marcador que no sabe interpretar.
+ *
+ * Devuelve la carpeta (con la barra final) o null si la URL no sirve.
+ */
+function baseDeBorrador(url) {
+    const limpia = (url || '').trim();
+    if (!limpia || !/draftfile\.php\//i.test(limpia)) return null;
+    const corte = limpia.lastIndexOf('/');
+    if (corte < 0) return null;
+    return limpia.slice(0, corte + 1);
+}
+
 /* ------------------------------------------------------------- Estado --- */
 
 let ARCHIVOS = new Map();   // ruta -> Uint8Array
@@ -297,6 +319,8 @@ function initMicrositio() {
     const imgsLista = document.getElementById('imgs-lista');
     const badgeImgs = document.getElementById('badge-imgs');
     const revisionLista = document.getElementById('revision-lista');
+    const inputDraft = document.getElementById('input-draft');
+    const notaDraft = document.getElementById('nota-draft');
     const inputCssMoodle = document.getElementById('input-css-moodle');
     const btnComparar = document.getElementById('btn-comparar');
     const cmpResultado = document.getElementById('cmp-resultado');
@@ -456,6 +480,9 @@ function initMicrositio() {
         const texto = new TextDecoder('utf-8').decode(ARCHIVOS.get(rutaHtml));
         const doc = new DOMParser().parseFromString(texto, 'text/html');
 
+        const draftBase = baseDeBorrador(inputDraft.value);
+        pintarNotaDraft(draftBase);
+
         const reporte = {
             usadas: new Map(),   // basename -> {ruta, tam}
             faltantes: [],       // referencias que no están en el zip
@@ -549,6 +576,10 @@ function initMicrositio() {
             } else {
                 reporte.usadas.set(base, { ruta, tam: ARCHIVOS.get(ruta).length });
             }
+
+            // Si nos dieron la carpeta de borrador, apuntamos ahí: al guardar,
+            // Moodle la convierte a @@PLUGINFILE@@ por su cuenta.
+            if (draftBase) return draftBase + encodeURIComponent(base);
 
             return opt.pluginfile.checked
                 ? `@@PLUGINFILE@@/${encodeURIComponent(base)}`
@@ -807,12 +838,23 @@ function initMicrositio() {
 
         /** Devuelve una URL blob: para el archivo del zip, o null si no está. */
         function aBlob(valor) {
-            if (!valor || esExterna(valor)) return null;
-            const base = decodeURIComponent(
-                valor.startsWith('@@PLUGINFILE@@/')
-                    ? valor.slice('@@PLUGINFILE@@/'.length)
-                    : resolverRuta(dirBase, valor).split('/').pop()
-            );
+            if (!valor) return null;
+
+            // La vista previa tiene que resolver los tres formatos que puede
+            // llevar el src: el marcador, la URL de borrador de Moodle (que es
+            // absoluta, pero no es "externa" para nosotros) y la ruta original.
+            let crudo;
+            if (valor.startsWith('@@PLUGINFILE@@/')) {
+                crudo = valor.slice('@@PLUGINFILE@@/'.length);
+            } else if (/draftfile\.php\//i.test(valor)) {
+                crudo = valor.slice(valor.lastIndexOf('/') + 1);
+            } else if (esExterna(valor)) {
+                return null;
+            } else {
+                crudo = resolverRuta(dirBase, valor).split('/').pop();
+            }
+
+            const base = decodeURIComponent(crudo);
             const ruta = [...ARCHIVOS.keys()].find(r => r.split('/').pop() === base);
             if (!ruta) return null;
             const url = URL.createObjectURL(
@@ -856,6 +898,30 @@ function initMicrositio() {
         d.textContent = s;
         return d.innerHTML;
     }
+
+    function pintarNotaDraft(base) {
+        const escrito = inputDraft.value.trim();
+
+        if (base) {
+            notaDraft.className = 'campo-nota campo-nota--ok';
+            notaDraft.innerHTML = `<i class="ph ph-check-circle"></i> Listo: las imágenes apuntan a
+                <code>${escapar(base)}</code>. Pega el HTML y guarda; Moodle lo convierte solo.`;
+        } else if (escrito) {
+            notaDraft.className = 'campo-nota campo-nota--error';
+            notaDraft.innerHTML = `<i class="ph ph-x-circle"></i> Esa URL no parece de borrador:
+                debe contener <code>draftfile.php</code>. Uso <code>@@PLUGINFILE@@</code> mientras tanto.`;
+        } else {
+            notaDraft.className = 'campo-nota';
+            notaDraft.innerHTML = `Arrastra las imágenes al editor, abre <code>&lt;/&gt;</code> y copia el
+                <code>src</code> de cualquiera. Con eso apunto todas a esa carpeta y Moodle
+                hace el resto solo al guardar.`;
+        }
+    }
+
+    inputDraft.addEventListener('input', () => {
+        if (ARCHIVOS.size) convertir();
+        else pintarNotaDraft(baseDeBorrador(inputDraft.value));
+    });
 
     /* ----------------------------------------------------- Comparar CSS */
 
