@@ -67,7 +67,28 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         globalOriginalTable = tabla;
-        
+
+        // Al pegar código con indentación, según el navegador esos espacios se
+        // vuelven &nbsp; (por eso a unos les pasa y a otros no). El parser de
+        // tablas expulsa ese texto suelto FUERA de la tabla (foster parenting), y
+        // como conservamos lo que la rodea para no perder títulos, ese bloque de
+        // &nbsp; se colaba en la salida. Quitamos los nodos de texto que son solo
+        // espacios/nbsp y no están dentro de una celda (ahí sí puede ser querido).
+        const enCelda = (nodo) => {
+            for (let p = nodo.parentElement; p; p = p.parentElement) {
+                if (p.tagName === 'TD' || p.tagName === 'TH') return true;
+            }
+            return false;
+        };
+        // .trim() en JS también elimina el &nbsp;, así que un nodo que quede
+        // vacío tras recortar es puro relleno.
+        const paseo = document.createTreeWalker(globalTempDiv, NodeFilter.SHOW_TEXT);
+        const basura = [];
+        for (let n = paseo.nextNode(); n; n = paseo.nextNode()) {
+            if (!n.textContent.trim() && !enCelda(n)) basura.push(n);
+        }
+        basura.forEach(n => n.remove());
+
         tabs[0].click();
         previewEmpty.classList.add('hidden');
         previewContainer.classList.remove('hidden');
