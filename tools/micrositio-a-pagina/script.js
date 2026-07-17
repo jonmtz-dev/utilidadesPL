@@ -203,6 +203,7 @@ function aplicarResponsive(tabla, { headerIndex = null, colorear = false, colore
     });
 
     if (colorearHeader && filas[idx]) {
+        filas[idx].style.setProperty('background-color', '#d8a7b6', 'important');
         const thead = tabla.querySelector('thead');
         if (thead && thead.contains(filas[idx])) {
             thead.classList.add('bg-primary-20');

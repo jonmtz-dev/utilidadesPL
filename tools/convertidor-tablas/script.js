@@ -155,6 +155,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const thead = document.createElement('thead');
         thead.className = optHeaderColor && optHeaderColor.checked ? "thead bg-primary-20" : "thead";
         const newHeaderRow = document.createElement('tr');
+        if (optHeaderColor && optHeaderColor.checked) {
+            newHeaderRow.style.setProperty('background-color', '#d8a7b6', 'important');
+        }
         
         const headers = [];
         const headerCells = headerRow.querySelectorAll('th, td');
