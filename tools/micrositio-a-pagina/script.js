@@ -820,6 +820,23 @@ function initMicrositio() {
             if (nuevo !== estilo) el.setAttribute('style', nuevo);
         });
 
+        // --- Contenedores flex de íconos que colapsaban.
+        // Los micrositios ponen íconos en un contenedor flex (clase align-self-*,
+        // que solo existe en un ítem flex) cuyo "no encogerse" vivía en el CSS del
+        // micrositio (que se quita). Contra tu Moodle ese contenedor se encoge a 0
+        // y el ícono desaparece. Como la hoja de Moodle no se debe tocar, lo
+        // resolvemos aquí: flex-shrink:0 inline en cada contenedor con align-self-*
+        // que envuelva una imagen. Es inofensivo si el elemento no es ítem flex
+        // (la propiedad se ignora) y respeta lo que ya trae en style.
+        doc.querySelectorAll('[class*="align-self-"]').forEach(el => {
+            if (!el.querySelector('img')) return;
+            const estilo = (el.getAttribute('style') || '').trim();
+            if (/flex-shrink/i.test(estilo)) return;
+            el.setAttribute('style', estilo
+                ? `${estilo.replace(/;?$/, ';')} flex-shrink: 0;`
+                : 'flex-shrink: 0;');
+        });
+
         // --- Enlaces a otras páginas del micrositio: no se pueden resolver solos
         doc.querySelectorAll('a[href]').forEach(a => {
             const href = a.getAttribute('href');

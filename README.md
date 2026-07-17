@@ -166,6 +166,16 @@ gigantes y en otros deformes (según si el recurso los limitaba por CSS). Ademá
 si el `<img>` no declara `width`/`height`, se los ponemos con el tamaño real del
 SVG (el atributo cede ante cualquier CSS, así que no pisa lo que ya se veía bien).
 
+**Íconos en flex que colapsaban.** Los micrositios ponen íconos en un contenedor
+flex (clase `align-self-*`) cuyo "no encogerse" vivía en el CSS del micrositio
+(que se quita). Contra la hoja de Moodle ese contenedor se encogía a 0 y el ícono
+desaparecía. **La hoja de Moodle no se toca** (es de otro equipo), así que el
+arreglo va aquí: la herramienta inyecta `flex-shrink: 0;` inline en cada
+contenedor con `align-self-*` que envuelva una imagen. Es inofensivo si el
+elemento no es ítem flex (la propiedad se ignora) y respeta el `style` existente.
+Regla general del proyecto: si algo depende de CSS que solo estaba en el
+micrositio, se resuelve en el HTML generado, no pidiendo cambios en Moodle.
+
 **Pestaña Revisión:** no se limita a decir "hay scripts". Sabe qué trae Moodle 5
 y da un veredicto por caso:
 
