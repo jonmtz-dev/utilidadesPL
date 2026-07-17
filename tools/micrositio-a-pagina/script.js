@@ -466,7 +466,8 @@ function initMicrositio() {
             interactivos: new Map(), // tipo data-bs-toggle -> cantidad
             tablas: [],          // títulos aplicados por tabla
             enlaces: [],
-            sinUsar: []
+            sinUsar: [],
+            cssLocales: []       // url() del CSS que apuntan a archivos del zip
         };
 
         // --- Scripts: distinguir librería que Moodle ya trae vs código propio
@@ -514,6 +515,13 @@ function initMicrositio() {
             css.push(`/* ===== <style> en ${rutaHtml} ===== */\n${s.textContent.trim()}`);
             if (opt.quitarCss.checked) s.remove();
         });
+
+        // El CSS se va a vivir a la hoja de Moodle, donde las rutas relativas
+        // del micrositio (fonts/…, img/…) ya no existen. Las data: URI sí viajan.
+        for (const [, , valor] of css.join('\n').matchAll(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi)) {
+            const limpio = valor.trim();
+            if (!esExterna(limpio) && !/^data:/i.test(limpio)) reporte.cssLocales.push(limpio);
+        }
 
         /** Traduce una ruta relativa a @@PLUGINFILE@@/archivo, registrando el reporte. */
         function traducir(valor) {
@@ -762,6 +770,16 @@ function initMicrositio() {
                 <span><strong>Dependencias externas del micrositio.</strong> Al quitar los
                 <code>&lt;link&gt;</code>, esto es de lo que dependía.</span></div>
                 <ul class="lista-veredicto">${filas}</ul>`);
+        }
+
+        // --- Archivos que el CSS pide por ruta relativa (fuentes, fondos)
+        if (r.cssLocales.length) {
+            bloques.push(`<div class="aviso aviso-warn"><i class="ph ph-file-dashed"></i>
+                <span><strong>El CSS pide archivos por ruta relativa.</strong> Ese CSS vive en la hoja
+                de Moodle, donde <code>fonts/…</code> o <code>img/…</code> ya no existen: hay que subir
+                esos archivos aparte y apuntar la regla a su URL definitiva. Las imágenes en
+                <code>data:</code> no tienen problema, viajan dentro del CSS.</span></div>
+                <ul class="lista-reporte">${lista([...new Set(r.cssLocales)])}</ul>`);
         }
 
         // --- Enlaces internos
