@@ -169,9 +169,14 @@ y da un veredicto por caso:
   con atributos**, así que sobreviven sin el bundle del micrositio.
   `tooltip` y `popover` sí necesitan init por JS y se pierden.
 - Las tablas se detectan y se convierten solas: `tabla-responsive-cards` +
-  `data-label` sacados del `<thead>` (o de la primera fila). Si no hay
-  encabezado claro lo dice y sugiere el Convertidor de Tablas, que deja elegir
-  la fila a mano.
+  `data-label` sacados del `<thead>` (o de la primera fila). **Cada tabla trae su
+  propio desplegable "Fila de títulos"** aquí mismo: si la auto-detección erró
+  (títulos en la fila 2, una fila de portada arriba, etc.), la eliges y se
+  reconvierte al instante. El cuerpo es siempre lo que va *después* de esa fila.
+  Si una tabla no tiene encabezado con texto, lo dice y sugiere el Convertidor de
+  Tablas. El toggle **Colorear 1ª columna** aplica el mismo alternado rosa/verde
+  (`bg-primary-10` / `bg-secondary-10`) que el Convertidor de Tablas; va **apagado
+  por defecto** para no pisar el estilo propio del micrositio.
 
 **Pestaña CSS:** pegas tu hoja de estilos de Moodle y te dice **qué reglas del
 micrositio te faltan** y cuáles existen con distinto contenido. El CSS se parsea

@@ -352,6 +352,64 @@
     word-break: break-all;
 }
 
+/* Selector de fila de títulos por tabla */
+.lista-tablas {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.tabla-sel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--control-bg);
+}
+
+.tabla-sel-cab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.tabla-sel-cab i { color: var(--accent); flex-shrink: 0; }
+
+.tabla-sel-titulos code {
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 700;
+}
+
+.tabla-sel-fila {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: 12.5px;
+}
+
+.sel-header {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: var(--input-bg);
+    color: var(--text-main);
+    border: 1px solid var(--input-border);
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.sel-header:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--input-bg-focus);
+}
+
 /* Comparación de CSS */
 .plain-input--css {
     min-height: 130px;

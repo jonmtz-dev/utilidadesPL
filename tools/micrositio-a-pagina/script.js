@@ -146,34 +146,69 @@ function clasificarExterno(url) {
     return YA_EN_MOODLE.find(x => x.re.test(url)) || null;
 }
 
+/** Resumen corto del contenido de una fila, para el desplegable de títulos. */
+function resumenFila(fila) {
+    const texto = [...fila.querySelectorAll('th, td')]
+        .map(c => (c.textContent || '').trim().replace(/\s+/g, ' '))
+        .filter(Boolean)
+        .join(' · ');
+    return texto.length > 55 ? texto.slice(0, 55) + '…' : (texto || '(fila vacía)');
+}
+
 /**
  * Aplica el formato responsive de tarjetas del panel: la clase
  * tabla-responsive-cards + un data-label por celda, que el CSS de Moodle
  * imprime como encabezado cuando la tabla se vuelve tarjeta en celular.
- * Devuelve los títulos usados, o null si la tabla no tiene de dónde sacarlos.
+ *
+ * `headerIndex` fuerza qué fila son los títulos (lo elige el usuario en el
+ * selector); si es null, se auto-detecta (el <thead>, o la primera fila).
+ * `colorear` pinta la 1ª columna alternando rosa/verde, igual que el
+ * Convertidor de Tablas.
+ *
+ * Devuelve { titulos, headerIndex, filas } para pintar el selector, o null si la
+ * tabla no tiene de dónde sacar títulos.
  */
-function aplicarResponsive(tabla) {
+function aplicarResponsive(tabla, { headerIndex = null, colorear = false } = {}) {
     const filas = [...tabla.querySelectorAll('tr')];
     if (filas.length < 2) return null;
 
-    // Con <thead> el encabezado es explícito; si no, la primera fila.
-    const filaTitulos = tabla.querySelector('thead tr') || filas[0];
-    const titulos = [...filaTitulos.querySelectorAll('th, td')]
+    // Índice de la fila de títulos: lo que eligió el usuario, o auto-detección.
+    let idx;
+    if (headerIndex !== null && filas[headerIndex]) {
+        idx = headerIndex;
+    } else {
+        const theadTr = tabla.querySelector('thead tr');
+        idx = theadTr ? filas.indexOf(theadTr) : 0;
+    }
+
+    const titulos = [...filas[idx].querySelectorAll('th, td')]
         .map(c => (c.textContent || '').trim().replace(/\s+/g, ' '));
     if (titulos.every(t => t === '')) return null;
 
-    const cuerpo = tabla.querySelectorAll('tbody tr').length
-        ? [...tabla.querySelectorAll('tbody tr')]
-        : filas.slice(filas.indexOf(filaTitulos) + 1);
+    // El cuerpo es siempre lo que va DESPUÉS de la fila de títulos: así funciona
+    // igual con encabezado en <thead> o en una fila cualquiera que se elija.
+    const cuerpo = filas.slice(idx + 1);
 
-    cuerpo.forEach(fila => {
-        [...fila.querySelectorAll('td, th')].forEach((celda, i) => {
+    cuerpo.forEach((fila, rowIndex) => {
+        const celdas = [...fila.querySelectorAll('td, th')];
+        celdas.forEach((celda, i) => {
             if (titulos[i]) celda.setAttribute('data-label', titulos[i]);
         });
+        if (colorear && celdas[0]) {
+            // Normaliza cualquier color previo del micrositio y aplica el alternado.
+            celdas[0].classList.remove('bg-primary-10', 'bg-secondary-10',
+                'bg-primary', 'bg-secondary', 'opacity-10');
+            celdas[0].classList.add(rowIndex % 2 === 0 ? 'bg-primary-10' : 'bg-secondary-10');
+        }
     });
 
     tabla.classList.add('table', 'tabla-responsive-cards');
-    return titulos;
+
+    return {
+        titulos,
+        headerIndex: idx,
+        filas: filas.map((f, i) => ({ index: i, resumen: resumenFila(f) }))
+    };
 }
 
 /* ----------------------------------------------- Carpetas sin comprimir --- */
@@ -417,6 +452,7 @@ let ARCHIVOS = new Map();   // ruta -> Uint8Array
 let BLOBS = [];             // URLs a revocar entre conversiones
 let RENOMBRE = new Map();   // nombre de salida -> ruta original (para la preview)
 let ULTIMO_REPORTE = null;  // último reporte, para la descarga de imágenes
+let HEADER_OVERRIDE = new Map(); // índice de tabla -> fila de títulos elegida a mano
 
 /* ---------------------------------------------------------------- Init --- */
 
@@ -454,7 +490,8 @@ function initMicrositio() {
         quitarCss: document.getElementById('opt-quitar-css'),
         quitarJs: document.getElementById('opt-quitar-js'),
         tabla: document.getElementById('opt-tabla'),
-        svgPng: document.getElementById('opt-svg-png')
+        svgPng: document.getElementById('opt-svg-png'),
+        colorear: document.getElementById('opt-colorear')
     };
     const btnDescargarImgs = document.getElementById('btn-descargar-imgs');
 
@@ -475,6 +512,7 @@ function initMicrositio() {
     /** Punto único de entrada: da igual si vino de .zip, carpeta o archivos. */
     async function procesarArchivos(mapa, etiqueta) {
         ARCHIVOS = limpiarMapa(mapa);
+        HEADER_OVERRIDE = new Map();   // otro micrositio, otras tablas
 
         const htmls = [...ARCHIVOS.keys()].filter(r => /\.html?$/i.test(r));
         if (htmls.length === 0) {
@@ -634,11 +672,15 @@ function initMicrositio() {
             reporte.interactivos.set(tipo, (reporte.interactivos.get(tipo) || 0) + 1);
         });
 
-        // --- Tablas
+        // --- Tablas. El índice en reporte.tablas es el orden de la tabla en el
+        // documento, y con esa clave guardamos qué fila de títulos eligió el
+        // usuario (HEADER_OVERRIDE), para que sobreviva a cada reconversión.
         if (opt.tabla.checked) {
-            doc.querySelectorAll('table').forEach(t => {
-                const titulos = aplicarResponsive(t);
-                if (titulos) reporte.tablas.push(titulos);
+            [...doc.querySelectorAll('table')].forEach((t, i) => {
+                reporte.tablas.push(aplicarResponsive(t, {
+                    headerIndex: HEADER_OVERRIDE.has(i) ? HEADER_OVERRIDE.get(i) : null,
+                    colorear: opt.colorear.checked
+                }));
             });
         } else {
             doc.querySelectorAll('table').forEach(() => reporte.tablas.push(null));
@@ -903,20 +945,34 @@ function initMicrositio() {
         const bloques = [];
         const lista = (items) => items.map(i => `<li><code>${escapar(i)}</code></li>`).join('');
 
-        // --- Tablas
+        // --- Tablas: por cada una, un selector para elegir la fila de títulos.
         if (r.tablas.length) {
-            const conTitulos = r.tablas.filter(Boolean);
-            if (conTitulos.length) {
-                const detalle = conTitulos.map((t, i) =>
-                    `<li>Tabla ${i + 1}: ${t.map(x => `<code>${escapar(x)}</code>`).join(' · ')}</li>`
-                ).join('');
+            const detectadas = r.tablas.filter(Boolean).length;
+            const sinTitulos = r.tablas.length - detectadas;
+
+            if (detectadas) {
+                const filasHtml = r.tablas.map((info, i) => {
+                    if (!info) return '';
+                    const opciones = info.filas.map(f =>
+                        `<option value="${f.index}"${f.index === info.headerIndex ? ' selected' : ''}>` +
+                        `Fila ${f.index + 1}: ${escapar(f.resumen)}</option>`
+                    ).join('');
+                    return `<li class="tabla-sel">
+                        <div class="tabla-sel-cab"><i class="ph ph-table"></i> <strong>Tabla ${i + 1}</strong>
+                            <span class="tabla-sel-titulos">${info.titulos.filter(Boolean).map(x => `<code>${escapar(x)}</code>`).join(' · ')}</span>
+                        </div>
+                        <label class="tabla-sel-fila">Fila de títulos:
+                            <select class="sel-header" data-tabla="${i}">${opciones}</select>
+                        </label>
+                    </li>`;
+                }).join('');
                 bloques.push(`<div class="aviso aviso-ok"><i class="ph ph-table"></i>
-                    <span><strong>${conTitulos.length} tabla(s) detectada(s).</strong> Se les aplicó
-                    <code>tabla-responsive-cards</code> y un <code>data-label</code> por celda, así
-                    que en celular se ven como tarjetas.</span></div>
-                    <ul class="lista-reporte">${detalle}</ul>`);
+                    <span><strong>${detectadas} tabla(s) detectada(s).</strong> Se les aplicó
+                    <code>tabla-responsive-cards</code> y un <code>data-label</code> por celda. Si los
+                    títulos no salieron bien, cambia la <strong>fila de títulos</strong> de esa tabla.</span></div>
+                    <ul class="lista-tablas">${filasHtml}</ul>`);
             }
-            const sinTitulos = r.tablas.length - conTitulos.length;
+
             if (sinTitulos > 0) {
                 bloques.push(`<div class="aviso aviso-warn"><i class="ph ph-table"></i>
                     <span><strong>${sinTitulos} tabla(s) sin encabezado claro.</strong> No se les puso
@@ -1179,7 +1235,16 @@ function initMicrositio() {
     Object.values(opt).forEach(o => o.addEventListener('change', () => {
         if (ARCHIVOS.size) convertir();
     }));
-    selectHtml.addEventListener('change', convertir);
+    // Al cambiar de página cambian las tablas: olvidamos las filas elegidas.
+    selectHtml.addEventListener('change', () => { HEADER_OVERRIDE = new Map(); convertir(); });
+
+    // Selector de fila de títulos por tabla (delegado: se re-renderiza en cada
+    // conversión). Guardamos la elección por índice de tabla y reconvertimos.
+    revisionLista.addEventListener('change', (e) => {
+        if (!e.target.classList.contains('sel-header')) return;
+        HEADER_OVERRIDE.set(Number(e.target.dataset.tabla), Number(e.target.value));
+        convertir();
+    });
 
     function copiar(textarea, boton) {
         if (!textarea.value.trim()) return;
