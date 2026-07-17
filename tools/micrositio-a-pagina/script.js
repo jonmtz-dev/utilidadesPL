@@ -356,16 +356,23 @@ function cargarImagen(url) {
     });
 }
 
-/** Dibuja el SVG en un canvas a `escala`× (para que no salga borroso) y lo devuelve como PNG. */
-async function rasterizarSVG(bytes, escala = 2) {
+/** Dibuja el SVG en un canvas y lo devuelve como PNG, a resolución generosa. */
+async function rasterizarSVG(bytes, escala = 3) {
     // Usamos el tamaño REAL del SVG (width/height o viewBox), no img.naturalWidth:
     // para un SVG sin tamaño intrínseco Chrome lo fija en 300px y salían PNGs
-    // gigantes que se veían deformes en Moodle. Con esto el PNG mide lo que el
-    // SVG dice que mide, ×escala para nitidez, y con un tope para no reventar memoria.
+    // deformes. Con esto el PNG mide lo que el SVG dice, a alta resolución.
     let { ancho, alto } = medidasSVG(new TextDecoder('utf-8').decode(bytes));
-    const MAX = 2048;
-    let esc = escala;
-    if (Math.max(ancho, alto) * esc > MAX) esc = MAX / Math.max(ancho, alto);
+    const lado = Math.max(ancho, alto);
+    const MAX = 3072;   // tope de memoria
+    const PISO = 1200;  // resolución mínima del lado largo para imágenes no diminutas
+
+    // Base ×escala (retina). Para imágenes medianas/grandes —ilustraciones, no
+    // íconos— subimos hasta un piso: un SVG detallado mostrado grande se ve
+    // borroso si el PNG tiene pocos píxeles (el SVG es vectorial; el PNG no).
+    let objetivo = lado * escala;
+    if (lado >= 150) objetivo = Math.max(objetivo, PISO);
+    objetivo = Math.min(objetivo, MAX);
+    const esc = objetivo / lado;
 
     const url = URL.createObjectURL(new Blob([bytes], { type: 'image/svg+xml' }));
     try {
