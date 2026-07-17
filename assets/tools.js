@@ -31,13 +31,13 @@ const TOOLS = [
         status: 'ready'
     },
     {
-        slug: 'herramienta-3',
-        title: 'Herramienta 3',
-        description: 'Otro hueco libre del cajón. Se activa en cuanto le pongas una URL y status "ready".',
-        icon: 'puzzle-piece',
-        accent: ['#34c759', '#30d0a0'],
-        tags: ['Moodle'],
-        url: null,
-        status: 'soon'
+        slug: 'micrositio-a-pagina',
+        title: 'Micrositio a Página',
+        description: 'Convierte un micrositio .zip en un recurso Página: reescribe las imágenes a @@PLUGINFILE@@ y avisa qué se rompe.',
+        icon: 'package',
+        accent: ['#7048e8', '#22b8cf'],
+        tags: ['Micrositios', 'Imágenes', 'ZIP'],
+        url: 'tools/micrositio-a-pagina/index.html',
+        status: 'ready'
     }
 ];

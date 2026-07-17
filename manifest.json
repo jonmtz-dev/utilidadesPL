@@ -1,0 +1,48 @@
+{
+  "name": "Panel de Herramientas Moodle",
+  "short_name": "Herramientas",
+  "description": "Cajón de utilidades para maquetar contenido en Moodle: tablas responsivas, bibliografías y más.",
+  "lang": "es",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "id": "./",
+  "display": "standalone",
+  "background_color": "#f0f2f5",
+  "theme_color": "#f0f2f5",
+  "categories": ["productivity", "education", "utilities"],
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Convertidor de Tablas",
+      "short_name": "Tablas",
+      "url": "tools/convertidor-tablas/index.html",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Generador de Bibliografías",
+      "short_name": "Bibliografías",
+      "url": "tools/generador-bibliografias/index.html",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

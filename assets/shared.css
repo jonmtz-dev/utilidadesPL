@@ -291,6 +291,95 @@ body {
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
+/* Botón "Instalar" (lo inyecta pwa.js cuando el navegador lo permite) */
+.btn-install {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 12px;
+    background: var(--accent);
+    border: none;
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.btn-install:hover {
+    background: var(--accent-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
+}
+
+/* Aviso flotante (nueva versión disponible) */
+.toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 12px 12px 20px;
+    border-radius: 16px;
+    background: var(--modal-bg);
+    max-width: calc(100vw - 32px);
+    animation: toastEntra 0.35s ease;
+}
+
+@keyframes toastEntra {
+    from { opacity: 0; transform: translate(-50%, 16px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.toast-texto {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.toast-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s ease;
+}
+
+.toast-btn:hover {
+    background: var(--accent-hover);
+}
+
+.toast-cerrar {
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.toast-cerrar:hover {
+    background: var(--control-bg);
+    color: var(--text-main);
+}
+
 .hidden {
     display: none !important;
 }

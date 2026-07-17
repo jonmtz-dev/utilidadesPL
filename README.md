@@ -4,6 +4,15 @@ Cajón de apps con utilidades propias para maquetar contenido en Moodle 5.1.
 Sin build, sin dependencias, sin `npm install`: son archivos HTML/CSS/JS planos.
 Se abre `index.html` en el navegador y funciona.
 
+Es además una **PWA instalable** (PC y móvil) que funciona sin conexión y avisa
+cuando hay una versión nueva.
+
+**Liga oficial (la que instala el equipo):**
+**<https://jonmtz-dev.github.io/utilidadesPL/>** — repo `jonmtz-dev/utilidadesPL`.
+
+Existe una copia en la cuenta personal (`jonawow/ConvertidorTablasMoodle`) como
+respaldo. Ver §7 antes de publicar en las dos.
+
 ---
 
 ## 1. Para qué existe esto
@@ -47,16 +56,23 @@ verifica que siga cuadrando con el CSS que está cargado en Moodle.
 
 ```
 index.html                  Launcher (el cajón de apps)
+manifest.json               Manifiesto PWA (nombre, iconos, atajos)
+sw.js                       Service Worker — VA EN LA RAÍZ, ver §7
+.nojekyll                   Evita que GitHub Pages procese el sitio con Jekyll
 assets/
   shared.css                Tokens de diseño, temas, shell y componentes de UI
   theme.js                  Tema claro/oscuro + inyecta el switch en el header
+  pwa.js                    Registra el SW, aviso de versión y botón Instalar
   launcher.css              Estilos del launcher
   launcher.js               Dibuja las tarjetas y la búsqueda
   tools.js                  ← Registro de herramientas (la fuente de la verdad)
+  icons/                    Iconos PWA (generados, ver §7)
 tools/
   convertidor-tablas/       Tablas de Word/HTML → tarjetas responsivas
     index.html · script.js · styles.css
   generador-bibliografias/  Fuentes de consulta → párrafos <p> con enlaces
+    index.html · script.js · styles.css
+  micrositio-a-pagina/      Micrositio .zip → recurso Página (@@PLUGINFILE@@)
     index.html · script.js · styles.css
 .claude/launch.json         Config del servidor local para previsualizar
 ```
@@ -109,6 +125,74 @@ Tres detalles que **no son adorno**, cada uno resuelve un problema real:
 
 El botón "Ver ejemplo del maquetado" abre un modal con la estructura completa
 del recurso y resaltados de color, y refleja los toggles activos.
+
+### Micrositio a Página (`tools/micrositio-a-pagina/`)
+
+Otro equipo maquetó contenido como **micrositios** (un `.zip` con `index.html`,
+`css/`, `img/`) subidos como recurso *Archivo*. Eso pierde el tema, el
+responsive y la app móvil, y para cambiar una coma hay que recomprimir. Esta
+herramienta los pasa a recurso **Página**.
+
+Acepta las tres formas en que llegan: **`.zip`**, **carpeta sin comprimir**
+(arrastrada o con el botón, vía `webkitGetAsEntry` / `webkitdirectory`) o
+archivos sueltos. Todo se procesa **en el navegador**; nada se sube. El zip se
+lee **sin librerías**, con `DecompressionStream('deflate-raw')`; soporta
+entradas *deflate* y *stored*, e ignora la basura de macOS (`__MACOSX/`, `._*`).
+
+Qué hace: extrae el `<body>`, reescribe las imágenes a
+`@@PLUGINFILE@@/archivo.ext` (en `src`, `srcset` y en los `url()` de estilos en
+línea), quita `<script>` / `<link>` / `<style>`, aplica el formato responsive a
+las tablas y reporta lo que se va a romper.
+
+**Pestaña Imágenes:** el checklist de qué arrastrar, con las alertas que a mano
+se escapan — imágenes que el HTML pide y no están, nombres repetidos en carpetas
+distintas (al aplanarse se pisan), nombres con espacios o acentos.
+
+**Pestaña Revisión:** no se limita a decir "hay scripts". Sabe qué trae Moodle 5
+y da un veredicto por caso:
+
+- Los `<script>` de Bootstrap, Font Awesome o jQuery **no son pérdida**: Moodle
+  ya los carga. Solo se marcan como problema los scripts propios.
+- Los `data-bs-toggle="collapse|dropdown|modal|offcanvas|tab"` **funcionan solo
+  con atributos**, así que sobreviven sin el bundle del micrositio.
+  `tooltip` y `popover` sí necesitan init por JS y se pierden.
+- Las tablas se detectan y se convierten solas: `tabla-responsive-cards` +
+  `data-label` sacados del `<thead>` (o de la primera fila). Si no hay
+  encabezado claro lo dice y sugiere el Convertidor de Tablas, que deja elegir
+  la fila a mano.
+
+**Pestaña CSS:** pegas tu hoja de estilos de Moodle y te dice **qué reglas del
+micrositio te faltan** y cuáles existen con distinto contenido. El CSS se parsea
+con el motor del navegador (`CSSStyleSheet` construible, que parsea sin aplicar,
+así el CSS ajeno no puede tocar el panel), no con regex.
+
+La **vista previa** va en un `<iframe sandbox>` con el CSS del micrositio y las
+imágenes reales del zip como `blob:`, así ves el resultado tal cual. El sandbox
+sin `allow-scripts` evita que ese CSS toque los estilos del panel.
+
+#### El flujo en Moodle (el truco importante)
+
+1. Crea el recurso **Página**.
+2. En el editor, **arrastra todas las imágenes de `img/` de un jalón**. Se van
+   al área de borrador de esa página.
+3. Abre **código fuente** (`</>`), borra todo y pega el HTML de la herramienta.
+4. Guarda. Las imágenes resuelven solas porque el HTML las llama por su nombre.
+
+Así no hay que subir imagen por imagen ni copiar URLs largas.
+
+> ⚠️ **Dos cosas sin validar en producción.** Pruébalas con UNA página antes de
+> convertir cuarenta:
+> 1. Que las imágenes del borrador sigan resolviendo al reemplazar el contenido
+>    del editor (debería: el HTML las referencia por nombre).
+> 2. Que Moodle no borre los atributos `data-bs-*` al guardar. Si los quita, los
+>    desplegables dejan de abrir — el contenido no se pierde, queda oculto. Si
+>    pasa, el plan B es convertirlos a `<details>/<summary>`, que es HTML nativo,
+>    no necesita JS ni atributos raros y sobrevive a cualquier purificado.
+
+> Idea para después: generar un `.mbz` (respaldo de Moodle) con todas las
+> páginas y sus imágenes dentro, y restaurarlo de un jalón. Es el camino
+> realmente masivo, pero el formato de backup es quisquilloso; solo vale la pena
+> si el flujo manual demuestra ser el cuello de botella.
 
 ---
 
@@ -251,7 +335,78 @@ Cosas que ya costaron un rato; no las vuelvas a pisar.
 
 ---
 
-## 7. Desarrollo
+## 7. PWA y publicación
+
+### Publicar en GitHub Pages
+
+En GitHub: **Settings → Pages → Source: Deploy from a branch → Branch: `main`,
+carpeta `/ (root)`**. En un par de minutos queda publicada, y cada `git push` a
+`main` republica solo.
+
+El código **no depende de la cuenta ni del nombre del repo**: todas las rutas
+son relativas y `pwa.js` deduce la raíz de su propia URL. Por eso el mismo
+código funciona igual en `jonmtz-dev/utilidadesPL` que en cualquier otro repo,
+sin cambiar nada.
+
+> ⚠️ **La app vive en un subdirectorio** (`.../utilidadesPL/`), no en la raíz
+> del dominio. De ahí la regla: **nunca uses rutas absolutas** (`/assets/...`).
+> Funcionan en local y se rompen en producción.
+
+#### Dos ligas = dos apps distintas
+
+El navegador identifica una PWA por su **origen**. Publicar el mismo código en
+dos cuentas produce dos apps independientes: caché propia, instalación propia y
+actualizaciones propias. Quien instaló desde la liga del trabajo **no** recibe
+nada de lo que publiques solo en la personal.
+
+Por eso: la liga oficial para el equipo es la del trabajo
+(<https://jonmtz-dev.github.io/utilidadesPL/>). La copia personal es respaldo;
+si la mantienes, publica en ambas o quedará atrás.
+
+### Instalar
+
+Con la página abierta en Chrome/Edge (PC o Android) aparece el botón
+**Instalar** en el header, o el icono de instalar en la barra de direcciones.
+En **iPhone/iPad** no existe ese botón: es Safari → Compartir → *Añadir a
+pantalla de inicio* (limitación de iOS, no del código).
+
+### Cómo funciona la actualización
+
+`sw.js` cachea la app para que abra sin internet, con estrategia **red primero,
+caché de respaldo**: teniendo conexión siempre ves lo último (nadie se queda
+pegado con una versión vieja), y sin conexión abre igual desde la caché.
+
+Cuando publicas y el navegador detecta que `sw.js` cambió, instala el SW nuevo,
+la app muestra el aviso *"Hay una nueva versión disponible"* con un botón
+**Actualizar**, y al pulsarlo se activa, borra la caché vieja y recarga. Se
+revisa al volver a la pestaña y cada 30 minutos.
+
+> ⚠️ **Al publicar cambios, sube `VERSION` en `sw.js`.** Es lo que hace que el
+> navegador note el cambio y salga el aviso. Si no la subes, el aviso no
+> aparece (el contenido igual se refresca por la estrategia de red primero,
+> pero la caché offline se queda vieja).
+
+### Los iconos
+
+`assets/icons/` está **generado**, no dibujado a mano. El script vive en el
+historial de la conversación pero es trivial de rehacer con PIL: cuadro con
+degradado `#0066cc → #00c6ff` y el glifo de 4 cuadros blanco, igual que el logo
+del launcher. Salidas: `icon-192`, `icon-512` (esquinas redondeadas),
+`icon-maskable-512` (lienzo completo, glifo al 40% para la zona segura de
+Android), `apple-touch-icon` (180) y `favicon-32`.
+
+### Probar la PWA
+
+**Los Service Workers solo corren en HTTPS o localhost.** Abriendo el
+`index.html` con doble clic (`file://`) la app funciona, pero no se instala ni
+cachea. Para probar de verdad usa `python -m http.server 5510`.
+
+Para forzar un estado limpio: DevTools → Application → Service Workers →
+*Unregister*, y Application → Storage → *Clear site data*.
+
+---
+
+## 8. Desarrollo
 
 Basta con abrir `index.html` en el navegador (funciona en `file://`).
 
@@ -278,6 +433,10 @@ la pena repetir:
   que la salida trae `tabla-responsive-cards` y un `data-label` por celda.
 - Bibliografías: generar con los toggles encendidos y apagados, y confirmar que
   el `span.nolink` solo envuelve enlaces de YouTube.
+- Micrositios: hay un generador de `.zip` de prueba con los casos difíciles
+  (nombre con espacio, colisión en subcarpetas, imagen faltante, script, enlace
+  a otra página, entrada *stored* sin comprimir). Vale la pena rehacerlo con
+  `zipfile` de Python si tocas el lector de zip.
 - Layout: con contenido largo (30 filas), comprobar
   `document.documentElement.scrollHeight > innerHeight === false` en escritorio.
 - Temas: recargar con `localStorage.setItem('panel-tema','dark')` y revisar que

@@ -26,12 +26,21 @@
         }
     }
 
+    // Instalada como app, la barra de título toma este color.
+    const COLOR_BARRA = { light: '#f0f2f5', dark: '#0f1115' };
+
+    function sincronizarBarra(tema) {
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.content = COLOR_BARRA[tema] || COLOR_BARRA.light;
+    }
+
     function aplicarTema(tema) {
         root.dataset.theme = tema;
         try {
             localStorage.setItem(STORAGE_KEY, tema);
         } catch (e) { /* Sin persistencia, pero el tema igual se aplica */ }
         sincronizarBotones(tema);
+        sincronizarBarra(tema);
     }
 
     function sincronizarBotones(tema) {
@@ -83,9 +92,14 @@
         sincronizarBotones(root.dataset.theme);
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', construirSwitch);
-    } else {
+    function init() {
         construirSwitch();
+        sincronizarBarra(root.dataset.theme);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
     }
 })();

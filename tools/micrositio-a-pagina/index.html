@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Micrositio a Página - Moodle</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="../../manifest.json">
+    <meta name="theme-color" content="#f0f2f5">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="../../assets/icons/apple-touch-icon.png">
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../assets/shared.css">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Iconos Phosphor -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Sin defer: aplica el tema antes del primer pintado -->
+    <script src="../../assets/theme.js"></script>
+    <script src="../../assets/pwa.js"></script>
+</head>
+<body>
+    <div class="background-mesh">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+    </div>
+
+    <main class="app-container glass-panel">
+        <header class="app-header">
+            <div class="logo logo--micrositio">
+                <i class="ph ph-package"></i>
+            </div>
+            <div>
+                <h1>Micrositio a Página</h1>
+                <p>Convierte un micrositio .zip en un recurso Página de Moodle</p>
+            </div>
+            <a class="btn-back" href="../../index.html">
+                <i class="ph ph-arrow-left"></i> Panel
+            </a>
+        </header>
+
+        <div class="workspace">
+            <!-- Columna Izquierda -->
+            <section class="panel-section glass-panel">
+                <div class="section-header">
+                    <h2><i class="ph ph-file-zip"></i> 1. Suelta el micrositio</h2>
+                </div>
+
+                <div id="dropzone" class="dropzone">
+                    <i class="ph ph-upload-simple"></i>
+                    <p class="dropzone-titulo">
+                        Arrastra aquí el <strong>.zip</strong> o la <strong>carpeta</strong>
+                    </p>
+                    <p class="dropzone-nota">todo se procesa en tu navegador, nada se sube</p>
+                    <div class="dropzone-botones">
+                        <button type="button" class="btn-secondary btn-chico" id="btn-buscar-zip">
+                            <i class="ph ph-file-zip"></i> Buscar .zip
+                        </button>
+                        <button type="button" class="btn-secondary btn-chico" id="btn-buscar-carpeta">
+                            <i class="ph ph-folder-open"></i> Buscar carpeta
+                        </button>
+                    </div>
+                    <input type="file" id="input-zip" accept=".zip,application/zip" hidden>
+                    <input type="file" id="input-carpeta" webkitdirectory multiple hidden>
+                </div>
+
+                <div id="zip-info" class="zip-info hidden"></div>
+
+                <div class="options-group mt-4">
+                    <h3><i class="ph ph-sliders"></i> Opciones</h3>
+
+                    <div class="field-row hidden" id="fila-html">
+                        <label for="select-html"><i class="ph ph-file-html"></i> Página</label>
+                        <select id="select-html"></select>
+                    </div>
+
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="opt-pluginfile" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Rutas de imagen a <code>@@PLUGINFILE@@</code></span>
+                    </label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="opt-solo-body" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Solo el contenido del <code>&lt;body&gt;</code></span>
+                    </label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="opt-quitar-css" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Quitar <code>&lt;link&gt;</code> y <code>&lt;style&gt;</code></span>
+                    </label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="opt-quitar-js" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Quitar <code>&lt;script&gt;</code> (Moodle los borra igual)</span>
+                    </label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="opt-tabla" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Tablas responsive (<code>tabla-responsive-cards</code>)</span>
+                    </label>
+                </div>
+
+                <button id="btn-convertir" class="btn-primary mt-4" disabled>
+                    <i class="ph ph-magic-wand"></i> Convertir
+                </button>
+
+                <button id="btn-pasos" class="btn-secondary mt-4" type="button">
+                    <i class="ph ph-list-numbers"></i> Ver pasos en Moodle
+                </button>
+            </section>
+
+            <!-- Columna Derecha -->
+            <section class="panel-section glass-panel">
+                <div class="tabs">
+                    <button class="tab-btn active" data-target="preview"><i class="ph ph-eye"></i> Vista Previa</button>
+                    <button class="tab-btn" data-target="code"><i class="ph ph-code"></i> HTML</button>
+                    <button class="tab-btn" data-target="imgs"><i class="ph ph-images"></i> Imágenes <span id="badge-imgs" class="badge hidden"></span></button>
+                    <button class="tab-btn" data-target="revision"><i class="ph ph-clipboard-text"></i> Revisión</button>
+                    <button class="tab-btn" data-target="css"><i class="ph ph-paint-brush"></i> CSS</button>
+                </div>
+
+                <div class="tab-content active" id="preview-content">
+                    <div class="empty-state" id="preview-empty">
+                        <i class="ph ph-package"></i>
+                        <p>Suelta un micrositio para ver la vista previa</p>
+                    </div>
+                    <iframe id="preview-frame" class="preview-frame hidden"
+                            sandbox="allow-same-origin" title="Vista previa del micrositio"></iframe>
+                </div>
+
+                <div class="tab-content" id="code-content">
+                    <div class="code-wrapper">
+                        <button id="btn-copy" class="btn-icon" title="Copiar código">
+                            <i class="ph ph-copy"></i>
+                        </button>
+                        <textarea id="output-code" class="code-output" readonly
+                                  placeholder="El HTML listo para pegar en el recurso Página aparecerá aquí..."></textarea>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="imgs-content">
+                    <div id="imgs-lista" class="reporte"></div>
+                </div>
+
+                <div class="tab-content" id="revision-content">
+                    <div id="revision-lista" class="reporte">
+                        <div class="aviso aviso-info">
+                            <i class="ph ph-info"></i>
+                            <span>Carga un micrositio para revisar tablas, interactivos, scripts y dependencias.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="css-content">
+                    <div class="reporte">
+                        <div class="aviso aviso-info">
+                            <i class="ph ph-info"></i>
+                            <span>Pega aquí tu hoja de estilos de Moodle y te digo <strong>qué reglas del micrositio te faltan</strong> o están distintas.</span>
+                        </div>
+
+                        <textarea id="input-css-moodle" class="plain-input plain-input--css"
+                                  placeholder="Pega aquí el CSS que tienes en Moodle..."></textarea>
+
+                        <button id="btn-comparar" class="btn-primary" type="button">
+                            <i class="ph ph-git-diff"></i> Comparar con mi hoja
+                        </button>
+
+                        <div id="cmp-resultado"></div>
+
+                        <details class="css-crudo">
+                            <summary>Ver el CSS que traía el micrositio</summary>
+                            <div class="code-wrapper">
+                                <button id="btn-copy-css" class="btn-icon" title="Copiar CSS">
+                                    <i class="ph ph-copy"></i>
+                                </button>
+                                <textarea id="output-css" class="code-output" readonly
+                                          placeholder="El CSS encontrado en el micrositio aparecerá aquí..."></textarea>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Modal con los pasos en Moodle -->
+    <div id="modal-pasos" class="modal hidden">
+        <div class="modal-content glass-panel">
+            <button class="modal-close" id="modal-close" title="Cerrar" aria-label="Cerrar">
+                <i class="ph ph-x"></i>
+            </button>
+            <h3><i class="ph ph-list-numbers"></i> Pasos en Moodle</h3>
+
+            <ol class="pasos">
+                <li>Crea el recurso <strong>Página</strong> en el curso.</li>
+                <li>
+                    En el editor de <em>Contenido</em>, <strong>arrastra todas las imágenes de
+                    <code>img/</code> de un jalón</strong> (selecciónalas todas y suéltalas).
+                    Se van al área de borrador de esa página.
+                </li>
+                <li>
+                    Abre <strong>código fuente</strong> (<code>&lt;/&gt;</code>), <strong>borra
+                    todo</strong> y pega el HTML de la pestaña <em>HTML</em>.
+                </li>
+                <li>Guarda. Las imágenes resuelven solas porque el HTML las llama por su nombre.</li>
+            </ol>
+
+            <p class="aviso aviso-warn">
+                <i class="ph ph-warning"></i>
+                <span>
+                    <strong>Prueba con una página antes de hacer cuarenta.</strong> El flujo depende
+                    de que las imágenes del borrador sigan resolviendo al reemplazar el contenido
+                    del editor. Debería funcionar porque el HTML las referencia, pero conviene
+                    confirmarlo una vez.
+                </span>
+            </p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
