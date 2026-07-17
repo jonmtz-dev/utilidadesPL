@@ -39,7 +39,25 @@ document.addEventListener('DOMContentLoaded', () => {
         
         globalTempDiv = document.createElement('div');
         globalTempDiv.innerHTML = rawHTML;
-        
+
+        let tabla = globalTempDiv.querySelector('table');
+
+        // Si no hay tabla como nodo, es que pegaron el HTML como texto (código
+        // crudo): el contenteditable lo guarda escapado (&lt;table&gt;…), así que
+        // reinterpretamos ese texto como HTML y volvemos a buscar.
+        if (!tabla) {
+            const comoTexto = globalTempDiv.textContent;
+            if (/<table[\s\S]*<\/table>/i.test(comoTexto)) {
+                globalTempDiv.innerHTML = comoTexto;
+                tabla = globalTempDiv.querySelector('table');
+            }
+        }
+
+        if (!tabla) {
+            alert("⚠️ No se detectó ninguna tabla en el texto pegado.");
+            return;
+        }
+
         // Limpiar estilos en línea inyectados por el navegador al copiar
         globalTempDiv.querySelectorAll('*').forEach(el => {
             el.removeAttribute('style');
@@ -47,12 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
             el.removeAttribute('data-darkreader-inline-color');
             el.removeAttribute('data-darkreader-inline-bgcolor');
         });
-        
-        globalOriginalTable = globalTempDiv.querySelector('table');
-        if (!globalOriginalTable) {
-            alert("⚠️ No se detectó ninguna tabla en el texto pegado.");
-            return;
-        }
+
+        globalOriginalTable = tabla;
         
         tabs[0].click();
         previewEmpty.classList.add('hidden');
