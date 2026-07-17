@@ -146,7 +146,19 @@ las tablas y reporta lo que se va a romper.
 
 **Pestaña Imágenes:** el checklist de qué arrastrar, con las alertas que a mano
 se escapan — imágenes que el HTML pide y no están, nombres repetidos en carpetas
-distintas (al aplanarse se pisan), nombres con espacios o acentos.
+distintas (al aplanarse se pisan), nombres con espacios o acentos. El botón
+**Descargar imágenes (.zip)** empaqueta justo las imágenes que esa página usa,
+ya listas para arrastrar (ver la trampa del SVG abajo).
+
+**SVG → PNG (importante).** El arrastre *múltiple* del editor TinyMCE **rechaza
+los `.svg`** (subidos de a uno sí los acepta, pero eso no sirve para "todas de un
+jalón"). Por eso el toggle **Convertir SVG a PNG** (encendido por defecto): al
+descargar el zip, cada SVG se rasteriza en un `<canvas>` a 2× (leyendo su
+`viewBox` si no trae `width`/`height`, o saldría de 0px) y el HTML ya referencia
+el `.png`. La vista previa sigue mostrando el SVG original —el navegador lo pinta
+directo— gracias a un mapa `salida.png → archivo.svg`. El `.zip` se **genera** sin
+librerías, "stored" (sin compresión: los PNG ya vienen comprimidos), con el mismo
+espíritu que el lector de zip.
 
 **Pestaña Revisión:** no se limita a decir "hay scripts". Sabe qué trae Moodle 5
 y da un veredicto por caso:
@@ -173,10 +185,12 @@ sin `allow-scripts` evita que ese CSS toque los estilos del panel.
 #### El flujo en Moodle (el truco importante)
 
 1. Crea el recurso **Página**.
-2. En el editor, **arrastra todas las imágenes de `img/` de un jalón**. Se van
-   al área de borrador de esa página.
-3. Abre **código fuente** (`</>`), borra todo y pega el HTML de la herramienta.
-4. Guarda. Las imágenes resuelven solas porque el HTML las llama por su nombre.
+2. En la herramienta, pulsa **Descargar imágenes (.zip)** y descomprímelo. Trae
+   todas las imágenes que esa página usa, con los SVG ya convertidos a PNG.
+3. En el editor, **arrastra todas esas imágenes de un jalón**. Se van al área de
+   borrador de esa página (sin el zip, los SVG se caen del arrastre múltiple).
+4. Abre **código fuente** (`</>`), borra todo y pega el HTML de la herramienta.
+5. Guarda. Las imágenes resuelven solas porque el HTML las llama por su nombre.
 
 Así no hay que subir imagen por imagen ni copiar URLs largas.
 

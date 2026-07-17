@@ -282,6 +282,21 @@
     font-variant-numeric: tabular-nums;
 }
 
+.etiqueta-svg {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    background: rgba(0, 122, 255, 0.16);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 2px 7px;
+    flex-shrink: 0;
+}
+
+#btn-descargar-imgs {
+    margin-bottom: 12px;
+}
+
 .lista-reporte {
     font-size: 13px;
     padding-left: 4px;

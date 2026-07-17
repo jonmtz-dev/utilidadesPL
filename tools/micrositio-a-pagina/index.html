@@ -116,6 +116,11 @@
                         <span class="slider"></span>
                         <span class="label-text">Tablas responsive (<code>tabla-responsive-cards</code>)</span>
                     </label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="opt-svg-png" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Convertir <code>SVG</code> a <code>PNG</code> al descargar</span>
+                    </label>
                 </div>
 
                 <button id="btn-convertir" class="btn-primary mt-4" disabled>
@@ -157,6 +162,9 @@
                 </div>
 
                 <div class="tab-content" id="imgs-content">
+                    <button id="btn-descargar-imgs" class="btn-primary hidden" type="button">
+                        <i class="ph ph-download-simple"></i> Descargar imágenes (.zip)
+                    </button>
                     <div id="imgs-lista" class="reporte"></div>
                 </div>
 
@@ -218,8 +226,13 @@
             <ol class="pasos">
                 <li>Crea el recurso <strong>Página</strong> y ve al editor de <em>Contenido</em>.</li>
                 <li>
-                    <strong>Arrastra PRIMERO las imágenes</strong>, todas de un jalón: abre la carpeta
-                    <code>img/</code>, <kbd>Ctrl</kbd>+<kbd>A</kbd> y suéltalas en el editor.
+                    En la pestaña <strong>Imágenes</strong>, pulsa <strong>Descargar imágenes (.zip)</strong>
+                    y descomprímelo. Trae los SVG ya convertidos a PNG (el arrastre múltiple del editor
+                    rechaza los <code>.svg</code>).
+                </li>
+                <li>
+                    <strong>Arrastra PRIMERO esas imágenes</strong>, todas de un jalón:
+                    <kbd>Ctrl</kbd>+<kbd>A</kbd> en la carpeta descomprimida y suéltalas en el editor.
                     <em>Este paso va antes que el código.</em>
                 </li>
                 <li>

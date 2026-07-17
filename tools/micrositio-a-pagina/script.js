@@ -294,10 +294,129 @@ function baseDeBorrador(url) {
     return limpia.slice(0, corte + 1);
 }
 
+/* -------------------------------------------- SVG -> PNG y armado zip --- */
+
+/**
+ * Lee las medidas de un SVG. El arrastre múltiple de TinyMCE rechaza los SVG,
+ * así que los rasterizamos a PNG para poder subirlos como los demás. Un SVG sin
+ * width/height explícitos hay que medirlo por su viewBox o saldría de 0px.
+ */
+function medidasSVG(texto) {
+    const svg = new DOMParser().parseFromString(texto, 'image/svg+xml').querySelector('svg');
+    let ancho = parseFloat(svg?.getAttribute('width'));
+    let alto = parseFloat(svg?.getAttribute('height'));
+    if (!ancho || !alto) {
+        const vb = (svg?.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
+        if (vb.length === 4) { ancho = ancho || vb[2]; alto = alto || vb[3]; }
+    }
+    return { ancho: ancho || 512, alto: alto || 512 };
+}
+
+function cargarImagen(url) {
+    return new Promise((ok, err) => {
+        const img = new Image();
+        img.onload = () => ok(img);
+        img.onerror = () => err(new Error('No se pudo rasterizar un SVG'));
+        img.src = url;
+    });
+}
+
+/** Dibuja el SVG en un canvas a `escala`× (para que no salga borroso) y lo devuelve como PNG. */
+async function rasterizarSVG(bytes, escala = 2) {
+    const medidas = medidasSVG(new TextDecoder('utf-8').decode(bytes));
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'image/svg+xml' }));
+    try {
+        const img = await cargarImagen(url);
+        const w = Math.max(1, Math.round((img.naturalWidth || medidas.ancho) * escala));
+        const h = Math.max(1, Math.round((img.naturalHeight || medidas.alto) * escala));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+        return new Uint8Array(await blob.arrayBuffer());
+    } finally {
+        URL.revokeObjectURL(url);
+    }
+}
+
+const CRC_TABLA = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        t[n] = c >>> 0;
+    }
+    return t;
+})();
+
+function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLA[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+/**
+ * Arma un .zip "stored" (sin compresión) sin librerías, igual que leemos el zip
+ * a mano. Los PNG/JPG ya vienen comprimidos, así que comprimir de nuevo no
+ * ahorra nada. Marca los nombres como UTF-8 (bit 11) para respetar acentos.
+ */
+function armarZipStored(entradas) {
+    const enc = new TextEncoder();
+    const datosLocales = [];
+    const central = [];
+    let offset = 0;
+
+    for (const { nombre, datos } of entradas) {
+        const nombreBytes = enc.encode(nombre);
+        const crc = crc32(datos);
+        const tam = datos.length;
+
+        const lh = new DataView(new ArrayBuffer(30));
+        lh.setUint32(0, SIG_LOCAL, true);
+        lh.setUint16(4, 20, true);       // versión necesaria
+        lh.setUint16(6, 0x0800, true);   // bandera: nombres UTF-8
+        lh.setUint16(8, 0, true);        // método 0 = stored
+        lh.setUint32(14, crc, true);
+        lh.setUint32(18, tam, true);     // tam comprimido
+        lh.setUint32(22, tam, true);     // tam sin comprimir
+        lh.setUint16(26, nombreBytes.length, true);
+        datosLocales.push(new Uint8Array(lh.buffer), nombreBytes, datos);
+
+        const cd = new DataView(new ArrayBuffer(46));
+        cd.setUint32(0, SIG_CD, true);
+        cd.setUint16(4, 20, true);       // versión que lo creó
+        cd.setUint16(6, 20, true);       // versión necesaria
+        cd.setUint16(8, 0x0800, true);   // bandera UTF-8
+        cd.setUint16(10, 0, true);       // método stored
+        cd.setUint32(16, crc, true);
+        cd.setUint32(20, tam, true);
+        cd.setUint32(24, tam, true);
+        cd.setUint16(28, nombreBytes.length, true);
+        cd.setUint32(42, offset, true);  // offset de la cabecera local
+        central.push(new Uint8Array(cd.buffer), nombreBytes);
+
+        offset += 30 + nombreBytes.length + tam;
+    }
+
+    const centralTam = central.reduce((s, c) => s + c.length, 0);
+    const eocd = new DataView(new ArrayBuffer(22));
+    eocd.setUint32(0, SIG_EOCD, true);
+    eocd.setUint16(8, entradas.length, true);
+    eocd.setUint16(10, entradas.length, true);
+    eocd.setUint32(12, centralTam, true);
+    eocd.setUint32(16, offset, true);    // inicio del directorio central
+
+    return new Blob([...datosLocales, ...central, new Uint8Array(eocd.buffer)],
+        { type: 'application/zip' });
+}
+
 /* ------------------------------------------------------------- Estado --- */
 
 let ARCHIVOS = new Map();   // ruta -> Uint8Array
 let BLOBS = [];             // URLs a revocar entre conversiones
+let RENOMBRE = new Map();   // nombre de salida -> ruta original (para la preview)
+let ULTIMO_REPORTE = null;  // último reporte, para la descarga de imágenes
 
 /* ---------------------------------------------------------------- Init --- */
 
@@ -334,8 +453,10 @@ function initMicrositio() {
         soloBody: document.getElementById('opt-solo-body'),
         quitarCss: document.getElementById('opt-quitar-css'),
         quitarJs: document.getElementById('opt-quitar-js'),
-        tabla: document.getElementById('opt-tabla')
+        tabla: document.getElementById('opt-tabla'),
+        svgPng: document.getElementById('opt-svg-png')
     };
+    const btnDescargarImgs = document.getElementById('btn-descargar-imgs');
 
     function activarTab(nombre) {
         tabs.forEach(t => t.classList.toggle('active', t.dataset.target === nombre));
@@ -471,6 +592,7 @@ function initMicrositio() {
 
         BLOBS.forEach(URL.revokeObjectURL);
         BLOBS = [];
+        RENOMBRE = new Map();
 
         const rutaHtml = selectHtml.value;
         const dirBase = rutaHtml.includes('/')
@@ -567,6 +689,15 @@ function initMicrositio() {
                 return null;
             }
 
+            // Solo reescribimos la ruta si vamos a apuntar a Moodle (borrador o
+            // marcador). En ese caso, si es SVG y el toggle está activo, el
+            // nombre de salida pasa a .png (TinyMCE rechaza los SVG al arrastre
+            // múltiple; los subimos ya rasterizados).
+            const reescribiendo = draftBase || opt.pluginfile.checked;
+            const salida = (reescribiendo && opt.svgPng.checked && extension(ruta) === 'svg')
+                ? base.replace(/\.svg$/i, '.png')
+                : base;
+
             // Al arrastrarlas al editor todas quedan planas: dos archivos con el
             // mismo nombre en carpetas distintas se pisarían.
             const previa = reporte.usadas.get(base);
@@ -574,15 +705,16 @@ function initMicrositio() {
                 if (!reporte.colisiones.has(base)) reporte.colisiones.set(base, new Set([previa.ruta]));
                 reporte.colisiones.get(base).add(ruta);
             } else {
-                reporte.usadas.set(base, { ruta, tam: ARCHIVOS.get(ruta).length });
+                reporte.usadas.set(base, { ruta, tam: ARCHIVOS.get(ruta).length, salida });
+                RENOMBRE.set(salida, ruta);   // la preview resuelve el nombre de salida al archivo real
             }
 
             // Si nos dieron la carpeta de borrador, apuntamos ahí: al guardar,
             // Moodle la convierte a @@PLUGINFILE@@ por su cuenta.
-            if (draftBase) return draftBase + encodeURIComponent(base);
+            if (draftBase) return draftBase + encodeURIComponent(salida);
 
             return opt.pluginfile.checked
-                ? `@@PLUGINFILE@@/${encodeURIComponent(base)}`
+                ? `@@PLUGINFILE@@/${encodeURIComponent(salida)}`
                 : valor;
         }
 
@@ -644,7 +776,61 @@ function initMicrositio() {
 
         const problemas = reporte.faltantes.length + reporte.colisiones.size;
         badgeImgs.classList.toggle('badge--alerta', problemas > 0);
+
+        ULTIMO_REPORTE = reporte;
+        btnDescargarImgs.classList.toggle('hidden', reporte.usadas.size === 0);
     }
+
+    /* ------------------------------------------------ Descargar imágenes */
+
+    /**
+     * Empaqueta en un .zip todas las imágenes que esta página usa, ya listas para
+     * arrastrar al editor: las de mapa de bits tal cual y los SVG rasterizados a
+     * PNG (con el nombre que el HTML ya referencia). Un solo arrastre, sin
+     * excepciones de SVG.
+     */
+    async function descargarImagenes() {
+        if (!ULTIMO_REPORTE || !ULTIMO_REPORTE.usadas.size) return;
+
+        const original = btnDescargarImgs.innerHTML;
+        btnDescargarImgs.disabled = true;
+        btnDescargarImgs.innerHTML = '<i class="ph ph-spinner"></i> Preparando…';
+
+        try {
+            const entradas = [];
+            for (const info of ULTIMO_REPORTE.usadas.values()) {
+                const datos = ARCHIVOS.get(info.ruta);
+                if (!datos) continue;
+
+                // El nombre de salida manda: si quedó .png y el original es .svg,
+                // rasterizamos; así el archivo casa con lo que el HTML pide.
+                if (extension(info.salida) === 'png' && extension(info.ruta) === 'svg') {
+                    try {
+                        entradas.push({ nombre: info.salida, datos: await rasterizarSVG(datos) });
+                        continue;
+                    } catch (e) {
+                        console.warn('[micrositio] SVG que no se pudo rasterizar:', info.ruta, e);
+                        // Cae al SVG original con su nombre original, para no perderlo.
+                        entradas.push({ nombre: info.ruta.split('/').pop(), datos });
+                        continue;
+                    }
+                }
+                entradas.push({ nombre: info.salida, datos });
+            }
+
+            const url = URL.createObjectURL(armarZipStored(entradas));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'imagenes-moodle.zip';
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } finally {
+            btnDescargarImgs.disabled = false;
+            btnDescargarImgs.innerHTML = original;
+        }
+    }
+
+    btnDescargarImgs.addEventListener('click', descargarImagenes);
 
     /* ---------------------------------------------------------- Reporte */
 
@@ -680,19 +866,21 @@ function initMicrositio() {
 
         // Checklist principal
         if (r.usadas.size) {
-            const filas = [...r.usadas.entries()]
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .map(([base, info]) => `
+            const entradas = [...r.usadas.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+            const svgs = entradas.filter(([base, info]) => info.salida !== base).length;
+            const filas = entradas.map(([base, info]) => `
                     <li>
                         <i class="ph ph-image"></i>
-                        <code>${escapar(base)}</code>
+                        <code>${escapar(info.salida)}</code>
+                        ${info.salida !== base ? `<span class="etiqueta-svg" title="Se rasteriza al descargar">SVG→PNG</span>` : ''}
                         <span class="ruta">${escapar(info.ruta)}</span>
                         <span class="peso">${(info.tam / 1024).toFixed(0)} KB</span>
                     </li>`).join('');
             bloques.unshift(`
                 <div class="aviso aviso-ok"><i class="ph ph-check-circle"></i>
                     <span><strong>${r.usadas.size} imagen(es) para arrastrar al editor.</strong>
-                    Selecciónalas todas juntas y suéltalas en el campo Contenido.</span></div>
+                    Usa <strong>Descargar imágenes</strong> y suelta todo el zip descomprimido en el
+                    campo Contenido, de un jalón.${svgs ? ` Incluye ${svgs} SVG convertido(s) a PNG.` : ''}</span></div>
                 <ul class="lista-imgs">${filas}</ul>`);
         } else {
             bloques.unshift(`<div class="aviso aviso-info"><i class="ph ph-info"></i>
@@ -855,7 +1043,10 @@ function initMicrositio() {
             }
 
             const base = decodeURIComponent(crudo);
-            const ruta = [...ARCHIVOS.keys()].find(r => r.split('/').pop() === base);
+            // El HTML puede referir un .png que en realidad es un .svg renombrado:
+            // RENOMBRE lo devuelve al archivo real. El navegador pinta el SVG solo.
+            const ruta = RENOMBRE.get(base)
+                || [...ARCHIVOS.keys()].find(r => r.split('/').pop() === base);
             if (!ruta) return null;
             const url = URL.createObjectURL(
                 new Blob([ARCHIVOS.get(ruta)], { type: EXT_MIME[extension(ruta)] || '' })
