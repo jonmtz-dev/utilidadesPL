@@ -168,7 +168,7 @@ function resumenFila(fila) {
  * Devuelve { titulos, headerIndex, filas } para pintar el selector, o null si la
  * tabla no tiene de dónde sacar títulos.
  */
-function aplicarResponsive(tabla, { headerIndex = null, colorear = false } = {}) {
+function aplicarResponsive(tabla, { headerIndex = null, colorear = false, colorearHeader = false } = {}) {
     const filas = [...tabla.querySelectorAll('tr')];
     if (filas.length < 2) return null;
 
@@ -201,6 +201,15 @@ function aplicarResponsive(tabla, { headerIndex = null, colorear = false } = {})
             celdas[0].classList.add(rowIndex % 2 === 0 ? 'bg-primary-10' : 'bg-secondary-10');
         }
     });
+
+    if (colorearHeader && filas[idx]) {
+        const thead = tabla.querySelector('thead');
+        if (thead && thead.contains(filas[idx])) {
+            thead.classList.add('bg-primary-20');
+        } else {
+            filas[idx].classList.add('bg-primary-20');
+        }
+    }
 
     tabla.classList.add('table', 'tabla-responsive-cards');
 
@@ -507,6 +516,7 @@ function initMicrositio() {
         tabla: document.getElementById('opt-tabla'),
         svgPng: document.getElementById('opt-svg-png'),
         colorear: document.getElementById('opt-colorear'),
+        colorearHeader: document.getElementById('opt-colorear-header'),
         previewMoodle: document.getElementById('opt-preview-moodle')
     };
     const btnDescargarImgs = document.getElementById('btn-descargar-imgs');
@@ -695,7 +705,8 @@ function initMicrositio() {
             [...doc.querySelectorAll('table')].forEach((t, i) => {
                 reporte.tablas.push(aplicarResponsive(t, {
                     headerIndex: HEADER_OVERRIDE.has(i) ? HEADER_OVERRIDE.get(i) : null,
-                    colorear: opt.colorear.checked
+                    colorear: opt.colorear.checked,
+                    colorearHeader: opt.colorearHeader.checked
                 }));
             });
         } else {

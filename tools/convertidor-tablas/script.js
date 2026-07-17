@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabContents = document.querySelectorAll('.tab-content');
     const optBordered = document.getElementById('opt-bordered');
     const optAltColors = document.getElementById('opt-alt-colors');
+    const optHeaderColor = document.getElementById('opt-header-color');
     const optMoodleWrap = document.getElementById('opt-moodle-wrap');
 
     let globalTempDiv = null;
@@ -152,7 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!headerRow) return;
         
         const thead = document.createElement('thead');
-        thead.className = "thead bg-primary-20";
+        thead.className = optHeaderColor && optHeaderColor.checked ? "thead bg-primary-20" : "thead";
         const newHeaderRow = document.createElement('tr');
         
         const headers = [];
