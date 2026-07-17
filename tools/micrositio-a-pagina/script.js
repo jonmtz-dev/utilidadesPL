@@ -358,12 +358,20 @@ function cargarImagen(url) {
 
 /** Dibuja el SVG en un canvas a `escala`× (para que no salga borroso) y lo devuelve como PNG. */
 async function rasterizarSVG(bytes, escala = 2) {
-    const medidas = medidasSVG(new TextDecoder('utf-8').decode(bytes));
+    // Usamos el tamaño REAL del SVG (width/height o viewBox), no img.naturalWidth:
+    // para un SVG sin tamaño intrínseco Chrome lo fija en 300px y salían PNGs
+    // gigantes que se veían deformes en Moodle. Con esto el PNG mide lo que el
+    // SVG dice que mide, ×escala para nitidez, y con un tope para no reventar memoria.
+    let { ancho, alto } = medidasSVG(new TextDecoder('utf-8').decode(bytes));
+    const MAX = 2048;
+    let esc = escala;
+    if (Math.max(ancho, alto) * esc > MAX) esc = MAX / Math.max(ancho, alto);
+
     const url = URL.createObjectURL(new Blob([bytes], { type: 'image/svg+xml' }));
     try {
         const img = await cargarImagen(url);
-        const w = Math.max(1, Math.round((img.naturalWidth || medidas.ancho) * escala));
-        const h = Math.max(1, Math.round((img.naturalHeight || medidas.alto) * escala));
+        const w = Math.max(1, Math.round(ancho * esc));
+        const h = Math.max(1, Math.round(alto * esc));
         const canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = h;
@@ -766,6 +774,22 @@ function initMicrositio() {
             if (src !== null) {
                 const nuevo = traducir(src);
                 if (nuevo) el.setAttribute('src', nuevo);
+
+                // Si convertimos un SVG a PNG y el <img> no dice de qué tamaño va,
+                // le fijamos el tamaño real del SVG. Sin esto, el PNG se mostraba
+                // a su resolución en píxeles (gigante) cuando el recurso no lo
+                // limitaba por CSS. El atributo width/height cede ante cualquier
+                // CSS existente, así que no pisa los casos que ya se veían bien.
+                if (nuevo && el.tagName === 'IMG' && /\.png$/i.test(nuevo) && !esExterna(src)
+                    && !el.hasAttribute('width') && !el.hasAttribute('height')) {
+                    const ruta = resolverRuta(dirBase, src);
+                    if (extension(ruta) === 'svg' && ARCHIVOS.has(ruta)) {
+                        const { ancho, alto } = medidasSVG(
+                            new TextDecoder('utf-8').decode(ARCHIVOS.get(ruta)));
+                        el.setAttribute('width', Math.round(ancho));
+                        el.setAttribute('height', Math.round(alto));
+                    }
+                }
             }
 
             const srcset = el.getAttribute('srcset');

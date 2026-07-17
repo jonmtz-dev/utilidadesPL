@@ -153,12 +153,18 @@ ya listas para arrastrar (ver la trampa del SVG abajo).
 **SVG → PNG (importante).** El arrastre *múltiple* del editor TinyMCE **rechaza
 los `.svg`** (subidos de a uno sí los acepta, pero eso no sirve para "todas de un
 jalón"). Por eso el toggle **Convertir SVG a PNG** (encendido por defecto): al
-descargar el zip, cada SVG se rasteriza en un `<canvas>` a 2× (leyendo su
-`viewBox` si no trae `width`/`height`, o saldría de 0px) y el HTML ya referencia
-el `.png`. La vista previa sigue mostrando el SVG original —el navegador lo pinta
-directo— gracias a un mapa `salida.png → archivo.svg`. El `.zip` se **genera** sin
-librerías, "stored" (sin compresión: los PNG ya vienen comprimidos), con el mismo
-espíritu que el lector de zip.
+descargar el zip, cada SVG se rasteriza en un `<canvas>` a 2× y el HTML ya
+referencia el `.png`. La vista previa sigue mostrando el SVG original —el
+navegador lo pinta directo— gracias a un mapa `salida.png → archivo.svg`. El
+`.zip` se **genera** sin librerías, "stored" (sin compresión: los PNG ya vienen
+comprimidos), con el mismo espíritu que el lector de zip.
+
+El **tamaño** se saca del `width`/`height` del SVG, o de su `viewBox` si no los
+trae. Antes se usaba `img.naturalWidth`, que para un SVG sin tamaño intrínseco
+Chrome fija en **300px**: eso disparaba PNGs de 600px que en unos recursos salían
+gigantes y en otros deformes (según si el recurso los limitaba por CSS). Además,
+si el `<img>` no declara `width`/`height`, se los ponemos con el tamaño real del
+SVG (el atributo cede ante cualquier CSS, así que no pisa lo que ya se veía bien).
 
 **Pestaña Revisión:** no se limita a decir "hay scripts". Sabe qué trae Moodle 5
 y da un veredicto por caso:

@@ -89,6 +89,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         basura.forEach(n => n.remove());
 
+        // Normaliza el espacio DENTRO de las celdas con texto. Al pegar código
+        // indentado, ese sangrado se vuelve &nbsp; pegado al texto; y como
+        // innerHTML serializa el nbsp como la entidad "&nbsp;" (empieza por '&'),
+        // un .trim() sobre el string ya no lo quita y la celda queda desalineada
+        // (sobre todo la 1ª columna y los <th> centrados). Aquí se arregla en el
+        // DOM, donde el nbsp sí es un espacio de verdad. Las celdas vacías (solo
+        // espacios) NO se tocan: ese &nbsp; les da altura en escritorio.
+        globalTempDiv.querySelectorAll('td, th').forEach(celda => {
+            if (!celda.textContent.trim()) return;
+            const textos = [];
+            const w = document.createTreeWalker(celda, NodeFilter.SHOW_TEXT);
+            for (let t = w.nextNode(); t; t = w.nextNode()) textos.push(t);
+            textos.forEach(t => { t.textContent = t.textContent.replace(/\s+/g, ' '); });
+            textos[0].textContent = textos[0].textContent.replace(/^\s+/, '');
+            const ult = textos[textos.length - 1];
+            ult.textContent = ult.textContent.replace(/\s+$/, '');
+        });
+
         tabs[0].click();
         previewEmpty.classList.add('hidden');
         previewContainer.classList.remove('hidden');
