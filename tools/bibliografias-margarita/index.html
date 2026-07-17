@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bloqueador de Vista Previa YouTube - Moodle</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="../../manifest.json">
+    <meta name="theme-color" content="#f0f2f5">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="../../assets/icons/apple-touch-icon.png">
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../assets/shared.css">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Iconos Phosphor -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Sin defer: aplica el tema antes del primer pintado -->
+    <script src="../../assets/theme.js"></script>
+    <script src="../../assets/pwa.js"></script>
+</head>
+<body>
+    <div class="background-mesh">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+    </div>
+
+    <main class="app-container glass-panel">
+        <header class="app-header">
+            <div class="logo logo--ytnolink">
+                <i class="ph ph-youtube-logo"></i>
+            </div>
+            <div>
+                <h1>Bloqueador de Vista Previa YouTube</h1>
+                <p>Pega tu código y agrega <code>nomediaplugin</code> a los enlaces de YouTube para que Moodle no los convierta en reproductor</p>
+            </div>
+            <a class="btn-back" href="../../index.html">
+                <i class="ph ph-arrow-left"></i> Panel
+            </a>
+        </header>
+
+        <div class="workspace">
+            <!-- Columna Izquierda: Código de entrada -->
+            <section class="panel-section glass-panel">
+                <div class="section-header">
+                    <h2><i class="ph ph-code"></i> 1. Pega tu código HTML</h2>
+                </div>
+
+                <textarea id="input-code" class="plain-input code-input" placeholder="Pega aquí el bloque de HTML que quieras corregir: párrafos, bibliografía, una sección completa..."></textarea>
+
+                <p class="field-hint tool-hint">
+                    Busca etiquetas <code>&lt;a&gt;</code> cuyo <code>href</code> apunte a
+                    <code>youtube.com</code> o <code>youtu.be</code> y les agrega
+                    <code>class="nomediaplugin"</code>. Todo lo demás queda exactamente igual.
+                </p>
+
+                <button id="btn-process" class="btn-primary mt-4" disabled>
+                    <i class="ph ph-magic-wand"></i> Corregir enlaces de YouTube
+                </button>
+            </section>
+
+            <!-- Columna Derecha: Resultado -->
+            <section class="panel-section glass-panel">
+                <div class="tabs">
+                    <button class="tab-btn active" data-target="code"><i class="ph ph-code"></i> Código corregido</button>
+                    <button class="tab-btn" data-target="links"><i class="ph ph-link"></i> Enlaces detectados</button>
+                </div>
+
+                <div class="tab-content active" id="code-content">
+                    <div class="empty-state" id="result-empty">
+                        <i class="ph ph-youtube-logo"></i>
+                        <p>Pega tu código y corrígelo para ver el resultado aquí</p>
+                    </div>
+                    <div id="result-wrapper" class="code-wrapper hidden">
+                        <button id="btn-copy" class="btn-icon" title="Copiar código">
+                            <i class="ph ph-copy"></i>
+                        </button>
+                        <textarea id="output-code" class="code-output" readonly placeholder="El código corregido aparecerá aquí..."></textarea>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="links-content">
+                    <div class="stats-bar hidden" id="stats-bar">
+                        <span class="stat-pill stat-pill--nuevo">
+                            <i class="ph ph-check-circle"></i>
+                            <span id="stat-corregidos">0</span> corregidos
+                        </span>
+                        <span class="stat-pill stat-pill--existente">
+                            <i class="ph ph-info"></i>
+                            <span id="stat-existentes">0</span> ya tenían la clase
+                        </span>
+                    </div>
+                    <div class="empty-state" id="links-empty">
+                        <i class="ph ph-link-break"></i>
+                        <p id="links-empty-text">Aquí verás la lista de enlaces de YouTube encontrados al corregir tu código.</p>
+                    </div>
+                    <ul id="links-list" class="links-list hidden"></ul>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>

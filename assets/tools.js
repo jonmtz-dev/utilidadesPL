@@ -39,5 +39,15 @@ const TOOLS = [
         tags: ['Micrositios', 'Imágenes', 'ZIP'],
         url: 'tools/micrositio-a-pagina/index.html',
         status: 'ready'
+    },
+    {
+        slug: 'bibliografias-margarita',
+        title: 'Bibliografías Margarita Maza',
+        description: 'Agrega la clase nomediaplugin a los enlaces de YouTube para que Moodle no los convierta en reproductor incrustado.',
+        icon: 'youtube-logo',
+        accent: ['#FF0000', '#B20000'],
+        tags: ['YouTube', 'Enlaces', 'HTML'],
+        url: 'tools/bibliografias-margarita/index.html',
+        status: 'ready'
     }
 ];
