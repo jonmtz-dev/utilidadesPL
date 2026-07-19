@@ -194,10 +194,41 @@ y da un veredicto por caso:
   (`bg-primary-10` / `bg-secondary-10`) que el Convertidor de Tablas; va **apagado
   por defecto** para no pisar el estilo propio del micrositio.
 
-**Pestaña CSS:** pegas tu hoja de estilos de Moodle y te dice **qué reglas del
-micrositio te faltan** y cuáles existen con distinto contenido. El CSS se parsea
-con el motor del navegador (`CSSStyleSheet` construible, que parsea sin aplicar,
-así el CSS ajeno no puede tocar el panel), no con regex.
+> 📐 **La lógica completa del sistema de igualación de estilos vive en
+> [`tools/micrositio-a-pagina/REGLAS.md`](tools/micrositio-a-pagina/REGLAS.md).**
+> Léelo antes de tocar `blindar()`, la marca `.ms-convertido` o el tablero de la
+> pestaña CSS: documenta las restricciones probadas en Moodle (qué borra TinyMCE,
+> por qué los estados no pueden ir inline) y los casos ya resueltos.
+
+**Pestaña CSS — igualar estilos con tu Moodle.** La hoja de Moodle (el CSS
+**compilado**, no el SCSS) **viene precargada por defecto** en `hoja-moodle-default.js`
+(`window.HOJA_MOODLE_DEFAULT`), así el equipo no tiene que pegar nada. Si alguien pega
+una propia, esa **se guarda** (`localStorage`, key `ms-hoja-moodle`) y tiene prioridad
+sobre el default. Para actualizar el default: recompila el SCSS y regenera ese archivo
+(es `JSON.stringify` del CSS, sin editar a mano). El CSS se parsea con el motor del
+navegador (`CSSStyleSheet` construible, que parsea sin aplicar, así el CSS ajeno no
+puede tocar el panel), no con regex.
+
+Con esa hoja, la herramienta compara cada micrositio y arma un **tablero**: lista
+las **diferencias de estilo de componentes** (acordeones, botones, tablas…) con
+**muestras de color** (resuelve los `var(--x)` reales bajo el módulo del micro en un
+iframe oculto), y genera el **arreglo listo para pegar** en tu tema.
+
+El arreglo son reglas **aditivas** bajo la clase marca `.ms-convertido` (que la
+herramienta le pone al wrapper de cada conversión): reescribe el selector del micro
+`.mainPlantilla23 → .ms-convertido` y usa sus declaraciones con `!important`. Así el
+arreglo **no modifica tus reglas existentes** y solo afecta a micrositios convertidos.
+Es la única vía para igualar **estados** (hover, acordeón abierto), que un `style=""`
+inline no puede: TinyMCE de Moodle borra los `<style>` y las variables `--bs-*`, pero
+respeta las clases y el CSS del **tema**. El flujo: pegas tu hoja → conviertes → copias
+el arreglo → lo pegas en tu tema (sección nueva) → repegas tu hoja y esa diferencia
+deja de aparecer. Cada micro nuevo aporta menos diferencias hasta cubrirlo todo.
+
+Para lo **sin estado** (fondos, textos, bordes de tablas), además hay un blindaje
+inline opcional (toggle *Blindar colores*): renderiza el micro en un iframe con su
+propio CSS y **congela** el color final como `style="… !important"` en la salida —gana
+al Bootstrap de Moodle y sobrevive a TinyMCE—. Los componentes con estado NO se
+congelan (los resuelve el complemento `.ms-convertido` del tema).
 
 La **vista previa** va en un `<iframe sandbox>` con el CSS del micrositio y las
 imágenes reales del zip como `blob:`, así ves el resultado tal cual. El sandbox

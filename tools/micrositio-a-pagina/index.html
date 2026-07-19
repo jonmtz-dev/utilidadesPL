@@ -132,6 +132,11 @@
                         <span class="label-text">Convertir <code>SVG</code> a <code>PNG</code> al descargar</span>
                     </label>
                     <label class="toggle-switch">
+                        <input type="checkbox" id="opt-blindar" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Blindar colores contra Moodle <span class="etiqueta-reco">congela el look del micro</span></span>
+                    </label>
+                    <label class="toggle-switch">
                         <input type="checkbox" id="opt-preview-moodle">
                         <span class="slider"></span>
                         <span class="label-text">Vista previa con tu CSS de Moodle <span class="etiqueta-reco">pega tu CSS en la pestaña CSS</span></span>
@@ -195,12 +200,33 @@
                 <div class="tab-content" id="css-content">
                     <div class="reporte">
                         <div class="aviso aviso-info">
-                            <i class="ph ph-info"></i>
-                            <span>Pega aquí tu hoja de estilos de Moodle y te digo <strong>qué reglas del micrositio te faltan</strong> o están distintas.</span>
+                            <i class="ph ph-paint-brush"></i>
+                            <span><strong>Igualar estilos con tu Moodle.</strong> Tu hoja de Moodle ya viene
+                            precargada. La herramienta compara cada micrositio con ella, te muestra qué se ve
+                            distinto (con muestras de color) y te da el <strong>arreglo listo para pegar</strong>.</span>
                         </div>
 
+                        <details class="css-crudo">
+                            <summary>¿Cómo funciona? (3 pasos)</summary>
+                            <ol class="pasos">
+                                <li><strong>La hoja de Moodle ya viene precargada</strong> — no tienes que pegar
+                                    nada. Solo cuando actualices tus estilos, pega el <strong>CSS compilado</strong>
+                                    nuevo abajo (se guarda solo). Cómo obtenerlo: en Moodle, <kbd>F12</kbd> →
+                                    pestaña <em>Red/Network</em> → filtra <code>styles.php</code> → abre el archivo →
+                                    <em>Response</em> → <kbd>Ctrl</kbd>+<kbd>A</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd>.</li>
+                                <li><strong>Carga un micrositio</strong> (arriba a la izquierda). La comparación
+                                    corre sola y lista las diferencias de estilo.</li>
+                                <li><strong>Copia el "arreglo listo"</strong> y pégalo en tu tema de Moodle,
+                                    en una sección nueva. Es aditivo: no modifica tus estilos, solo agrega.
+                                    Al terminar, pulsa <strong>"Ya lo pegué en mi tema"</strong>: la herramienta
+                                    se actualiza sola y esa diferencia deja de aparecer.</li>
+                            </ol>
+                        </details>
+
                         <textarea id="input-css-moodle" class="plain-input plain-input--css"
-                                  placeholder="Pega aquí el CSS que tienes en Moodle..."></textarea>
+                                  placeholder="Tu hoja ya viene precargada. Pega aquí solo para actualizarla o reemplazarla..."></textarea>
+
+                        <p id="hoja-estado" class="campo-nota">Tu hoja de Moodle viene precargada. Solo la actualizas cuando cambies tus estilos.</p>
 
                         <button id="btn-comparar" class="btn-primary" type="button">
                             <i class="ph ph-git-diff"></i> Comparar con mi hoja
@@ -288,6 +314,8 @@
         </div>
     </div>
 
+    <!-- Hoja de Moodle precargada por defecto (se puede sobrescribir pegando otra) -->
+    <script src="hoja-moodle-default.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

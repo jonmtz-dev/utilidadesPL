@@ -300,21 +300,377 @@ function parsearCSS(texto) {
     return mapa;
 }
 
+/**
+ * El selector con el que el complemento aditivo del tema cubre una regla del
+ * micrositio: .mainPlantilla23 -> .ms-convertido, o la marca antepuesta.
+ * Debe ser EXACTAMENTE la misma transformación que usa generarComplemento,
+ * porque compararCSS la usa para saber si tu hoja ya cubre una diferencia.
+ */
+function selectorComplemento(sel) {
+    return /\.mainPlantilla23/.test(sel)
+        ? sel.replace(/\.mainPlantilla23/g, '.ms-convertido')
+        : '.ms-convertido ' + sel;
+}
+
 function compararCSS(cssMicrositio, cssMoodle) {
     const A = parsearCSS(cssMicrositio);
     const B = parsearCSS(cssMoodle);
 
     const faltantes = [];
     const diferentes = [];
+    const cubiertas = [];   // diferencias que tu complemento .ms-convertido ya resuelve
     let iguales = 0;
 
     for (const [sel, decl] of A) {
-        if (!B.has(sel)) faltantes.push(sel);
-        else if (B.get(sel) !== decl) diferentes.push({ sel, micrositio: decl, moodle: B.get(sel) });
-        else iguales++;
+        // ¿Tu hoja ya trae la versión .ms-convertido con las declaraciones del
+        // micro? Entonces esa diferencia está resuelta: no hay nada que hacer.
+        const cubierta = B.get(selectorComplemento(sel)) === decl;
+
+        if (!B.has(sel)) {
+            // Guardamos también las declaraciones: una regla que tu hoja no tiene
+            // es estilo PERDIDO (puede romper el layout, no solo el color), así que
+            // el complemento debe poder reponerla.
+            if (cubierta) cubiertas.push(sel);
+            else faltantes.push({ sel, micrositio: decl });
+        } else if (B.get(sel) !== decl) {
+            if (cubierta) cubiertas.push(sel);
+            else diferentes.push({ sel, micrositio: decl, moodle: B.get(sel) });
+        } else {
+            iguales++;
+        }
     }
 
-    return { faltantes, diferentes, iguales, totalMicrositio: A.size, totalMoodle: B.size };
+    return { faltantes, diferentes, cubiertas, iguales, totalMicrositio: A.size, totalMoodle: B.size };
+}
+
+/* ------------------------------------------------ Blindaje de estilos --- */
+
+/**
+ * El problema: los micrositios usan clases (bg-primary-20, .btn-primary,
+ * .accordion-button…) y defaults de SU Bootstrap. Al pasar a un recurso Página,
+ * el Bootstrap 5 + tema de Moodle repinta esos componentes distinto (encabezados
+ * grises, acordeones más claros con texto oscuro, botones grises). Los tokens de
+ * color coinciden; lo que no coinciden son los DEFAULTS de componente.
+ *
+ * La solución ("congelar el look"): renderizamos el micrositio con SU css en un
+ * iframe oculto —donde se ve bien— leemos el color/fondo/texto FINAL computado de
+ * cada componente temático y lo fijamos INLINE con !important en la salida. Inline
+ * porque TinyMCE de Moodle borra los <style>, pero respeta los style="".
+ *
+ * Para estados (acordeón abierto, hover) un style="" no basta: ahí sembramos las
+ * variables --bs-* de Bootstrap inline y dejamos que el propio Bootstrap de Moodle
+ * haga el estado con el color correcto.
+ */
+
+const RE_BG = /(^|\s)bg-(primary|secondary|neutral|resalte)/;
+const RE_TX = /(^|\s)text-(primary|secondary|neutral|resalte)/;
+const RE_BD = /(^|\s)border-(primary|secondary|neutral|resalte)/;
+
+const SEL_TEMATICOS = [
+    '[class*="bg-primary"]', '[class*="bg-secondary"]', '[class*="bg-neutral"]', '[class*="bg-resalte"]',
+    '[class*="text-primary"]', '[class*="text-secondary"]', '[class*="text-neutral"]', '[class*="text-resalte"]',
+    '[class*="border-primary"]', '[class*="border-secondary"]', '[class*="border-neutral"]', '[class*="border-resalte"]',
+    '.accordion-button', '.btn', 'thead th', '.card'
+].join(',');
+
+function esTransparente(c) {
+    return !c || c === 'transparent' || /rgba?\([^)]*,\s*0\s*\)\s*$/i.test(c.replace(/\s/g, ''));
+}
+
+/** Sube por el árbol hasta encontrar un fondo no transparente (el que se VE). */
+function fondoEfectivo(el) {
+    let n = el;
+    while (n && n.nodeType === 1) {
+        const bg = getComputedStyle(n).backgroundColor;
+        if (!esTransparente(bg)) return bg;
+        n = n.parentElement;
+    }
+    return null;
+}
+
+function esInteractivo(cls) {
+    return /\saccordion-button\s/.test(cls) || /\sbtn(-\S+)?\s/.test(cls);
+}
+
+/** Elige texto legible (#fff u oscuro) sobre un fondo rgb(...). */
+function textoLegible(bgRgb) {
+    const m = (bgRgb || '').match(/\d+/g);
+    if (!m) return '#ffffff';
+    const [r, g, b] = m.map(Number);
+    const L = (0.299 * r + 0.587 * g + 0.114 * b) / 255;   // luminancia aprox.
+    return L > 0.6 ? '#212529' : '#ffffff';
+}
+
+/**
+ * Componentes SIN estados (celdas, fondos, encabezados): congelamos el color
+ * final con style="" inline y !important. Gana al Bootstrap de Moodle y aguanta
+ * a TinyMCE. NO se usa en botones/acordeones: ahí un inline mataría el hover y el
+ * estado "abierto" (ver sembrarVariablesBS).
+ */
+function congelarElemento(src, dst) {
+    const cs = getComputedStyle(src);
+    const cls = ' ' + (typeof src.className === 'string' ? src.className : '') + ' ';
+    const esTh = src.tagName === 'TH';
+    const esCard = / card /.test(cls);
+
+    // --- Tarjetas (.card): solo reponemos lo que es DEFAULT de Bootstrap y Moodle
+    // quita; nunca pisamos un color que la tarjeta ya trae por clase.
+    if (esCard) {
+        // Fondo: si NO trae color propio, su fondo es el blanco default de Bootstrap
+        // (Moodle lo pinta gris) -> reponemos blanco. Si SÍ trae color (clase bg-*),
+        // esa clase funciona igual en micro y en Moodle: NO la tocamos (theme-aware).
+        if (esTransparente(cs.backgroundColor)) {
+            dst.style.setProperty('background-color', 'rgb(255, 255, 255)', 'important');
+        }
+        // Borde: el borde fino es default de Bootstrap y Moodle lo quita a TODAS las
+        // tarjetas (con o sin color). Lo reponemos para que se vean separadas como en
+        // el micro. Si la tarjeta define su propio borde, respetamos ese color.
+        const sinBorde = cs.borderTopStyle === 'none' || parseFloat(cs.borderTopWidth) === 0;
+        if (sinBorde) dst.style.setProperty('border', '1px solid rgba(0, 0, 0, 0.176)', 'important');
+        else if (!esTransparente(cs.borderTopColor)) dst.style.setProperty('border-color', cs.borderTopColor, 'important');
+        return;
+    }
+
+    // Fondo. El TH hereda el color visible del thead coloreado: fondo EFECTIVO.
+    if (RE_BG.test(cls) || esTh) {
+        const bg = esTh ? fondoEfectivo(src) : cs.backgroundColor;
+        if (bg && !esTransparente(bg)) dst.style.setProperty('background-color', bg, 'important');
+    }
+    if (RE_TX.test(cls) || esTh) {
+        if (cs.color) dst.style.setProperty('color', cs.color, 'important');
+    }
+    if (RE_BD.test(cls)) {
+        const bc = cs.borderTopColor;
+        if (bc && !esTransparente(bc)) dst.style.setProperty('border-color', bc, 'important');
+    }
+}
+
+/**
+ * Componentes CON estados (acordeón, botón). Un style="" inline con !important
+ * mataría el hover y el "abierto". En su lugar sembramos las variables --bs-* de
+ * Bootstrap inline; el propio Bootstrap de Moodle las lee y pinta cada estado con
+ * el color correcto. (Depende de que Moodle no borre las propiedades --custom;
+ * si las borra, estos componentes quedan con el default de Moodle.)
+ */
+function sembrarVariablesBS(src, dst) {
+    const cs = getComputedStyle(src);
+    const bg = cs.backgroundColor;
+    const color = cs.color;
+    const cls = ' ' + (typeof src.className === 'string' ? src.className : '') + ' ';
+
+    if (/\saccordion-button\s/.test(cls)) {
+        // Reposo (cerrado): tal cual lo pinta el micro.
+        if (!esTransparente(bg)) dst.style.setProperty('--bs-accordion-btn-bg', bg);
+        if (color) dst.style.setProperty('--bs-accordion-btn-color', color);
+        // Abierto: versión SÓLIDA del color de acento del botón, con texto legible.
+        if (color) {
+            dst.style.setProperty('--bs-accordion-active-bg', color);
+            dst.style.setProperty('--bs-accordion-active-color', textoLegible(color));
+        }
+        return;
+    }
+    // Botón: color de reposo. El hover lo resuelve Bootstrap.
+    if (!esTransparente(bg)) dst.style.setProperty('--bs-btn-bg', bg);
+    if (color) dst.style.setProperty('--bs-btn-color', color);
+    const bc = cs.borderTopColor;
+    if (bc && !esTransparente(bc)) dst.style.setProperty('--bs-btn-border-color', bc);
+}
+
+/**
+ * Congela el look del micrositio en `doc` (mutándolo). Rinde el cuerpo con el css
+ * del micro en un iframe oculto y copia los estilos computados a inline.
+ * Es idempotente y tolerante: si algo falla, deja el HTML como estaba.
+ */
+async function blindar(doc, cssMicro) {
+    if (!cssMicro || !doc.body) return;
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.cssText = 'position:absolute;left:-99999px;top:0;width:1200px;height:20px;border:0;visibility:hidden';
+    document.body.appendChild(iframe);
+    try {
+        const idoc = iframe.contentDocument;
+        idoc.open();
+        idoc.write('<!doctype html><html><head><meta charset="utf-8"><style>' +
+            cssMicro + '</style></head><body>' + doc.body.innerHTML + '</body></html>');
+        idoc.close();
+        // Un respiro para que el navegador calcule el layout del iframe.
+        await new Promise(r => setTimeout(r, 30));
+
+        const src = [...idoc.querySelectorAll(SEL_TEMATICOS)];
+        const dst = [...doc.querySelectorAll(SEL_TEMATICOS)];
+        if (src.length !== dst.length) return;   // estructuras desalineadas: no arriesgamos
+        for (let i = 0; i < src.length; i++) {
+            const cls = ' ' + (typeof src[i].className === 'string' ? src[i].className : '') + ' ';
+            // Los componentes CON estado (acordeón, botón) los resuelve el
+            // complemento .ms-convertido de tu tema (dos estados, sin inline).
+            // Aquí solo congelamos lo SIN estado (tablas, fondos, textos, bordes).
+            if (esInteractivo(cls)) continue;
+            congelarElemento(src[i], dst[i]);
+        }
+    } finally {
+        iframe.remove();
+    }
+}
+
+/**
+ * Marca el contenido convertido con la clase .ms-convertido para que las reglas
+ * ADITIVAS de tu tema (`.ms-convertido .accordion-button:hover`, etc.) apliquen
+ * solo a micrositios convertidos, sin tocar tus reglas existentes. La marca va
+ * sobre el wrapper .mainPlantilla23 (ancestro de todo); si no existe, envuelve el
+ * contenido del body. Idempotente.
+ */
+function marcarConvertido(doc) {
+    const wrappers = doc.querySelectorAll('.mainPlantilla23');
+    if (wrappers.length) {
+        wrappers.forEach(w => w.classList.add('ms-convertido'));
+        return;
+    }
+    if (!doc.body || !doc.body.firstChild) return;
+    if (doc.body.children.length === 1 && doc.body.firstElementChild.classList.contains('ms-convertido')) return;
+    const env = doc.createElement('div');
+    env.className = 'ms-convertido';
+    while (doc.body.firstChild) env.appendChild(doc.body.firstChild);
+    doc.body.appendChild(env);
+}
+
+/**
+ * Lee la hoja de Moodle guardada y detecta qué reglas aditivas .ms-convertido ya
+ * tienes, para (a) confirmarle al usuario que el contexto está y (b) decidir qué
+ * componentes ya cubre tu tema. Escanea el texto (sirve aunque sea SCSS): solo
+ * necesita ver el selector, no compilarlo.
+ */
+function detectarComplemento(cssTexto) {
+    if (!cssTexto) return [];
+    const encontrados = new Set();
+    const re = /\.ms-convertido\s+\.?([a-z0-9_-]+)/gi;
+    let m;
+    while ((m = re.exec(cssTexto))) encontrados.add(m[1].toLowerCase());
+    const etiqueta = { 'accordion-button': 'acordeones', 'btn': 'botones',
+        'accordion': 'acordeones', 'table': 'tablas', 'thead': 'encabezados de tabla' };
+    return [...encontrados].map(c => etiqueta[c] || c);
+}
+
+/** ¿El selector es de un componente que nos interesa igualar? */
+function esSelectorComponente(sel) {
+    return /mainPlantilla23|accordion|\bbtn(\b|-)|\btable\b|thead|\b(bg|text|border)-(primary|secondary|neutral|resalte)/.test(sel);
+}
+
+/**
+ * A partir de las reglas DIVERGENTES (mismo selector, distinto valor) arma el
+ * bloque .ms-convertido listo para pegar en tu tema: reescribe .mainPlantilla23
+ * -> .ms-convertido (o antepone la marca) y usa las declaraciones del MICRO con
+ * !important, para que ganen SIN tocar tus reglas existentes.
+ */
+/**
+ * ¿La regla aplica a algo de ESTA página? Se usa para no meter en el arreglo las
+ * decenas de reglas del micrositio que esta página no usa. Quitamos pseudo-clases
+ * y pseudo-elementos (`:hover`, `::after`) porque querySelector no los resuelve,
+ * pero la regla igual aplica sobre el elemento base.
+ */
+function seUsaEnPagina(sel, doc) {
+    if (!doc) return false;
+    const base = sel.replace(/::?[a-zA-Z-]+(\([^)]*\))?/g, '').trim();
+    if (!base) return false;
+    try {
+        return !!doc.querySelector(base);
+    } catch {
+        return false;
+    }
+}
+
+function generarComplemento(diferentes, faltantes, doc) {
+    const armar = (sel, decls) => {
+        const cuerpo = decls.split(';').filter(Boolean).map(dec => {
+            const i = dec.indexOf(':');
+            return `    ${dec.slice(0, i).trim()}: ${dec.slice(i + 1).trim()} !important;`;
+        }).join('\n');
+        return { sel, css: `${selectorComplemento(sel)} {\n${cuerpo}\n}` };
+    };
+
+    // 1) Conflictos: mismo selector, distinto valor (componentes visibles).
+    const conflictos = diferentes
+        .filter(d => esSelectorComponente(d.sel))
+        .map(d => armar(d.sel, d.micrositio));
+
+    // 2) Estilo PERDIDO: reglas que el micro usa EN ESTA PÁGINA y tu hoja no tiene.
+    // Sin ellas se rompe el layout (p. ej. la altura del título que alinea filas).
+    const perdidas = (faltantes || [])
+        .filter(f => f.micrositio && seUsaEnPagina(f.sel, doc))
+        .map(f => armar(f.sel, f.micrositio));
+
+    const reglas = [...conflictos, ...perdidas];
+    const texto = reglas.length
+        ? '/* === Complemento micrositios (aditivo — no toca tus reglas) === */\n' +
+          (conflictos.length ? '/* -- Estilos que tu hoja pinta distinto -- */\n' +
+              conflictos.map(r => r.css).join('\n\n') + '\n\n' : '') +
+          (perdidas.length ? '/* -- Estilos del micrositio que tu hoja no tiene -- */\n' +
+              perdidas.map(r => r.css).join('\n\n') : '')
+        : '';
+    return { texto, reglas, conflictos: conflictos.length, perdidas: perdidas.length };
+}
+
+/** Extrae los valores de color relevantes de un string "prop:val;prop:val". */
+function extraerColores(declStr) {
+    const out = {};
+    (declStr || '').split(';').forEach(d => {
+        const i = d.indexOf(':');
+        if (i < 0) return;
+        const prop = d.slice(0, i).trim();
+        const val = d.slice(i + 1).trim();
+        if (prop === 'background-color' || prop === 'background') out.fondo = val;
+        else if (prop === 'color') out.texto = val;
+        else if (prop === 'border-color') out.borde = val;
+    });
+    return out;
+}
+
+/** Detecta la clase de módulo (MM, M01…) del HTML convertido, para resolver tokens. */
+function detectarModulo(html) {
+    const m = (html || '').match(/mainPlantilla23[^"']*?\b(M\d{1,2}|MM|reg)\b/);
+    return m ? m[1] : 'MM';
+}
+
+/**
+ * Resuelve valores de color CSS (incluido `var(--x)`) a rgb reales, bajo el
+ * contexto del módulo, usando tu hoja de Moodle en un iframe oculto. Sirve para
+ * pintar las muestras (swatches) del tablero.
+ */
+async function resolverColores(valores, cssMoodle, moduloClase) {
+    const mapa = new Map();
+    const unicos = [...new Set(valores.filter(Boolean))];
+    if (!unicos.length || !cssMoodle) return mapa;
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:absolute;left:-99999px;top:0;width:80px;height:80px;border:0;visibility:hidden';
+    document.body.appendChild(iframe);
+    try {
+        const idoc = iframe.contentDocument;
+        const spans = unicos.map((v, i) =>
+            `<span id="sw${i}" style="color:${v.replace(/[;{}<>]/g, '')}">.</span>`).join('');
+        idoc.open();
+        idoc.write(`<style>${cssMoodle}</style><div class="mainPlantilla23 ${moduloClase}">${spans}</div>`);
+        idoc.close();
+        await new Promise(r => setTimeout(r, 20));
+        unicos.forEach((v, i) => {
+            const el = idoc.getElementById('sw' + i);
+            if (el) mapa.set(v, getComputedStyle(el).color);
+        });
+    } finally {
+        iframe.remove();
+    }
+    return mapa;
+}
+
+/** Muestras de color (fondo/texto/borde) para un lado de la comparación. */
+function chipsColor(declStr) {
+    const c = extraerColores(declStr);
+    const chip = (v, etq) => v
+        ? `<span class="swatch" data-color="${escaparAtributo(v)}" title="${etq}: ${escaparAtributo(v)}"></span>`
+        : '';
+    return `<span class="swatches">${chip(c.fondo, 'fondo')}${chip(c.texto, 'texto')}${chip(c.borde, 'borde')}</span>`;
+}
+
+function escaparAtributo(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /* -------------------------------------------------- URL de borrador --- */
@@ -518,6 +874,7 @@ function initMicrositio() {
         svgPng: document.getElementById('opt-svg-png'),
         colorear: document.getElementById('opt-colorear'),
         colorearHeader: document.getElementById('opt-colorear-header'),
+        blindar: document.getElementById('opt-blindar'),
         previewMoodle: document.getElementById('opt-preview-moodle')
     };
     const btnDescargarImgs = document.getElementById('btn-descargar-imgs');
@@ -863,16 +1220,30 @@ function initMicrositio() {
 
         /* ---- Salidas */
 
-        const html = opt.soloBody.checked
+        // Opción A: marca el contenido para que las reglas aditivas .ms-convertido
+        // de tu tema (acordeones, etc.) apliquen sin tocar tus reglas existentes.
+        marcarConvertido(doc);
+
+        const cssMicro = css.join('\n\n');
+        const salida = () => opt.soloBody.checked
             ? doc.body.innerHTML.trim()
             : doc.documentElement.outerHTML;
 
-        outputCode.value = html;
-        outputCss.value = css.join('\n\n');
+        outputCode.value = salida();
+        outputCss.value = cssMicro;
         pintarReporte(reporte);
         pintarRevision(reporte);
-        pintarPreview(doc, css.join('\n\n'), dirBase);
+        pintarPreview(doc, cssMicro, dirBase);
         if (inputCssMoodle.value.trim()) pintarComparacion();
+
+        // Blindaje: congela el look del micro en la salida (asíncrono; reescribe
+        // el HTML ya con los estilos inline cuando termina). La vista previa ya
+        // quedó bien porque usa el css del micro tal cual.
+        if (opt.blindar.checked) {
+            blindar(doc, cssMicro)
+                .then(() => { outputCode.value = salida(); })
+                .catch(e => console.warn('[micrositio] blindaje:', e));
+        }
 
         badgeImgs.textContent = String(reporte.usadas.size);
         badgeImgs.classList.remove('hidden');
@@ -1266,26 +1637,90 @@ function initMicrositio() {
             <strong>${r.diferentes.length}</strong> distintas,
             <strong>${r.faltantes.length}</strong> que te faltan.</span></div>`];
 
-        if (r.faltantes.length) {
-            bloques.push(`<div class="aviso aviso-error"><i class="ph ph-x-circle"></i>
-                <span><strong>${r.faltantes.length} regla(s) que el micrositio usa y tu hoja NO tiene.</strong>
-                Si no las agregas, esta parte se verá distinta.</span></div>
-                <ul class="lista-reporte">${r.faltantes.map(s => `<li><code>${escapar(s)}</code></li>`).join('')}</ul>`);
+        // El arreglo cubre dos cosas: conflictos de color en componentes Y estilos
+        // del micro que tu hoja no tiene pero ESTA página sí usa (rompen el layout).
+        const paginaDoc = outputCode.value.trim()
+            ? new DOMParser().parseFromString(outputCode.value, 'text/html')
+            : null;
+        const comp = generarComplemento(r.diferentes, r.faltantes, paginaDoc);
+        const compSet = new Set(comp.reglas.map(x => x.sel));
+        const difComp = r.diferentes.filter(d => compSet.has(d.sel));
+        const difOtras = r.diferentes.filter(d => !compSet.has(d.sel));
+        const perdidasUsadas = r.faltantes.filter(f => compSet.has(f.sel));
+
+        if (difComp.length) {
+            const filas = difComp.map(d => `
+                <li>
+                    <code class="dif-sel">${escapar(d.sel)}</code>
+                    <div class="cmp-lado"><span class="cmp-tag cmp-tag--micro">micrositio</span>
+                        ${chipsColor(d.micrositio)}<span class="ruta">${escapar(d.micrositio)}</span></div>
+                    <div class="cmp-lado"><span class="cmp-tag cmp-tag--moodle">tu Moodle</span>
+                        ${chipsColor(d.moodle)}<span class="ruta">${escapar(d.moodle)}</span></div>
+                </li>`).join('');
+            bloques.push(`<div class="aviso aviso-warn"><i class="ph ph-swatches"></i>
+                <span><strong>${difComp.length} diferencia(s) de estilo en componentes.</strong>
+                Así los pinta el micrositio vs. tu Moodle (mira las muestras de color). El arreglo listo
+                está abajo.</span></div>
+                <ul class="lista-cmp">${filas}</ul>`);
         }
 
-        if (r.diferentes.length) {
-            const filas = r.diferentes.map(d => `
+        if (perdidasUsadas.length) {
+            const filas = perdidasUsadas.map(f => `
                 <li>
-                    <code>${escapar(d.sel)}</code>
-                    <div class="cmp-lado"><span class="cmp-tag cmp-tag--micro">micrositio</span>
-                        <span class="ruta">${escapar(d.micrositio)}</span></div>
-                    <div class="cmp-lado"><span class="cmp-tag cmp-tag--moodle">tu Moodle</span>
-                        <span class="ruta">${escapar(d.moodle)}</span></div>
+                    <code class="dif-sel">${escapar(f.sel)}</code>
+                    <span class="ruta">${escapar(f.micrositio)}</span>
                 </li>`).join('');
-            bloques.push(`<div class="aviso aviso-warn"><i class="ph ph-warning"></i>
-                <span><strong>${r.diferentes.length} regla(s) con el mismo selector pero distinto contenido.</strong>
-                Decide cuál gana; puede que tu hoja ya esté más al día.</span></div>
+            bloques.push(`<div class="aviso aviso-error"><i class="ph ph-puzzle-piece"></i>
+                <span><strong>${perdidasUsadas.length} estilo(s) que esta página usa y tu hoja NO tiene.</strong>
+                Se pierden al pasar a Moodle: no solo cambian colores, pueden <strong>romper el
+                acomodo</strong> (alturas, alineación de columnas). Ya van incluidos en el arreglo de
+                abajo.</span></div>
                 <ul class="lista-cmp">${filas}</ul>`);
+        }
+
+        if (r.cubiertas.length) {
+            bloques.push(`<div class="aviso aviso-ok"><i class="ph ph-shield-check"></i>
+                <span><strong>${r.cubiertas.length} diferencia(s) ya cubiertas por tu complemento</strong>
+                <code>.ms-convertido</code>. No hay nada que hacer: los micrositios convertidos las toman
+                solas de tu tema.</span></div>`);
+        }
+
+        if (comp.texto) {
+            bloques.push(`<div class="aviso aviso-ok"><i class="ph ph-magic-wand"></i>
+                <span><strong>Arreglo listo para pegar en tu tema.</strong> Copia este bloque y pégalo en
+                <em>Moodle → Administración del sitio → Apariencia → tu tema → SCSS/CSS adicional</em>,
+                en una sección nueva. Es <strong>aditivo</strong>: usa <code>.ms-convertido</code>, no
+                modifica tus reglas y solo afecta a micrositios convertidos con esta herramienta. Cuando
+                ya lo hayas pegado allá, pulsa <strong>"Ya lo pegué en mi tema"</strong> y la herramienta
+                se actualiza sola: estas diferencias dejan de aparecer.</span></div>
+                <div class="code-wrapper">
+                    <button class="btn-icon js-copiar-complemento" title="Copiar"><i class="ph ph-copy"></i></button>
+                    <textarea class="code-output code-complemento" readonly>${escapar(comp.texto)}</textarea>
+                </div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px">
+                    <button class="btn-secondary btn-chico js-copiar-complemento" type="button">
+                        <i class="ph ph-copy"></i> Copiar el arreglo
+                    </button>
+                    <button class="btn-secondary btn-chico js-marcar-agregado" type="button"
+                            title="Agrega estas reglas a la hoja guardada aquí, para que la herramienta sepa que tu tema ya las tiene">
+                        <i class="ph ph-check-circle"></i> Ya lo pegué en mi tema
+                    </button>
+                </div>`);
+        }
+
+        const faltNoUsadas = r.faltantes.filter(f => !compSet.has(f.sel));
+        if (difOtras.length || faltNoUsadas.length) {
+            const otras = difOtras.map(d => `<li><code>${escapar(d.sel)}</code>
+                <span class="ruta">micro: ${escapar(d.micrositio)} · tu Moodle: ${escapar(d.moodle)}</span></li>`).join('');
+            const falt = faltNoUsadas.map(f => `<li><code>${escapar(f.sel)}</code></li>`).join('');
+            bloques.push(`<details class="css-crudo"><summary>Ver detalle técnico
+                (${difOtras.length} otras diferencias, ${faltNoUsadas.length} faltantes que esta página no usa)</summary>
+                ${otras ? `<p class="campo-nota">Diferencias que no son de color visible (sombras, etc.):</p>
+                    <ul class="lista-reporte">${otras}</ul>` : ''}
+                ${falt ? `<p class="campo-nota">Reglas que tu hoja no tiene, pero que <strong>esta página no
+                    usa</strong> (otra página del micrositio podría necesitarlas):</p>
+                    <ul class="lista-reporte">${falt}</ul>` : ''}
+            </details>`);
         }
 
         if (!r.faltantes.length && !r.diferentes.length) {
@@ -1294,14 +1729,96 @@ function initMicrositio() {
         }
 
         cmpResultado.innerHTML = bloques.join('');
+
+        // Pintar las muestras de color (async): resuelve var(--x) reales bajo el
+        // módulo del micrositio usando tu hoja de Moodle.
+        const pendientes = [...cmpResultado.querySelectorAll('.swatch[data-color]')];
+        if (pendientes.length) {
+            const modulo = detectarModulo(outputCode.value);
+            resolverColores(pendientes.map(s => s.dataset.color), cssMoodle, modulo)
+                .then(mapa => pendientes.forEach(s => {
+                    const rgb = mapa.get(s.dataset.color);
+                    if (rgb) s.style.background = rgb;
+                }))
+                .catch(e => console.warn('[micrositio] muestras:', e));
+        }
     }
 
     btnComparar.addEventListener('click', pintarComparacion);
 
-    // Al pegar/editar tu CSS de Moodle, si el preview está en "modo Moodle" lo
-    // refrescamos (con un respiro para no re-renderizar en cada tecla).
+    // Botones del arreglo (delegados: cmpResultado se re-renderiza).
+    cmpResultado.addEventListener('click', (e) => {
+        const btnCopiar = e.target.closest('.js-copiar-complemento');
+        if (btnCopiar) {
+            copiar(cmpResultado.querySelector('.code-complemento'), btnCopiar);
+            return;
+        }
+
+        // "Ya lo pegué en mi tema": anexa el arreglo a la hoja guardada aquí.
+        // Así la herramienta queda sincronizada con el tema SIN volver a copiar
+        // el CSS de Moodle, y compararCSS reconoce la diferencia como cubierta.
+        const btnMarcar = e.target.closest('.js-marcar-agregado');
+        if (btnMarcar) {
+            const ta = cmpResultado.querySelector('.code-complemento');
+            if (!ta || !ta.value.trim()) return;
+            inputCssMoodle.value = inputCssMoodle.value.replace(/\s*$/, '\n\n') + ta.value + '\n';
+            // Dispara el flujo normal de "pegar": guarda en localStorage y
+            // actualiza el estado de la hoja.
+            inputCssMoodle.dispatchEvent(new Event('input'));
+            pintarComparacion();
+        }
+    });
+
+    /* --------------------------------- Hoja de Moodle persistente + contexto */
+
+    // Tu hoja de Moodle se guarda en el navegador (localStorage) y queda
+    // disponible siempre. Con ella la herramienta sabe qué reglas .ms-convertido
+    // ya tienes y te lo confirma. Actualizarla = pegar la nueva y listo.
+    const HOJA_KEY = 'ms-hoja-moodle';
+    const hojaEstado = document.getElementById('hoja-estado');
+
+    function actualizarEstadoHoja(guardado, esDefault) {
+        if (!hojaEstado) return;
+        const txt = inputCssMoodle.value.trim();
+        if (!txt) {
+            hojaEstado.className = 'campo-nota';
+            hojaEstado.innerHTML = 'Pega tu hoja de Moodle: se guarda sola y sirve para todos los micrositios.';
+            return;
+        }
+        const cubre = detectarComplemento(txt);
+        const marca = guardado
+            ? '<i class="ph ph-check-circle"></i> Guardada. '
+            : esDefault
+                ? '<i class="ph ph-check-circle"></i> Usando la hoja precargada por defecto (no tienes que pegar nada). '
+                : '';
+        hojaEstado.className = 'campo-nota campo-nota--ok';
+        hojaEstado.innerHTML = cubre.length
+            ? `${marca}Detecté el complemento <code>.ms-convertido</code> para: <strong>${cubre.map(escapar).join(', ')}</strong>. Los micrositios convertidos lo usan solos.`
+            : `${marca}Aún no veo reglas <code>.ms-convertido</code>. Agrega el complemento a tu tema y pégalo aquí.`;
+    }
+
+    // Cargar la hoja: la guardada por el usuario manda; si no hay, la precargada
+    // por defecto con la herramienta (así el equipo no tiene que pegar nada).
+    const hojaGuardada = localStorage.getItem(HOJA_KEY);
+    const usandoDefault = hojaGuardada == null && !!window.HOJA_MOODLE_DEFAULT;
+    if (hojaGuardada != null) inputCssMoodle.value = hojaGuardada;
+    else if (window.HOJA_MOODLE_DEFAULT) inputCssMoodle.value = window.HOJA_MOODLE_DEFAULT;
+    actualizarEstadoHoja(false, usandoDefault);
+
+    // Al pegar/editar tu CSS de Moodle: guardar, actualizar estado y, si el
+    // preview está en "modo Moodle", refrescarlo (con un respiro).
     let tempCssPreview = null;
     inputCssMoodle.addEventListener('input', () => {
+        let guardado = true;
+        try {
+            localStorage.setItem(HOJA_KEY, inputCssMoodle.value);
+        } catch (e) {
+            // Hoja demasiado grande para localStorage: no rompe nada, solo no
+            // persiste entre sesiones. La comparación de esta sesión sí funciona.
+            guardado = false;
+            console.warn('[micrositio] no se pudo guardar la hoja (tamaño):', e);
+        }
+        actualizarEstadoHoja(guardado);
         if (!opt.previewMoodle.checked || !ARCHIVOS.size) return;
         clearTimeout(tempCssPreview);
         tempCssPreview = setTimeout(convertir, 500);

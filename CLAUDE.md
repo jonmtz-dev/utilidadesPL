@@ -28,6 +28,12 @@ Idioma: **todo en español** (UI, comentarios, commits).
   cadena de flex necesita `min-height: 0`. El README explica por qué.
 - En JS, arrancar siempre con el patrón `document.readyState === 'loading'`,
   no solo con `DOMContentLoaded`.
+- **Micrositio a Página tiene su propio doc de reglas:**
+  `tools/micrositio-a-pagina/REGLAS.md`. Léelo antes de tocar el blindaje de
+  estilos, la marca `.ms-convertido` o el tablero de la pestaña CSS. Regla de
+  oro ahí: los estados (hover/abierto) NUNCA van inline (TinyMCE borra `<style>`
+  y las `--bs-*`; congelar el reposo mata el hover) — van como reglas aditivas
+  `.ms-convertido` en el tema de Moodle. Y la hoja del usuario no se edita jamás.
 
 ## PWA (importante)
 
