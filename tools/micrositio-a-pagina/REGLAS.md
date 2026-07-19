@@ -147,6 +147,24 @@ Renderiza el cuerpo convertido en un **iframe oculto con el CSS del micrositio**
   ahí porque ninguna hoja lo escribe; esos casos se resuelven en el blindaje (§4)
   y se van sumando ahí cuando aparecen (así entraron `.card` y el `<th>`).
 
+## 6-bis. Los toggles de colorear tabla: NUNCA un hex
+
+`Colorear 1ª columna` y `Colorear encabezado` van **apagados por defecto** y son
+**opt-in**, para tablas que lleguen sin ningún color propio. Reglas:
+
+- **Solo aplican CLASES** (`bg-primary-20`, `bg-primary-10`/`bg-secondary-10`),
+  jamás un color literal. El color lo resuelve el **módulo** del micrositio
+  (`.mainPlantilla23.MM/.M01/…`) contra la hoja de Moodle.
+- ⚠️ Hubo un `background-color: #d8a7b6 !important` inline en la fila de títulos.
+  Ese hex es el rosa del módulo **MM**: en un micrositio de M01 (lila), M02
+  (azul), M03 (rojo) o reg pintaba el encabezado del **color equivocado**, y al
+  ser inline `!important` le ganaba incluso al blindaje. **Eliminado — no
+  reintroducir hex en este archivo.**
+- Van apagados porque los micrositios **ya traen su color** (`bg-primary-20` en su
+  `<thead>`) y el blindaje (§4) se encarga de que se vea correcto en Moodle.
+  Encenderlos *añade* diseño que el micro no tenía; es decisión editorial, no
+  fidelidad.
+
 ## 7. Ciclo de trabajo del equipo
 
 1. Abrir la herramienta → cargar micrositio (la hoja ya está precargada).
@@ -177,3 +195,4 @@ Renderiza el cuerpo convertido en un **iframe oculto con el CSS del micrositio**
 | Hover del acordeón | Más claro y sin texto blanco (regla divergente en la hoja) | Regla aditiva `.ms-convertido .accordion-button:hover` en el tema |
 | Tarjetas `.card` | Grises y sin borde (default de Moodle) | Blindaje: blanco si no hay color propio + borde default siempre; color propio intacto |
 | Columnas desalineadas | Las imágenes de una `.row` quedaban a distinta altura: `.texto-titulo` (con su altura) existía solo en el micro y se perdía | El arreglo ahora incluye las **reglas faltantes que la página usa**, no solo los conflictos de color |
+| Encabezado con hex fijo | `Colorear encabezado` inyectaba `#d8a7b6` (rosa de **MM**) inline: color equivocado en micrositios de otros módulos | Solo se aplica la clase `bg-primary-20`; el toggle quedó **apagado** por defecto |

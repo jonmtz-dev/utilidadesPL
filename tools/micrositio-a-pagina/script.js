@@ -202,8 +202,10 @@ function aplicarResponsive(tabla, { headerIndex = null, colorear = false, colore
         }
     });
 
+    // Solo se aplica la CLASE, nunca un hex: el color lo resuelve el módulo del
+    // micrositio (.mainPlantilla23.MM/.M01/…) contra tu hoja. Antes aquí había un
+    // '#d8a7b6' inline —el rosa de MM— que pintaba mal cualquier otro módulo.
     if (colorearHeader && filas[idx]) {
-        filas[idx].style.setProperty('background-color', '#d8a7b6', 'important');
         const thead = tabla.querySelector('thead');
         if (thead && thead.contains(filas[idx])) {
             thead.classList.add('bg-primary-20');
