@@ -180,8 +180,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let estructura = null;   // estructura neutral de la tabla elegida
     let matriz = null;       // resultado del análisis
-    let anteponerNivel = false;
-    let borrarSobrantes = false;
+    // Los dos encendidos por defecto:
+    //  · anteponerNivel: en las rúbricas reales el primer criterio lleva el
+    //    nombre del nivel ("EXPERTO\n\nUtiliza hojas de cálculo…").
+    //  · borrarSobrantes: se probó contra un Moodle REAL y borra bien. Si algún
+    //    día no pudiera, no rompe nada: aborta, marca en rojo y lo dice.
+    let anteponerNivel = true;
+    let borrarSobrantes = true;
 
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -371,7 +376,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <label class="toggle-switch mb-3">
                 <input type="checkbox" id="opt-anteponer-nivel" ${anteponerNivel ? 'checked' : ''}>
                 <span class="slider"></span>
-                <span class="label-text">Anteponer el nombre del nivel al texto (p. ej. "EXPERTO" antes del párrafo)</span>
+                <span class="label-text">Anteponer el nombre del nivel al texto
+                    <small>(solo en el primer criterio: "EXPERTO", "CAPACITADO"… como en tus rúbricas)</small></span>
             </label>
             <label class="toggle-switch mb-3">
                 <input type="checkbox" id="opt-borrar-sobrantes" ${borrarSobrantes ? 'checked' : ''}>
@@ -476,10 +482,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const DATA = incluidos.map(crit => ({
+        // El nombre del nivel (EXPERTO, CAPACITADO…) se antepone SOLO en el
+        // primer criterio. No es un capricho: así están las rúbricas reales en
+        // Moodle —Cognitivo lleva "EXPERTO\n\nUtiliza…" y Actitudinal,
+        // Comunicativo y Pensamiento crítico van sin nombre— porque en el Word
+        // esos nombres viven en el encabezado de la tabla y solo hacen falta una
+        // vez, como referencia de la columna.
+        const DATA = incluidos.map((crit, ci) => ({
             nombre: crit.nombre,
             niveles: crit.celdas.map((cel, li) => ({
-                texto: anteponerNivel && matriz.niveles[li]
+                texto: (anteponerNivel && ci === 0 && matriz.niveles[li])
                     ? `${matriz.niveles[li]}\n\n${cel.texto}`
                     : cel.texto,
                 puntos: cel.puntos   // string, tal cual venía del Word
@@ -623,35 +635,116 @@ document.addEventListener('DOMContentLoaded', () => {
         if (p.diferencia > 0) marcarEnPagina(p.existente.tr, 'FALTAN ' + p.diferencia + ' NIVEL(ES)', '#ef6c00');
     });
 
-    // Borrado de los sobrantes: opcional y con VERIFICACIÓN. El botón de
-    // eliminar es un <input type="submit"> y no hay forma de saber de antemano
-    // si el editor de Moodle lo maneja en la página o recarga el formulario.
-    // Por eso se pulsa y se comprueba si la fila desapareció de verdad: si no,
-    // se avisa en vez de dar por hecho que funcionó.
-    var borrados = 0, noBorrados = [];
-    if (BORRAR_SOBRANTES && sobrantes.length) {
-        sobrantes.forEach(function (e) {
-            var btn = e.tr.querySelector('input[name$="[delete]"]:not([name*="[levels]"])');
-            if (btn) btn.click();
-        });
-        sobrantes.forEach(function (e) {
-            if (e.tr.isConnected) { noBorrados.push(e); } else { borrados++; }
-        });
-        noBorrados.forEach(function (e) { marcarEnPagina(e.tr, 'BORRAR: ya no viene en el Word', '#c62828'); });
-    } else {
-        sobrantes.forEach(function (e) { marcarEnPagina(e.tr, 'BORRAR: ya no viene en el Word', '#c62828'); });
-        noBorrados = sobrantes;
+    /* ------------------------------------------ borrado de los sobrantes ---
+     * Moodle pide CONFIRMACIÓN en un diálogo modal (YUI) por cada criterio que
+     * se borra, y mientras está abierto tapa la página con una máscara
+     * (.moodle-dialogue-lightbox) que bloquea cualquier otro clic.
+     *
+     * Por eso NO se puede pulsar los botones de golpe: el primero abre el
+     * modal y los demás clics se pierden contra la máscara, dejando la página
+     * gris y trabada. Hay que ir de UNO EN UNO: pulsar, confirmar el diálogo,
+     * esperar a que la fila desaparezca, y recién entonces seguir.
+     *
+     * Si algo no sale como se espera, se ABORTA el resto (no se insiste a
+     * ciegas), se marcan los que quedaron y se dice con claridad qué pasó.    */
+
+    function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    // OJO: nada de comprobar offsetParent aquí. En un elemento con position
+    // fixed —que es justo lo que usa el modal de Moodle— offsetParent vale null
+    // aunque esté perfectamente visible, así que el diálogo NUNCA se detectaba y
+    // el borrado automático no podía funcionar. Se mide por tamaño real y por
+    // estilo calculado. (Y ojo con las comillas invertidas en este comentario:
+    // va dentro de un template literal y cerrarían la cadena.)
+    function dialogoVisible() {
+        var candidatos = document.querySelectorAll(
+            '.moodle-dialogue-confirm, .confirmation-dialogue, .moodle-dialogue, [role="dialog"]');
+        for (var i = 0; i < candidatos.length; i++) {
+            var d = candidatos[i];
+            var cs = getComputedStyle(d);
+            if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+            var r = d.getBoundingClientRect();
+            if (r.height > 0 && r.width > 0) return d;
+        }
+        return null;
     }
 
-    var marcado = document.querySelector('.marca-adaptador');
-    if (marcado) marcado.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    function botonDeConfirmar(dlg) {
+        var botones = dlg.querySelectorAll('input[type="button"], input[type="submit"], button');
+        for (var i = 0; i < botones.length; i++) {
+            var txt = (botones[i].value || botones[i].textContent || '').trim().toLowerCase();
+            if (/^(s[ií]|yes|continuar|aceptar|eliminar|borrar|confirmar)$/.test(txt)) return botones[i];
+        }
+        return dlg.querySelector('input.btn-primary, button.btn-primary');
+    }
 
-    var fin = 'Listo: ' + totalCeldas + ' celdas llenadas.';
-    if (borrados) fin += '\\n' + borrados + ' criterio(s) sobrante(s) borrado(s).';
-    if (noBorrados.length) fin += '\\n' + noBorrados.length + ' criterio(s) marcado(s) en rojo: bórralos con la X.';
-    if (faltanNiveles.length) fin += '\\n' + faltanNiveles.length + ' marcado(s) en naranja: les faltan niveles.';
-    fin += '\\n\\nRevisa y presiona Guardar. El script no guarda.';
-    alert(fin);
+    function esperarADesaparecer(tr, limiteMs) {
+        var pasado = 0;
+        return (function ciclo() {
+            if (!tr.isConnected) return Promise.resolve(true);
+            if (pasado >= limiteMs) return Promise.resolve(false);
+            pasado += 120;
+            return esperar(120).then(ciclo);
+        })();
+    }
+
+    async function borrarUno(entrada) {
+        var btn = entrada.tr.querySelector('input[name$="[delete]"]:not([name*="[levels]"])');
+        if (!btn) return 'sin-boton';
+
+        btn.click();
+        await esperar(350);
+
+        var dlg = dialogoVisible();
+        if (dlg) {
+            var si = botonDeConfirmar(dlg);
+            // Si no se identifica el botón de confirmar, se deja el diálogo tal
+            // cual para que el usuario decida: nunca se adivina cuál pulsar.
+            if (!si) return 'dialogo-desconocido';
+            si.click();
+            await esperar(300);
+        }
+        return (await esperarADesaparecer(entrada.tr, 2500)) ? 'ok' : 'no-desaparecio';
+    }
+
+    async function borrarSobrantes(lista) {
+        var borrados = [], pendientes = [], motivo = null;
+        for (var i = 0; i < lista.length; i++) {
+            if (motivo) { pendientes.push(lista[i]); continue; }   // ya se abortó
+            var res = await borrarUno(lista[i]);
+            if (res === 'ok') borrados.push(lista[i]);
+            else { motivo = res; pendientes.push(lista[i]); }
+        }
+        return { borrados: borrados, pendientes: pendientes, motivo: motivo };
+    }
+
+    async function terminar() {
+        var borrados = [], pendientes = sobrantes, motivo = null;
+
+        if (BORRAR_SOBRANTES && sobrantes.length) {
+            var r = await borrarSobrantes(sobrantes);
+            borrados = r.borrados; pendientes = r.pendientes; motivo = r.motivo;
+        }
+        pendientes.forEach(function (e) {
+            marcarEnPagina(e.tr, 'BORRAR: ya no viene en el Word', '#c62828');
+        });
+
+        var marcado = document.querySelector('.marca-adaptador');
+        if (marcado) marcado.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        var fin = 'Listo: ' + totalCeldas + ' celdas llenadas.';
+        if (borrados.length) fin += '\\n' + borrados.length + ' criterio(s) sobrante(s) borrado(s).';
+        if (pendientes.length) {
+            fin += '\\n' + pendientes.length + ' criterio(s) marcado(s) en rojo: bórralos con la X.';
+            if (motivo === 'dialogo-desconocido') fin += '\\n(Moodle pidió confirmación y no reconocí el botón; te lo dejé abierto.)';
+            else if (motivo === 'no-desaparecio') fin += '\\n(El borrado automático no funcionó en este Moodle.)';
+        }
+        if (faltanNiveles.length) fin += '\\n' + faltanNiveles.length + ' marcado(s) en naranja: les faltan niveles.';
+        fin += '\\n\\nRevisa y presiona Guardar. El script no guarda.';
+        alert(fin);
+    }
+
+    terminar();
 })();`.trim();
     }
 
