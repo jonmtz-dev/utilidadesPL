@@ -314,12 +314,42 @@ function selectorComplemento(sel) {
         : '.ms-convertido ' + sel;
 }
 
-function compararCSS(cssMicrositio, cssMoodle) {
+/**
+ * Defaults del Bootstrap 5.2.3 del micrositio que el Bootstrap + tema de Moodle
+ * repinta con otro valor. Es la causa #1 de REGLAS.md §1 y el "límite conocido"
+ * de §6: NINGUNA de las dos hojas escribe estas reglas (viven dentro del propio
+ * Bootstrap de cada lado), así que la comparación no las puede ver por más que
+ * la diferencia se note a simple vista.
+ *
+ * Normalmente un default sin estado se resuelve con blindaje inline (§4), pero
+ * los botones están excluidos del blindaje a propósito: un inline con !important
+ * les mata el hover. Por eso estos van al complemento del tema.
+ *
+ * Hex fijos y NO tokens: son grises de Bootstrap, iguales en todos los módulos.
+ * (La prohibición de hex de §6-bis aplica a los colores que dependen del módulo
+ * —el rosa de MM vs. el lila de M01—, no a estos.)
+ *
+ * Solo entran las que ESTA página usa (seUsaEnPagina), igual que las perdidas.
+ *
+ * ⚠️ NADA de `border-color` aquí, aunque Bootstrap sí lo declare: los botones del
+ * micrositio traen `border border-4 border-secondary-10`, y esa utilidad pinta el
+ * borde con el token del MÓDULO. Un `border-color` nuestro con !important se lo
+ * comería y dejaría el borde gris en todos los módulos. Además el atajo se
+ * expande a los cuatro longhands, que ensucian el bloque. Solo fondo y texto.
+ */
+const DEFAULTS_BOOTSTRAP_CSS = `
+.btn-secondary { color: #fff; background-color: #6c757d; }
+.btn-secondary:hover { color: #fff; background-color: #5c636a; }
+.btn-secondary:active { color: #fff; background-color: #565e64; }
+`;
+
+function compararCSS(cssMicrositio, cssMoodle, doc) {
     const A = parsearCSS(cssMicrositio);
     const B = parsearCSS(cssMoodle);
 
     const faltantes = [];
     const diferentes = [];
+    const defaults = [];    // defaults de Bootstrap que ninguna hoja declara
     const cubiertas = [];   // diferencias que tu complemento .ms-convertido ya resuelve
     let iguales = 0;
 
@@ -342,7 +372,19 @@ function compararCSS(cssMicrositio, cssMoodle) {
         }
     }
 
-    return { faltantes, diferentes, cubiertas, iguales, totalMicrositio: A.size, totalMoodle: B.size };
+    // Defaults de Bootstrap (ver DEFAULTS_BOOTSTRAP_CSS): no están en A ni en B,
+    // hay que traerlos a mano. Se parsean con el mismo motor para que el valor
+    // quede normalizado igual que el de tu hoja (#fff -> rgb(255, 255, 255)) y la
+    // comparación de "ya cubierta" funcione.
+    for (const [sel, decl] of parsearCSS(DEFAULTS_BOOTSTRAP_CSS)) {
+        // Si el micrositio SÍ declara la regla, el flujo normal ya la cubre.
+        if (A.has(sel) || !seUsaEnPagina(sel, doc)) continue;
+        if (B.get(selectorComplemento(sel)) === decl) cubiertas.push(sel);
+        else defaults.push({ sel, micrositio: decl });
+    }
+
+    return { faltantes, diferentes, defaults, cubiertas, iguales,
+        totalMicrositio: A.size, totalMoodle: B.size };
 }
 
 /* ------------------------------------------------ Blindaje de estilos --- */
@@ -549,7 +591,7 @@ function seUsaEnPagina(sel, doc) {
     }
 }
 
-function generarComplemento(diferentes, faltantes, doc) {
+function generarComplemento(diferentes, faltantes, doc, defaults) {
     const armar = (sel, decls) => {
         const cuerpo = decls.split(';').filter(Boolean).map(dec => {
             const i = dec.indexOf(':');
@@ -569,15 +611,23 @@ function generarComplemento(diferentes, faltantes, doc) {
         .filter(f => f.micrositio && seUsaEnPagina(f.sel, doc))
         .map(f => armar(f.sel, f.micrositio));
 
-    const reglas = [...conflictos, ...perdidas];
+    // 3) Defaults de Bootstrap que Moodle repinta: no los declara ninguna hoja,
+    // pero se ven distintos (el gris de .btn-secondary). Vienen ya filtrados por
+    // "esta página los usa" desde compararCSS.
+    const bootstrap = (defaults || []).map(d => armar(d.sel, d.micrositio));
+
+    const reglas = [...conflictos, ...perdidas, ...bootstrap];
     const texto = reglas.length
         ? '/* === Complemento micrositios (aditivo — no toca tus reglas) === */\n' +
           (conflictos.length ? '/* -- Estilos que tu hoja pinta distinto -- */\n' +
               conflictos.map(r => r.css).join('\n\n') + '\n\n' : '') +
           (perdidas.length ? '/* -- Estilos del micrositio que tu hoja no tiene -- */\n' +
-              perdidas.map(r => r.css).join('\n\n') : '')
+              perdidas.map(r => r.css).join('\n\n') + '\n\n' : '') +
+          (bootstrap.length ? '/* -- Defaults de Bootstrap que tu Moodle repinta -- */\n' +
+              bootstrap.map(r => r.css).join('\n\n') : '')
         : '';
-    return { texto, reglas, conflictos: conflictos.length, perdidas: perdidas.length };
+    return { texto, reglas, conflictos: conflictos.length, perdidas: perdidas.length,
+        bootstrap: bootstrap.length };
 }
 
 /** Extrae los valores de color relevantes de un string "prop:val;prop:val". */
@@ -1644,9 +1694,16 @@ function initMicrositio() {
             return;
         }
 
+        // El arreglo cubre tres cosas: conflictos de color en componentes, estilos
+        // del micro que tu hoja no tiene pero ESTA página sí usa (rompen el
+        // layout) y defaults de Bootstrap que tu Moodle repinta.
+        const paginaDoc = outputCode.value.trim()
+            ? new DOMParser().parseFromString(outputCode.value, 'text/html')
+            : null;
+
         let r;
         try {
-            r = compararCSS(cssMicro, cssMoodle);
+            r = compararCSS(cssMicro, cssMoodle, paginaDoc);
         } catch (e) {
             cmpResultado.innerHTML = `<div class="aviso aviso-error"><i class="ph ph-x-circle"></i>
                 <span>No se pudo leer el CSS: ${escapar(e.message)}</span></div>`;
@@ -1659,12 +1716,7 @@ function initMicrositio() {
             <strong>${r.diferentes.length}</strong> distintas,
             <strong>${r.faltantes.length}</strong> que te faltan.</span></div>`];
 
-        // El arreglo cubre dos cosas: conflictos de color en componentes Y estilos
-        // del micro que tu hoja no tiene pero ESTA página sí usa (rompen el layout).
-        const paginaDoc = outputCode.value.trim()
-            ? new DOMParser().parseFromString(outputCode.value, 'text/html')
-            : null;
-        const comp = generarComplemento(r.diferentes, r.faltantes, paginaDoc);
+        const comp = generarComplemento(r.diferentes, r.faltantes, paginaDoc, r.defaults);
         const compSet = new Set(comp.reglas.map(x => x.sel));
         const difComp = r.diferentes.filter(d => compSet.has(d.sel));
         const difOtras = r.diferentes.filter(d => !compSet.has(d.sel));
@@ -1697,6 +1749,22 @@ function initMicrositio() {
                 Se pierden al pasar a Moodle: no solo cambian colores, pueden <strong>romper el
                 acomodo</strong> (alturas, alineación de columnas). Ya van incluidos en el arreglo de
                 abajo.</span></div>
+                <ul class="lista-cmp">${filas}</ul>`);
+        }
+
+        if (r.defaults.length) {
+            const filas = r.defaults.map(d => `
+                <li>
+                    <code class="dif-sel">${escapar(d.sel)}</code>
+                    <div class="cmp-lado"><span class="cmp-tag cmp-tag--micro">micrositio</span>
+                        ${chipsColor(d.micrositio)}<span class="ruta">${escapar(d.micrositio)}</span></div>
+                </li>`).join('');
+            bloques.push(`<div class="aviso aviso-warn"><i class="ph ph-paint-brush"></i>
+                <span><strong>${r.defaults.length} estilo(s) que vienen del Bootstrap del micrositio</strong>
+                y tu Moodle pinta distinto (el gris de los botones <code>.btn-secondary</code>). No aparecen
+                al comparar porque <strong>ninguna de las dos hojas los escribe</strong>: viven dentro del
+                Bootstrap de cada lado. Tampoco se pueden fijar en el HTML sin matarles el
+                <em>hover</em>, así que van en el arreglo de abajo.</span></div>
                 <ul class="lista-cmp">${filas}</ul>`);
         }
 
@@ -1745,7 +1813,7 @@ function initMicrositio() {
             </details>`);
         }
 
-        if (!r.faltantes.length && !r.diferentes.length) {
+        if (!r.faltantes.length && !r.diferentes.length && !r.defaults.length) {
             bloques.push(`<div class="aviso aviso-ok"><i class="ph ph-check-circle"></i>
                 <span><strong>Tu hoja ya cubre todo.</strong> No hace falta agregar nada.</span></div>`);
         }

@@ -118,7 +118,25 @@ Renderiza el cuerpo convertido en un **iframe oculto con el CSS del micrositio**
     `!important`, listo para copiar y pegar en el tema. Cubre **dos** categorías:
     1. **Conflictos** — mismo selector, distinto valor, en selectores de
        componente (`esSelectorComponente`). Son diferencias de color.
-    2. **Estilo perdido** — reglas que el micro trae y tu hoja **no tiene**. No
+    2. **Defaults de Bootstrap** (`DEFAULTS_BOOTSTRAP_CSS` en `script.js`) — tabla
+       curada, porque este caso **no se puede detectar comparando**: la regla no
+       está en ninguna de las dos hojas, vive dentro del Bootstrap de cada lado
+       (es la causa #1 de §1 y el "límite conocido" del final de esta sección).
+       Normalmente se resolvería con blindaje inline, pero si el componente es un
+       **botón** el inline está prohibido (§4: mata el hover), así que la única
+       vía que queda es el complemento. Reglas de la tabla:
+       - Se filtran con `seUsaEnPagina()`, igual que las perdidas.
+       - Si el micro **sí** declara el selector, se ignoran: el flujo normal ya
+         lo cubre.
+       - **Solo fondo y texto, nunca `border-color`.** Los botones del micro
+         traen `border border-4 border-secondary-10`: esa utilidad pinta el borde
+         con el token del **módulo**, y un `border-color !important` nuestro lo
+         dejaría gris en todos los módulos. (Además el atajo se expande a los
+         cuatro longhands y ensucia el bloque.)
+       - Hex fijos, no tokens: son grises de Bootstrap, iguales en todo módulo.
+         La prohibición de hex de §6-bis aplica a colores que **dependen del
+         módulo**, no a estos.
+    3. **Estilo perdido** — reglas que el micro trae y tu hoja **no tiene**. No
        son solo color: pueden romper el **acomodo** (fue el caso de
        `.texto-titulo`, cuya altura alineaba las columnas de una `.row`; sin ella
        cada título empujaba su imagen a distinta altura). Se filtran con
@@ -142,10 +160,16 @@ Renderiza el cuerpo convertido en un **iframe oculto con el CSS del micrositio**
     queda sincronizada con el tema sin volver a copiar el CSS de Moodle. El botón
     NO modifica el tema: solo el espejo local; el usuario debe haber pegado el
     arreglo en Moodle primero.
-- **Límite conocido:** el tablero solo detecta diferencias entre reglas que
+- **Límite conocido:** el tablero solo *detecta* diferencias entre reglas que
   **ambas hojas declaran**. Un default de Bootstrap (causa #1 de §1) no aparece
-  ahí porque ninguna hoja lo escribe; esos casos se resuelven en el blindaje (§4)
-  y se van sumando ahí cuando aparecen (así entraron `.card` y el `<th>`).
+  ahí porque ninguna hoja lo escribe. Esos casos no se detectan, **se enumeran a
+  mano** y se resuelven según el componente:
+  - Sin estado (tarjetas, `<th>`) → blindaje inline (§4).
+  - Con estado (botones) → tabla `DEFAULTS_BOOTSTRAP_CSS` del complemento
+    (punto 2 de la lista de arriba).
+
+  Las dos listas van creciendo conforme aparecen casos: así entraron `.card`, el
+  `<th>` y `.btn-secondary`.
 
 ## 6-bis. Los toggles de colorear tabla: NUNCA un hex
 
@@ -229,4 +253,5 @@ al contenedor, **sin scroll**, y el título coincide solo. El límite superior d
 | Texto de `<th>` grisáceo | El blindaje congelaba el color **heredado**: sin el Bootstrap del micro, el `<th>` hereda `#333340` de `.mainPlantilla23` en vez del `#212529` real | Solo se congela el color si lo pide una clase `text-*`; el heredado se deja a Moodle |
 | Título de tabla más angosto | **Moodle constriñe `.container-fluid`** (max-width + márgenes auto, lo usa para el layout de página). La barra del título salía angosta y centrada, sin abarcar la tabla | `width/max-width: 100%` y márgenes `0` **inline con `!important`** en el `.container-fluid` hijo de `.table-responsive`. Además, si la tabla es `w-auto`, se le da `width: fit-content` al `.table-responsive` para que encoja como con el padre flex del micro |
 | Enlaces con subrayado de más | Moodle subraya los `<a>` por accesibilidad con una regla más específica que la clase `.text-decoration-none` de Bootstrap, así que los enlaces-botón del micro (los de `<mark>`, modales…) salían subrayados | `text-decoration: none !important` inline **solo** en elementos con la clase `.text-decoration-none`. Los demás enlaces conservan su subrayado (verificado) |
+| Botón gris más claro | `.btn-secondary` (el "Ubicación en tiempo real" de los modales) salía **gris claro** en Moodle y **gris fuerte** (`#6c757d`) en el micro. El tablero **no ofrecía el arreglo**: ni la hoja del micro ni la de Moodle declaran `.btn-secondary` — es un default del Bootstrap de cada lado. Y como es un botón, tampoco podía blindarse inline (mataría el hover) | Tercera categoría del complemento: tabla `DEFAULTS_BOOTSTRAP_CSS` con el default de Bootstrap 5.2.3 (reposo/hover/active), filtrada por `seUsaEnPagina()`. **Solo fondo y texto**: el `border-color` se omite a propósito para no pisar `border-secondary-10` (color del módulo). Ver §6, punto 2 |
 | Scroll horizontal en pantallas medianas | `.mainPlantilla23 .table td { min-width: 200px }` (está en el CSS del micro **y** en la hoja de Moodle): 5 columnas × 200px = **1000px de ancho mínimo**, así que la tabla no podía encogerse y sacaba barra de desplazamiento entre los 576px de las tarjetas y el escritorio | `max-width: 100%` inline en la tabla **+** una regla `@media` en el complemento del tema que pone `min-width: 0` en las celdas (ver §6-ter). Al encoger la tabla, el título cuadra solo |
