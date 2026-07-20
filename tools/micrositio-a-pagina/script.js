@@ -790,7 +790,12 @@ function medidasSVG(texto) {
     // intrínseco y el navegador lo estira hasta llenar su contenedor. Un PNG
     // nunca hace eso (siempre trae píxeles), así que hay que reponer ese
     // comportamiento a mano o la imagen se queda chica. Ver REGLAS.md §4-ter.
-    return { ancho: ancho || 512, alto: alto || 512, fluido: !anchoPx && !altoPx };
+    //
+    // `porcentaje`: el SVG declara su ancho en % — una señal EXPLÍCITA de su
+    // autor de que esa imagen es fluida. Sirve para acotar el arreglo (§4-ter).
+    const porcentaje = /%\s*$/.test((svg?.getAttribute('width') || '').trim());
+
+    return { ancho: ancho || 512, alto: alto || 512, fluido: !anchoPx && !altoPx, porcentaje };
 }
 
 function cargarImagen(url) {
@@ -1241,20 +1246,40 @@ function initMicrositio() {
                     && !el.hasAttribute('width') && !el.hasAttribute('height')) {
                     const ruta = resolverRuta(dirBase, src);
                     if (extension(ruta) === 'svg' && ARCHIVOS.has(ruta)) {
-                        const { ancho, alto, fluido } = medidasSVG(
+                        const { ancho, alto, fluido, porcentaje } = medidasSVG(
                             new TextDecoder('utf-8').decode(ARCHIVOS.get(ruta)));
 
-                        if (fluido) {
-                            // El SVG no traía medidas en px: en el micrositio no tenía
-                            // tamaño intrínseco y se estiraba hasta LLENAR su contenedor.
-                            // El PNG sí trae píxeles y no lo haría, así que reponemos ese
-                            // comportamiento. Inline porque TinyMCE borra los <style>.
-                            el.style.setProperty('width', '100%');
-                            el.style.setProperty('height', 'auto');
+                        // El trato "fluido" es la EXCEPCIÓN, no la regla. Solo entra
+                        // donde hay evidencia de que la imagen debía estirarse:
+                        //   · está dentro de un modal (contenedor de ancho variable
+                        //     donde se detectó el problema), o
+                        //   · su SVG declara el ancho en % (señal explícita del autor).
+                        // Todo lo demás conserva el comportamiento de siempre.
+                        //
+                        // Acotarlo NO es cosmético: sin esto, una imagen decorativa sin
+                        // regla CSS que la dimensione pasaba de 300x300 a 900x900 (el
+                        // PNG se rasteriza a 3x), y eso tocaría páginas que hoy salen
+                        // perfectas. Ver REGLAS.md §4-ter.
+                        const enModal = !!el.closest('.modal, .modal-body');
+
+                        if (fluido && (enModal || porcentaje)) {
+                            // Inline porque TinyMCE borra los <style>.
+                            //
+                            // ⚠️ max-width, NUNCA width:100%. Un `width` inline le GANA a
+                            // las reglas que dimensionan iconos (p. ej.
+                            // `.mainPlantilla23 .instrucciones img { width:56px }`), y la
+                            // flechita de las cajas de instrucción pasaba de 80px a
+                            // ¡1162px!. Con max-width no hay pelea: si el CSS fija 56px,
+                            // 56 < 100% y manda el CSS; si no fija nada, el PNG se topa
+                            // con el ancho del contenedor y lo llena igual que el SVG.
+                            // Tampoco va `height:auto`: pisaría el `height` que esas
+                            // mismas reglas fijan.
+                            el.style.setProperty('max-width', '100%');
                         } else {
-                            // El SVG sí declaraba su tamaño: era una imagen de medida fija
-                            // y así debe quedarse (si no, el PNG saldría a su resolución
-                            // de rasterizado, que es 3x).
+                            // Comportamiento de siempre: le fijamos el tamaño real del
+                            // SVG. Sin esto el PNG saldría a su resolución de rasterizado
+                            // (3x) cuando ningún CSS lo limita. El atributo cede ante
+                            // cualquier regla CSS, así que no pisa lo que ya se veía bien.
                             el.setAttribute('width', Math.round(ancho));
                             el.setAttribute('height', Math.round(alto));
                         }

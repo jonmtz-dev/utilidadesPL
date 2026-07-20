@@ -115,10 +115,30 @@ cambia una propiedad que **no es de estilo, es del formato**:
 
 Por eso `medidasSVG()` devuelve `fluido` y la conversión se bifurca:
 
-| El SVG traía | Salida | Por qué |
+**El trato fluido es la EXCEPCIÓN, no la regla.** Solo entra donde hay evidencia
+de que la imagen debía estirarse: la imagen está **dentro de un modal**, o su SVG
+**declara el ancho en `%`** (señal explícita del autor). Todo lo demás conserva
+el comportamiento de siempre.
+
+| El SVG traía | Dónde está | Salida |
 |---|---|---|
-| Nada en px (`viewBox`, `%`) | `style="width:100%; height:auto"` | Repone el estirado al contenedor. Inline porque TinyMCE borra los `<style>` |
-| Medidas en px | `width`/`height` como antes | Era una imagen de medida fija; sin los atributos saldría al **3×** del rasterizado |
+| Nada en px | en un modal, **o** ancho en `%` | `style="max-width: 100%"` |
+| Nada en px | en cualquier otro lado | `width`/`height` (lo de siempre) |
+| Medidas en px | donde sea | `width`/`height` (lo de siempre) |
+
+Acotarlo no es cosmético: **sin el acotamiento, una imagen decorativa sin regla
+CSS que la dimensione pasaba de 300×300 a 900×900** (el PNG se rasteriza a 3×).
+Eso tocaría páginas ya convertidas que salen perfectas. La regla de oro aquí es
+que un arreglo para un caso no debe cambiar los que ya funcionaban.
+
+⚠️ **`max-width`, NUNCA `width: 100%`** (ni `height: auto`). Un `width` inline le
+gana a las reglas que dimensionan iconos —`.mainPlantilla23 .instrucciones img
+{ width: 56px; height: 56px }` está en la hoja de Moodle— y la flechita de las
+cajas de instrucción pasó de **80px a 1162px**. Con `max-width` no hay pelea:
+
+- Si el CSS fija un ancho (56px), `56 < 100%` y **manda el CSS** → el icono queda igual.
+- Si el CSS no fija nada, el PNG (rasterizado a 3×) es más ancho que el
+  contenedor, así que el tope lo recorta y **lo llena**, igual que el SVG.
 
 Medido con el modal de "Número de átomos" (contenedor de 1138px, PNG 2400×933):
 
@@ -128,9 +148,17 @@ Medido con el modal de "Número de átomos" (contenedor de 1138px, PNG 2400×933
 | Antes (`width="800"`) | 800×311 ← el bug |
 | Ahora | **1138×442** |
 
-Y sigue adaptándose: en una columna de 300px da 300×117, sin `img-fluid` da lo
-mismo, y no desborda. La proporción nunca cambió — el problema **no era**
-deformación, era tamaño.
+Y sigue adaptándose. Medido a 7 anchos (1600, 1138, 992, 768, 576, 400, 320px),
+comparando contra el SVG del micrositio en el mismo contenedor: **idéntico en los
+dos casos y sin desbordar**.
+
+| Contenedor | Icono (`.instrucciones img`) | Ilustración |
+|---|---|---|
+| 1600px | 80×80 = micro | 1600×622 = micro |
+| 1138px | 80×80 = micro | 1138×442 = micro |
+| 320px | 80×80 = micro | 320×124 = micro |
+
+La proporción nunca cambió — el problema **no era** deformación, era tamaño.
 
 ## 5. Complemento aditivo `.ms-convertido` — lo CON estado
 
@@ -322,6 +350,7 @@ al contenedor, **sin scroll**, y el título coincide solo. El límite superior d
 | Texto de `<th>` grisáceo | El blindaje congelaba el color **heredado**: sin el Bootstrap del micro, el `<th>` hereda `#333340` de `.mainPlantilla23` en vez del `#212529` real | Solo se congela el color si lo pide una clase `text-*`; el heredado se deja a Moodle |
 | Título de tabla más angosto | **Moodle constriñe `.container-fluid`** (max-width + márgenes auto, lo usa para el layout de página). La barra del título salía angosta y centrada, sin abarcar la tabla | `width/max-width: 100%` y márgenes `0` **inline con `!important`** en el `.container-fluid` hijo de `.table-responsive`. Además, si la tabla es `w-auto`, se le da `width: fit-content` al `.table-responsive` para que encoja como con el padre flex del micro |
 | Enlaces con subrayado de más | Moodle subraya los `<a>` por accesibilidad con una regla más específica que la clase `.text-decoration-none` de Bootstrap, así que los enlaces-botón del micro (los de `<mark>`, modales…) salían subrayados | `text-decoration: none !important` inline **solo** en elementos con la clase `.text-decoration-none`. Los demás enlaces conservan su subrayado (verificado) |
+| Iconos enormes tras el arreglo anterior | La flechita de las cajas de instrucción pasó de 80px a **1162px**. El `width:100%` inline puesto para las ilustraciones fluidas le ganaba a `.mainPlantilla23 .instrucciones img { width:56px }` de la hoja de Moodle, y se aplicaba a **toda** imagen sin medidas en px, no solo a las de los modales | Dos cambios: (1) `max-width` en vez de `width` (y sin `height:auto`), que no compite con el CSS que dimensiona iconos; (2) **acotado** a imágenes dentro de modales o con ancho en `%`. Ver §4-ter |
 | Imagen del modal más chica que en el micrositio | La ilustración salía a 800px dentro de un modal de 1138px, con espacio sobrando a los lados; en el micrositio llenaba el modal. **No era deformación** (proporción idéntica, 2.5723 en ambos): el SVG sin medidas en px es fluido y llena su contenedor, el PNG con `width="800"` queda clavado. `img-fluid` no ayuda: solo limita, nunca agranda | `medidasSVG()` devuelve `fluido`; si el SVG no traía px, la salida lleva `style="width:100%; height:auto"` en vez de los atributos. Ver §4-ter |
 | SVG responsivo rasterizado cuadrado | `medidasSVG()` hacía `parseFloat` del atributo: un `width="100%"` daba **100** y se tomaba como 100px, así que un SVG responsivo salía como PNG **cuadrado de 100×100** con el dibujo deformado. Igual con unidades (`600pt`) | Solo se aceptan medidas en px (o sin unidad); cualquier otra cosa cae al `viewBox`, que además repone la medida que falte **conservando su proporción** |
 | Texto del modal estirado | En el modal de "park", los `<mark>` de colores salían como **barras verticales altísimas** y las palabras separadas en fila. El micrositio envolvía la frase en una `<ul>` **sin `<li>`**; TinyMCE la borra por inválida y entonces cada `<strong>`/`<mark>`/`<i>` se volvió item flex del `.card-body.d-flex` (3 → 8 items, `<mark>` de 17px → 200px) | `sanearParaTinyMCE()`: envuelve el contenido suelto en un `<li style="list-style:none">` para que la lista sea válida y sobreviva. Ver §4-bis |
