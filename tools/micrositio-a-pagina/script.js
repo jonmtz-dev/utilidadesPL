@@ -758,13 +758,35 @@ function baseDeBorrador(url) {
  */
 function medidasSVG(texto) {
     const svg = new DOMParser().parseFromString(texto, 'image/svg+xml').querySelector('svg');
-    let ancho = parseFloat(svg?.getAttribute('width'));
-    let alto = parseFloat(svg?.getAttribute('height'));
-    if (!ancho || !alto) {
-        const vb = (svg?.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
-        if (vb.length === 4) { ancho = ancho || vb[2]; alto = alto || vb[3]; }
+
+    // Solo valen las medidas en px (o sin unidad). Un `width="100%"` con
+    // parseFloat daba 100 y se tomaba como 100px: un SVG responsivo
+    // (`width="100%" height="100%"`, de lo más común) salía como PNG CUADRADO de
+    // 100x100 y el dibujo quedaba deformado. Lo mismo con "600pt".
+    const enPx = attr => {
+        const v = (svg?.getAttribute(attr) || '').trim();
+        return /^[\d.]+(px)?$/.test(v) ? parseFloat(v) : NaN;
+    };
+    const anchoPx = enPx('width');
+    const altoPx = enPx('height');
+    let ancho = anchoPx;
+    let alto = altoPx;
+
+    // El viewBox es la caja real del dibujo: repone lo que falte conservando su
+    // proporción (no solo cuando faltan las dos medidas).
+    const vb = (svg?.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
+    if (vb.length === 4 && vb[2] > 0 && vb[3] > 0) {
+        const proporcion = vb[2] / vb[3];
+        if (!ancho && !alto) { ancho = vb[2]; alto = vb[3]; }
+        else if (!alto) { alto = ancho / proporcion; }
+        else if (!ancho) { ancho = alto * proporcion; }
     }
-    return { ancho: ancho || 512, alto: alto || 512 };
+
+    // `fluido`: el SVG no declara NINGUNA medida en px, así que no tiene tamaño
+    // intrínseco y el navegador lo estira hasta llenar su contenedor. Un PNG
+    // nunca hace eso (siempre trae píxeles), así que hay que reponer ese
+    // comportamiento a mano o la imagen se queda chica. Ver REGLAS.md §4-ter.
+    return { ancho: ancho || 512, alto: alto || 512, fluido: !anchoPx && !altoPx };
 }
 
 function cargarImagen(url) {
@@ -1215,10 +1237,23 @@ function initMicrositio() {
                     && !el.hasAttribute('width') && !el.hasAttribute('height')) {
                     const ruta = resolverRuta(dirBase, src);
                     if (extension(ruta) === 'svg' && ARCHIVOS.has(ruta)) {
-                        const { ancho, alto } = medidasSVG(
+                        const { ancho, alto, fluido } = medidasSVG(
                             new TextDecoder('utf-8').decode(ARCHIVOS.get(ruta)));
-                        el.setAttribute('width', Math.round(ancho));
-                        el.setAttribute('height', Math.round(alto));
+
+                        if (fluido) {
+                            // El SVG no traía medidas en px: en el micrositio no tenía
+                            // tamaño intrínseco y se estiraba hasta LLENAR su contenedor.
+                            // El PNG sí trae píxeles y no lo haría, así que reponemos ese
+                            // comportamiento. Inline porque TinyMCE borra los <style>.
+                            el.style.setProperty('width', '100%');
+                            el.style.setProperty('height', 'auto');
+                        } else {
+                            // El SVG sí declaraba su tamaño: era una imagen de medida fija
+                            // y así debe quedarse (si no, el PNG saldría a su resolución
+                            // de rasterizado, que es 3x).
+                            el.setAttribute('width', Math.round(ancho));
+                            el.setAttribute('height', Math.round(alto));
+                        }
                     }
                 }
             }

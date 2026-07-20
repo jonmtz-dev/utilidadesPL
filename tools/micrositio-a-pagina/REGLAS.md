@@ -101,6 +101,37 @@ blindaje**: si TinyMCE borra un elemento, ningún color inline lo salva.
   pasaba de 3 a **8 items** y el `<mark>` de 17px a **200px** de alto. Con el
   saneo, la salida queda idéntica al micrositio (3 items, `<mark>` de 17px).
 
+## 4-ter. SVG → PNG: el tamaño fluido se pierde y hay que reponerlo
+
+Los SVG se rasterizan a PNG (el arrastre múltiple de TinyMCE los rechaza). Eso
+cambia una propiedad que **no es de estilo, es del formato**:
+
+- Un `<img>` cuyo SVG **no declara medidas en px** (solo `viewBox`, o `width` en
+  `%`) **no tiene tamaño intrínseco**, así que el navegador lo estira hasta
+  **llenar su contenedor**. Es fluido sin que ninguna regla CSS intervenga.
+- Un PNG **siempre** trae píxeles, así que nunca hace eso. Con los atributos
+  `width`/`height` queda clavado a esa medida y **se ve más chico** que en el
+  micrositio.
+
+Por eso `medidasSVG()` devuelve `fluido` y la conversión se bifurca:
+
+| El SVG traía | Salida | Por qué |
+|---|---|---|
+| Nada en px (`viewBox`, `%`) | `style="width:100%; height:auto"` | Repone el estirado al contenedor. Inline porque TinyMCE borra los `<style>` |
+| Medidas en px | `width`/`height` como antes | Era una imagen de medida fija; sin los atributos saldría al **3×** del rasterizado |
+
+Medido con el modal de "Número de átomos" (contenedor de 1138px, PNG 2400×933):
+
+| | Se muestra |
+|---|---|
+| Micrositio (referencia) | 1138×442 |
+| Antes (`width="800"`) | 800×311 ← el bug |
+| Ahora | **1138×442** |
+
+Y sigue adaptándose: en una columna de 300px da 300×117, sin `img-fluid` da lo
+mismo, y no desborda. La proporción nunca cambió — el problema **no era**
+deformación, era tamaño.
+
 ## 5. Complemento aditivo `.ms-convertido` — lo CON estado
 
 - La herramienta **marca** cada conversión: agrega la clase `ms-convertido` al
@@ -275,6 +306,8 @@ al contenedor, **sin scroll**, y el título coincide solo. El límite superior d
 | Texto de `<th>` grisáceo | El blindaje congelaba el color **heredado**: sin el Bootstrap del micro, el `<th>` hereda `#333340` de `.mainPlantilla23` en vez del `#212529` real | Solo se congela el color si lo pide una clase `text-*`; el heredado se deja a Moodle |
 | Título de tabla más angosto | **Moodle constriñe `.container-fluid`** (max-width + márgenes auto, lo usa para el layout de página). La barra del título salía angosta y centrada, sin abarcar la tabla | `width/max-width: 100%` y márgenes `0` **inline con `!important`** en el `.container-fluid` hijo de `.table-responsive`. Además, si la tabla es `w-auto`, se le da `width: fit-content` al `.table-responsive` para que encoja como con el padre flex del micro |
 | Enlaces con subrayado de más | Moodle subraya los `<a>` por accesibilidad con una regla más específica que la clase `.text-decoration-none` de Bootstrap, así que los enlaces-botón del micro (los de `<mark>`, modales…) salían subrayados | `text-decoration: none !important` inline **solo** en elementos con la clase `.text-decoration-none`. Los demás enlaces conservan su subrayado (verificado) |
+| Imagen del modal más chica que en el micrositio | La ilustración salía a 800px dentro de un modal de 1138px, con espacio sobrando a los lados; en el micrositio llenaba el modal. **No era deformación** (proporción idéntica, 2.5723 en ambos): el SVG sin medidas en px es fluido y llena su contenedor, el PNG con `width="800"` queda clavado. `img-fluid` no ayuda: solo limita, nunca agranda | `medidasSVG()` devuelve `fluido`; si el SVG no traía px, la salida lleva `style="width:100%; height:auto"` en vez de los atributos. Ver §4-ter |
+| SVG responsivo rasterizado cuadrado | `medidasSVG()` hacía `parseFloat` del atributo: un `width="100%"` daba **100** y se tomaba como 100px, así que un SVG responsivo salía como PNG **cuadrado de 100×100** con el dibujo deformado. Igual con unidades (`600pt`) | Solo se aceptan medidas en px (o sin unidad); cualquier otra cosa cae al `viewBox`, que además repone la medida que falte **conservando su proporción** |
 | Texto del modal estirado | En el modal de "park", los `<mark>` de colores salían como **barras verticales altísimas** y las palabras separadas en fila. El micrositio envolvía la frase en una `<ul>` **sin `<li>`**; TinyMCE la borra por inválida y entonces cada `<strong>`/`<mark>`/`<i>` se volvió item flex del `.card-body.d-flex` (3 → 8 items, `<mark>` de 17px → 200px) | `sanearParaTinyMCE()`: envuelve el contenido suelto en un `<li style="list-style:none">` para que la lista sea válida y sobreviva. Ver §4-bis |
 | Botón gris más claro | `.btn-secondary` (el "Ubicación en tiempo real" de los modales) salía **gris claro** en Moodle y **gris fuerte** (`#6c757d`) en el micro. El tablero **no ofrecía el arreglo**: ni la hoja del micro ni la de Moodle declaran `.btn-secondary` — es un default del Bootstrap de cada lado. Y como es un botón, tampoco podía blindarse inline (mataría el hover) | Tercera categoría del complemento: tabla `DEFAULTS_BOOTSTRAP_CSS` con el default de Bootstrap 5.2.3 (reposo/hover/active), filtrada por `seUsaEnPagina()`. **Solo fondo y texto**: el `border-color` se omite a propósito para no pisar `border-secondary-10` (color del módulo). Ver §6, punto 2 |
 | Scroll horizontal en pantallas medianas | `.mainPlantilla23 .table td { min-width: 200px }` (está en el CSS del micro **y** en la hoja de Moodle): 5 columnas × 200px = **1000px de ancho mínimo**, así que la tabla no podía encogerse y sacaba barra de desplazamiento entre los 576px de las tarjetas y el escritorio | `max-width: 100%` inline en la tabla **+** una regla `@media` en el complemento del tema que pone `min-width: 0` en las celdas (ver §6-ter). Al encoger la tabla, el título cuadra solo |
