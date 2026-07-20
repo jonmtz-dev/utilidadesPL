@@ -532,6 +532,39 @@ async function blindar(doc, cssMicro) {
  * sobre el wrapper .mainPlantilla23 (ancestro de todo); si no existe, envuelve el
  * contenido del body. Idempotente.
  */
+/**
+ * TinyMCE limpia el HTML inválido al guardar, y una <ul>/<ol> SIN ningún <li> lo
+ * es: la borra y deja su contenido suelto. El navegador sí tolera esa lista al
+ * mostrar el micrositio, por eso allá se ve bien y en Moodle no.
+ *
+ * Cuando esa lista era el único hijo de bloque de un contenedor flex
+ * (`.card-body.d-flex`), perderla es catastrófico: sin ella cada <strong>,
+ * <mark> e <i> se convierte en SU PROPIO item flex, se acomodan en fila y se
+ * estiran a la altura del contenedor. Medido: el <mark> pasó de 17px a 200px de
+ * alto (las barras de color alargadas del modal de "park").
+ *
+ * Arreglo: envolver el contenido suelto en un <li> con `list-style: none`. Así
+ * la lista queda VÁLIDA (TinyMCE ya no la toca), sigue siendo un solo hijo de
+ * bloque y conserva cualquier regla que el micro tenga para `ul` — que es más
+ * fiel que cambiarla por un <div>, porque no perdemos su sangría ni sus márgenes.
+ */
+function sanearParaTinyMCE(doc) {
+    let arregladas = 0;
+    doc.querySelectorAll('ul, ol').forEach(lista => {
+        // Si ya tiene <li>, es válida: no la tocamos (aunque traiga texto suelto
+        // además, eso es una mezcla rara que no queremos reacomodar a ciegas).
+        if (lista.querySelector(':scope > li')) return;
+        if (!lista.childNodes.length) return;
+
+        const li = doc.createElement('li');
+        li.style.setProperty('list-style', 'none');
+        while (lista.firstChild) li.appendChild(lista.firstChild);
+        lista.appendChild(li);
+        arregladas++;
+    });
+    return arregladas;
+}
+
 function marcarConvertido(doc) {
     const wrappers = doc.querySelectorAll('.mainPlantilla23');
     if (wrappers.length) {
@@ -1291,6 +1324,10 @@ function initMicrositio() {
             .filter(r => ![...reporte.usadas.values()].some(u => u.ruta === r));
 
         /* ---- Salidas */
+
+        // Saneo estructural: va SIEMPRE (no depende del blindaje), porque sin él
+        // TinyMCE borra las listas inválidas y descuadra los contenedores flex.
+        reporte.listasSaneadas = sanearParaTinyMCE(doc);
 
         // Opción A: marca el contenido para que las reglas aditivas .ms-convertido
         // de tu tema (acordeones, etc.) apliquen sin tocar tus reglas existentes.

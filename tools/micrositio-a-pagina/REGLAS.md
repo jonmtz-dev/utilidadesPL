@@ -35,7 +35,14 @@ Probado en producción, no negociable:
    congela el estado de reposo con `!important`, mata el hover (pasó con el
    acordeón: dejó de reaccionar al mouse). Los estados solo pueden vivir en el
    **CSS del tema**.
-5. **La hoja de Moodle del usuario NO se toca.** Es el estándar del equipo. Todo
+5. **TinyMCE limpia el HTML inválido al guardar.** El navegador es tolerante al
+   mostrar el micrositio, TinyMCE no. Caso probado: una `<ul>`/`<ol>` **sin
+   ningún `<li>`** (usada como simple envoltorio) se borra y su contenido queda
+   suelto. Si esa lista era el único hijo de bloque de un contenedor flex
+   (`.card-body.d-flex`), cada `<strong>`/`<mark>`/`<i>` pasa a ser **su propio
+   item flex** y se estira a la altura del contenedor. Lo resuelve
+   `sanearParaTinyMCE()` (§4-bis).
+6. **La hoja de Moodle del usuario NO se toca.** Es el estándar del equipo. Todo
    arreglo en el tema debe ser **aditivo**: reglas nuevas bajo la marca
    `.ms-convertido`, nunca editar reglas existentes.
 
@@ -78,6 +85,21 @@ Renderiza el cuerpo convertido en un **iframe oculto con el CSS del micrositio**
     el modo offline de la PWA y mete red en la conversión).
 - Si el conteo de nodos entre iframe y salida no coincide, **no se arriesga**:
   se deja el HTML sin congelar (estructuras desalineadas).
+
+## 4-bis. Saneo estructural (`sanearParaTinyMCE()`) — sobrevivir al limpiador
+
+Corre **siempre**, antes de `marcarConvertido()`, y **no depende del toggle de
+blindaje**: si TinyMCE borra un elemento, ningún color inline lo salva.
+
+- **`<ul>`/`<ol>` sin `<li>`** → se envuelve su contenido en un
+  `<li style="list-style: none">`. Así la lista queda válida (TinyMCE ya no la
+  toca), sigue siendo **un solo hijo de bloque** y **conserva las reglas que el
+  micro tenga para `ul`** — más fiel que cambiarla por un `<div>`, que perdería
+  su sangría y márgenes.
+- Las listas **válidas no se tocan** (con `<li>`, anidadas, o vacías).
+- Medido con el modal de "park": tras la limpieza de TinyMCE, el contenedor flex
+  pasaba de 3 a **8 items** y el `<mark>` de 17px a **200px** de alto. Con el
+  saneo, la salida queda idéntica al micrositio (3 items, `<mark>` de 17px).
 
 ## 5. Complemento aditivo `.ms-convertido` — lo CON estado
 
@@ -253,5 +275,6 @@ al contenedor, **sin scroll**, y el título coincide solo. El límite superior d
 | Texto de `<th>` grisáceo | El blindaje congelaba el color **heredado**: sin el Bootstrap del micro, el `<th>` hereda `#333340` de `.mainPlantilla23` en vez del `#212529` real | Solo se congela el color si lo pide una clase `text-*`; el heredado se deja a Moodle |
 | Título de tabla más angosto | **Moodle constriñe `.container-fluid`** (max-width + márgenes auto, lo usa para el layout de página). La barra del título salía angosta y centrada, sin abarcar la tabla | `width/max-width: 100%` y márgenes `0` **inline con `!important`** en el `.container-fluid` hijo de `.table-responsive`. Además, si la tabla es `w-auto`, se le da `width: fit-content` al `.table-responsive` para que encoja como con el padre flex del micro |
 | Enlaces con subrayado de más | Moodle subraya los `<a>` por accesibilidad con una regla más específica que la clase `.text-decoration-none` de Bootstrap, así que los enlaces-botón del micro (los de `<mark>`, modales…) salían subrayados | `text-decoration: none !important` inline **solo** en elementos con la clase `.text-decoration-none`. Los demás enlaces conservan su subrayado (verificado) |
+| Texto del modal estirado | En el modal de "park", los `<mark>` de colores salían como **barras verticales altísimas** y las palabras separadas en fila. El micrositio envolvía la frase en una `<ul>` **sin `<li>`**; TinyMCE la borra por inválida y entonces cada `<strong>`/`<mark>`/`<i>` se volvió item flex del `.card-body.d-flex` (3 → 8 items, `<mark>` de 17px → 200px) | `sanearParaTinyMCE()`: envuelve el contenido suelto en un `<li style="list-style:none">` para que la lista sea válida y sobreviva. Ver §4-bis |
 | Botón gris más claro | `.btn-secondary` (el "Ubicación en tiempo real" de los modales) salía **gris claro** en Moodle y **gris fuerte** (`#6c757d`) en el micro. El tablero **no ofrecía el arreglo**: ni la hoja del micro ni la de Moodle declaran `.btn-secondary` — es un default del Bootstrap de cada lado. Y como es un botón, tampoco podía blindarse inline (mataría el hover) | Tercera categoría del complemento: tabla `DEFAULTS_BOOTSTRAP_CSS` con el default de Bootstrap 5.2.3 (reposo/hover/active), filtrada por `seUsaEnPagina()`. **Solo fondo y texto**: el `border-color` se omite a propósito para no pisar `border-secondary-10` (color del módulo). Ver §6, punto 2 |
 | Scroll horizontal en pantallas medianas | `.mainPlantilla23 .table td { min-width: 200px }` (está en el CSS del micro **y** en la hoja de Moodle): 5 columnas × 200px = **1000px de ancho mínimo**, así que la tabla no podía encogerse y sacaba barra de desplazamiento entre los 576px de las tarjetas y el escritorio | `max-width: 100%` inline en la tabla **+** una regla `@media` en el complemento del tema que pone `min-width: 0` en las celdas (ver §6-ter). Al encoger la tabla, el título cuadra solo |
