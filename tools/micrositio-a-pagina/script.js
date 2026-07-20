@@ -394,20 +394,14 @@ function esInteractivo(cls) {
     return /\saccordion-button\s/.test(cls) || /\sbtn(-\S+)?\s/.test(cls);
 }
 
-/** Elige texto legible (#fff u oscuro) sobre un fondo rgb(...). */
-function textoLegible(bgRgb) {
-    const m = (bgRgb || '').match(/\d+/g);
-    if (!m) return '#ffffff';
-    const [r, g, b] = m.map(Number);
-    const L = (0.299 * r + 0.587 * g + 0.114 * b) / 255;   // luminancia aprox.
-    return L > 0.6 ? '#212529' : '#ffffff';
-}
-
 /**
- * Componentes SIN estados (celdas, fondos, encabezados): congelamos el color
- * final con style="" inline y !important. Gana al Bootstrap de Moodle y aguanta
- * a TinyMCE. NO se usa en botones/acordeones: ahí un inline mataría el hover y el
- * estado "abierto" (ver sembrarVariablesBS).
+ * Componentes SIN estados (celdas, fondos, encabezados, tarjetas): congelamos el
+ * color final con style="" inline y !important. Gana al Bootstrap de Moodle y
+ * aguanta a TinyMCE.
+ *
+ * NO se usa en botones ni acordeones: un inline les mataría el hover y el estado
+ * "abierto". Esos se resuelven con el complemento `.ms-convertido` en el tema
+ * (ver REGLAS.md §5); desde el HTML es imposible.
  */
 function congelarElemento(src, dst) {
     const cs = getComputedStyle(src);
@@ -438,7 +432,12 @@ function congelarElemento(src, dst) {
         const bg = esTh ? fondoEfectivo(src) : cs.backgroundColor;
         if (bg && !esTransparente(bg)) dst.style.setProperty('background-color', bg, 'important');
     }
-    if (RE_TX.test(cls) || esTh) {
+    // Texto: SOLO si lo pide una clase text-* (esa sí la define estilos.css y el
+    // render la calcula bien). Nunca congelamos el color heredado: el render no
+    // trae el Bootstrap del micro, así que un <th> heredaría el gris de
+    // .mainPlantilla23 (#333340) en vez del negro real de Bootstrap (#212529).
+    // Sin congelar, Moodle le aplica su propio negro, que es el correcto.
+    if (RE_TX.test(cls)) {
         if (cs.color) dst.style.setProperty('color', cs.color, 'important');
     }
     if (RE_BD.test(cls)) {
@@ -447,36 +446,6 @@ function congelarElemento(src, dst) {
     }
 }
 
-/**
- * Componentes CON estados (acordeón, botón). Un style="" inline con !important
- * mataría el hover y el "abierto". En su lugar sembramos las variables --bs-* de
- * Bootstrap inline; el propio Bootstrap de Moodle las lee y pinta cada estado con
- * el color correcto. (Depende de que Moodle no borre las propiedades --custom;
- * si las borra, estos componentes quedan con el default de Moodle.)
- */
-function sembrarVariablesBS(src, dst) {
-    const cs = getComputedStyle(src);
-    const bg = cs.backgroundColor;
-    const color = cs.color;
-    const cls = ' ' + (typeof src.className === 'string' ? src.className : '') + ' ';
-
-    if (/\saccordion-button\s/.test(cls)) {
-        // Reposo (cerrado): tal cual lo pinta el micro.
-        if (!esTransparente(bg)) dst.style.setProperty('--bs-accordion-btn-bg', bg);
-        if (color) dst.style.setProperty('--bs-accordion-btn-color', color);
-        // Abierto: versión SÓLIDA del color de acento del botón, con texto legible.
-        if (color) {
-            dst.style.setProperty('--bs-accordion-active-bg', color);
-            dst.style.setProperty('--bs-accordion-active-color', textoLegible(color));
-        }
-        return;
-    }
-    // Botón: color de reposo. El hover lo resuelve Bootstrap.
-    if (!esTransparente(bg)) dst.style.setProperty('--bs-btn-bg', bg);
-    if (color) dst.style.setProperty('--bs-btn-color', color);
-    const bc = cs.borderTopColor;
-    if (bc && !esTransparente(bc)) dst.style.setProperty('--bs-btn-border-color', bc);
-}
 
 /**
  * Congela el look del micrositio en `doc` (mutándolo). Rinde el cuerpo con el css
@@ -1206,6 +1175,47 @@ function initMicrositio() {
             el.setAttribute('style', estilo
                 ? `${estilo.replace(/;?$/, ';')} flex-shrink: 0;`
                 : 'flex-shrink: 0;');
+        });
+
+        // --- Tabla w-auto: el título de arriba no abarcaba el ancho de la tabla.
+        // Cuando la tabla es `w-auto` (se encoge a su contenido), el micrositio la
+        // envuelve en un padre flex (`d-flex justify-content-center`) que hace que
+        // el .table-responsive TAMBIÉN se encoja; así el contenedor del título
+        // (container-fluid, 100% del padre) mide exactamente lo que la tabla.
+        // Si ese envoltorio no sobrevive, el .table-responsive ocupa el 100% y el
+        // título queda de otro ancho. Lo resolvemos aquí sin depender del padre:
+        // fit-content encoge a la tabla, y los márgenes auto la centran igual.
+        doc.querySelectorAll('.table-responsive').forEach(cont => {
+            const tabla = cont.querySelector('table');
+            if (!tabla || !/(^|\s)w-auto(\s|$)/.test(tabla.className)) return;
+            const estilo = (cont.getAttribute('style') || '').trim();
+            if (/(^|;)\s*width\s*:/i.test(estilo)) return;   // ya trae ancho propio
+            cont.setAttribute('style', (estilo ? `${estilo.replace(/;?$/, ';')} ` : '') +
+                'width: fit-content; margin-left: auto; margin-right: auto;');
+        });
+
+        // --- Barra del título de tabla (el .container-fluid que va sobre la tabla).
+        // Moodle constriñe .container-fluid (max-width y márgenes auto) porque la usa
+        // para el layout de la página; eso deja la barra del título más angosta que la
+        // tabla y centrada. En el micrositio ese div mide el 100% de su contenedor.
+        // Lo forzamos inline para que ningún default de Moodle lo encoja.
+        doc.querySelectorAll('.table-responsive > .container-fluid').forEach(cap => {
+            cap.style.setProperty('width', '100%', 'important');
+            cap.style.setProperty('max-width', '100%', 'important');
+            cap.style.setProperty('margin-left', '0', 'important');
+            cap.style.setProperty('margin-right', '0', 'important');
+        });
+
+        // --- Que la tabla se ENCOJA en vez de sacar scroll horizontal.
+        // Una tabla `w-auto` mantiene su ancho natural: en pantallas medianas (más
+        // anchas que el corte de 576px donde entran las tarjetas) no cabía y salía
+        // barra de desplazamiento. Con `max-width: 100%` la tabla se ajusta al
+        // contenedor y el texto de las celdas se acomoda en varias líneas.
+        // Combinado con el `fit-content` del .table-responsive, el título siempre
+        // mide lo mismo que la tabla: si cabe, ambos = ancho de la tabla; si no
+        // cabe, ambos = ancho disponible. Sin scroll y sin desalineación.
+        doc.querySelectorAll('.table-responsive > table').forEach(tabla => {
+            tabla.style.setProperty('max-width', '100%', 'important');
         });
 
         // --- Enlaces a otras páginas del micrositio: no se pueden resolver solos

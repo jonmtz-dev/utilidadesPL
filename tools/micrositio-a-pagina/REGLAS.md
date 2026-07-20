@@ -165,6 +165,36 @@ Renderiza el cuerpo convertido en un **iframe oculto con el CSS del micrositio**
   Encenderlos *añade* diseño que el micro no tenía; es decisión editorial, no
   fidelidad.
 
+## 6-ter. Tablas responsivas en pantallas medianas
+
+Las tarjetas (`tabla-responsive-cards`) resuelven el celular (≤576px). El hueco
+estaba **entre 577px y escritorio**: ahí la tabla no cabía y salía scroll
+horizontal, porque `.mainPlantilla23 .table td { min-width: 200px }` (regla que
+existe tanto en el CSS del micrositio como en la hoja de Moodle) le impone a una
+tabla de 5 columnas un mínimo de 1000px.
+
+Un `max-width: 100%` inline **no basta**: una tabla nunca baja de su ancho
+mínimo. Hay que relajar el `min-width`, y como depende del ancho de pantalla
+necesita un `@media` → va en el **complemento del tema** (§5), no inline:
+
+```css
+/* Tablas de micrositios: que se ajusten en pantallas medianas
+   en vez de sacar barra de desplazamiento. */
+@media (min-width: 577px) and (max-width: 1200px) {
+    .ms-convertido .table-responsive table td,
+    .ms-convertido .table-responsive table th {
+        min-width: 0 !important;
+    }
+    .ms-convertido .table-responsive table {
+        width: 100% !important;
+    }
+}
+```
+
+Medido: a 900px y 700px la tabla pasa de 1001px (con scroll) a ajustarse exacto
+al contenedor, **sin scroll**, y el título coincide solo. El límite superior de
+1200px es ajustable: por encima, las tablas normalmente ya caben.
+
 ## 7. Ciclo de trabajo del equipo
 
 1. Abrir la herramienta → cargar micrositio (la hoja ya está precargada).
@@ -196,3 +226,6 @@ Renderiza el cuerpo convertido en un **iframe oculto con el CSS del micrositio**
 | Tarjetas `.card` | Grises y sin borde (default de Moodle) | Blindaje: blanco si no hay color propio + borde default siempre; color propio intacto |
 | Columnas desalineadas | Las imágenes de una `.row` quedaban a distinta altura: `.texto-titulo` (con su altura) existía solo en el micro y se perdía | El arreglo ahora incluye las **reglas faltantes que la página usa**, no solo los conflictos de color |
 | Encabezado con hex fijo | `Colorear encabezado` inyectaba `#d8a7b6` (rosa de **MM**) inline: color equivocado en micrositios de otros módulos | Solo se aplica la clase `bg-primary-20`; el toggle quedó **apagado** por defecto |
+| Texto de `<th>` grisáceo | El blindaje congelaba el color **heredado**: sin el Bootstrap del micro, el `<th>` hereda `#333340` de `.mainPlantilla23` en vez del `#212529` real | Solo se congela el color si lo pide una clase `text-*`; el heredado se deja a Moodle |
+| Título de tabla más angosto | **Moodle constriñe `.container-fluid`** (max-width + márgenes auto, lo usa para el layout de página). La barra del título salía angosta y centrada, sin abarcar la tabla | `width/max-width: 100%` y márgenes `0` **inline con `!important`** en el `.container-fluid` hijo de `.table-responsive`. Además, si la tabla es `w-auto`, se le da `width: fit-content` al `.table-responsive` para que encoja como con el padre flex del micro |
+| Scroll horizontal en pantallas medianas | `.mainPlantilla23 .table td { min-width: 200px }` (está en el CSS del micro **y** en la hoja de Moodle): 5 columnas × 200px = **1000px de ancho mínimo**, así que la tabla no podía encogerse y sacaba barra de desplazamiento entre los 576px de las tarjetas y el escritorio | `max-width: 100%` inline en la tabla **+** una regla `@media` en el complemento del tema que pone `min-width: 0` en las celdas (ver §6-ter). Al encoger la tabla, el título cuadra solo |
