@@ -1218,6 +1218,16 @@ function initMicrositio() {
             tabla.style.setProperty('max-width', '100%', 'important');
         });
 
+        // --- Enlaces que NO deben ir subrayados.
+        // Moodle subraya los <a> por accesibilidad con una regla más específica
+        // que la clase `.text-decoration-none` de Bootstrap, así que el subrayado
+        // reaparecía en los enlaces-botón del micrositio (los de <mark>, modales…).
+        // Lo forzamos inline SOLO en lo que ya pedía no tener decoración: el resto
+        // de los enlaces conserva su subrayado, que sí debe estar.
+        doc.querySelectorAll('.text-decoration-none').forEach(el => {
+            el.style.setProperty('text-decoration', 'none', 'important');
+        });
+
         // --- Enlaces a otras páginas del micrositio: no se pueden resolver solos
         doc.querySelectorAll('a[href]').forEach(a => {
             const href = a.getAttribute('href');
