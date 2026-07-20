@@ -100,6 +100,15 @@ blindaje**: si TinyMCE borra un elemento, ningún color inline lo salva.
   toca), sigue siendo **un solo hijo de bloque** y **conserva las reglas que el
   micro tenga para `ul`** — más fiel que cambiarla por un `<div>`, que perdería
   su sangría y márgenes.
+- **`<button href="#id">` → `data-bs-target="#id"`.** Bootstrap acepta el `href`
+  como objetivo de un collapse/modal, pero **`href` no es un atributo válido de
+  `<button>`** (sí de `<a>`), así que TinyMCE lo borra. El botón se ve idéntico y
+  deja de funcionar, sin ningún aviso. `data-bs-target` hace lo mismo y es
+  válido — por eso los micrositios que ya lo usaban nunca dieron problema.
+  ⚠️ El objetivo se toma del **`href`, NUNCA de `aria-controls`**: hay
+  micrositios donde ese aria apunta al panel equivocado por copy-paste entre
+  botones, y el que manda de verdad es el href. Los `<a href="#...">` **no se
+  tocan**: ahí el atributo es válido.
 - Las listas **válidas no se tocan** (con `<li>`, anidadas, o vacías).
 - Medido con el modal de "park": tras la limpieza de TinyMCE, el contenedor flex
   pasaba de 3 a **8 items** y el `<mark>` de 17px a **200px** de alto. Con el
@@ -354,6 +363,7 @@ al contenedor, **sin scroll**, y el título coincide solo. El límite superior d
 | Texto de `<th>` grisáceo | El blindaje congelaba el color **heredado**: sin el Bootstrap del micro, el `<th>` hereda `#333340` de `.mainPlantilla23` en vez del `#212529` real | Solo se congela el color si lo pide una clase `text-*`; el heredado se deja a Moodle |
 | Título de tabla más angosto | **Moodle constriñe `.container-fluid`** (max-width + márgenes auto, lo usa para el layout de página). La barra del título salía angosta y centrada, sin abarcar la tabla | `width/max-width: 100%` y márgenes `0` **inline con `!important`** en el `.container-fluid` hijo de `.table-responsive`. Además, si la tabla es `w-auto`, se le da `width: fit-content` al `.table-responsive` para que encoja como con el padre flex del micro |
 | Enlaces con subrayado de más | Moodle subraya los `<a>` por accesibilidad con una regla más específica que la clase `.text-decoration-none` de Bootstrap, así que los enlaces-botón del micro (los de `<mark>`, modales…) salían subrayados | `text-decoration: none !important` inline **solo** en elementos con la clase `.text-decoration-none`. Los demás enlaces conservan su subrayado (verificado) |
+| Botones desplegables que no abren nada | Los botones `data-bs-toggle="collapse"` no hacían nada en Moodle, aunque otros idénticos sí servían. El micrositio marcaba el objetivo con `href="#desplegable1"`; `href` no es válido en `<button>` y TinyMCE lo borra, dejando al botón sin saber qué desplegar. Los que funcionaban usaban `data-bs-target` | `sanearParaTinyMCE()` traduce `href="#id"` a `data-bs-target="#id"` en los `<button>` y quita el `href`. Ver §4-bis |
 | Encabezado gris en UNA tabla y bien en las demás | Una tabla armaba su `<thead>` con `<td>` en vez de `<th>`. El blindaje solo cubría `thead th`, así que esas celdas no recibían el fondo inline y el Bootstrap de Moodle las pintaba encima del rosa del `<thead>`. Desconcertante porque el resto de tablas del mismo micrositio salían bien | El blindaje ahora cubre `thead td` además de `thead th`, y `esTh` se decide por **posición** (`closest('thead')`), no por etiqueta |
 | Iconos enormes tras el arreglo anterior | La flechita de las cajas de instrucción pasó de 80px a **1162px**. El `width:100%` inline puesto para las ilustraciones fluidas le ganaba a `.mainPlantilla23 .instrucciones img { width:56px }` de la hoja de Moodle, y se aplicaba a **toda** imagen sin medidas en px, no solo a las de los modales | Dos cambios: (1) `max-width` en vez de `width` (y sin `height:auto`), que no compite con el CSS que dimensiona iconos; (2) **acotado** a imágenes dentro de modales o con ancho en `%`. Ver §4-ter |
 | Imagen del modal más chica que en el micrositio | La ilustración salía a 800px dentro de un modal de 1138px, con espacio sobrando a los lados; en el micrositio llenaba el modal. **No era deformación** (proporción idéntica, 2.5723 en ambos): el SVG sin medidas en px es fluido y llena su contenedor, el PNG con `width="800"` queda clavado. `img-fluid` no ayuda: solo limita, nunca agranda | `medidasSVG()` devuelve `fluido`; si el SVG no traía px, la salida lleva `style="width:100%; height:auto"` en vez de los atributos. Ver §4-ter |

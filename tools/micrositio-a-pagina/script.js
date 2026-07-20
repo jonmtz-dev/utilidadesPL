@@ -562,6 +562,30 @@ async function blindar(doc, cssMicro) {
  */
 function sanearParaTinyMCE(doc) {
     let arregladas = 0;
+    let botones = 0;
+
+    // --- <button href="#id">: Bootstrap acepta `href` como objetivo de un
+    // collapse/modal, pero `href` NO es un atributo válido de <button> (sí de
+    // <a>), así que TinyMCE lo borra al guardar. El botón queda sin saber qué
+    // desplegar y deja de funcionar — silenciosamente, porque se ve idéntico.
+    // Lo pasamos a `data-bs-target`, que sí es válido y hace exactamente lo
+    // mismo. (Por eso los botones que usaban data-bs-target siempre sirvieron.)
+    //
+    // ⚠️ El objetivo se toma del `href`, NUNCA de `aria-controls`: se han visto
+    // micrositios donde ese aria apunta al panel equivocado (copy-paste entre
+    // botones) y el que manda de verdad es el href.
+    doc.querySelectorAll('button[href]').forEach(boton => {
+        const href = (boton.getAttribute('href') || '').trim();
+        if (/^#.+/.test(href) && !boton.hasAttribute('data-bs-target')) {
+            boton.setAttribute('data-bs-target', href);
+            botones++;
+        }
+        // Lo quitamos aunque no hayamos podido traducirlo: es inválido ahí y
+        // TinyMCE lo borraría igual. Así la salida ya es la definitiva.
+        boton.removeAttribute('href');
+    });
+
+    // --- <ul>/<ol> sin ningún <li>: HTML inválido, TinyMCE las borra.
     doc.querySelectorAll('ul, ol').forEach(lista => {
         // Si ya tiene <li>, es válida: no la tocamos (aunque traiga texto suelto
         // además, eso es una mezcla rara que no queremos reacomodar a ciegas).
@@ -574,7 +598,8 @@ function sanearParaTinyMCE(doc) {
         lista.appendChild(li);
         arregladas++;
     });
-    return arregladas;
+
+    return { listas: arregladas, botones };
 }
 
 function marcarConvertido(doc) {
@@ -1399,7 +1424,7 @@ function initMicrositio() {
 
         // Saneo estructural: va SIEMPRE (no depende del blindaje), porque sin él
         // TinyMCE borra las listas inválidas y descuadra los contenedores flex.
-        reporte.listasSaneadas = sanearParaTinyMCE(doc);
+        reporte.saneado = sanearParaTinyMCE(doc);
 
         // Opción A: marca el contenido para que las reglas aditivas .ms-convertido
         // de tu tema (acordeones, etc.) apliquen sin tocar tus reglas existentes.
