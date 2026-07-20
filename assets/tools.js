@@ -41,6 +41,16 @@ const TOOLS = [
         status: 'ready'
     },
     {
+        slug: 'adaptador-rubricas',
+        title: 'Adaptador de Rúbricas Moodle',
+        description: 'Pega la tabla de una rúbrica (Word) y genera un script que la vacía en "Definir rúbrica": compara por nombre de criterio, nunca a ciegas.',
+        icon: 'list-checks',
+        accent: ['#0f9d58', '#5cc98a'],
+        tags: ['Rúbricas', 'Calificación', 'Script'],
+        url: 'tools/adaptador-rubricas/index.html',
+        status: 'ready'
+    },
+    {
         slug: 'bibliografias-margarita',
         title: 'Bibliografías Margarita Maza',
         description: 'Agrega la clase nomediaplugin a los enlaces de YouTube para que Moodle no los convierta en reproductor incrustado.',

@@ -1,0 +1,306 @@
+/* ==========================================================================
+   Adaptador de Rúbricas — estilos propios de la herramienta.
+   Los tokens, el fondo, los paneles glass y los componentes de UI
+   (toggles, botones, pestañas, salida de código) vienen de /assets/shared.css.
+   ========================================================================== */
+
+.aviso-intro { margin-bottom: 18px; }
+
+/* Copiados de Micrositio a Página: no viven en shared.css. */
+.aviso {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13.5px;
+    border-radius: 10px;
+    padding: 11px 13px;
+    border-left: 3px solid var(--text-muted);
+    background: var(--control-bg);
+}
+.aviso i { font-size: 17px; flex-shrink: 0; margin-top: 1px; }
+
+.aviso-ok { background: rgba(52, 199, 89, 0.12); border-left-color: var(--success); }
+.aviso-ok i { color: var(--success); }
+
+.aviso-warn { background: rgba(255, 149, 0, 0.12); border-left-color: var(--warning); }
+.aviso-warn i { color: var(--warning); }
+
+.aviso-error { background: rgba(255, 59, 48, 0.12); border-left-color: var(--danger); }
+.aviso-error i { color: var(--danger); }
+
+.aviso-info { background: rgba(0, 102, 204, 0.1); border-left-color: var(--accent); }
+.aviso-info i { color: var(--accent); }
+
+.campo-nota {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 10px;
+}
+
+.btn-chico { padding: 8px 14px; font-size: 13.5px; }
+
+.mb-3 { margin-bottom: 14px; }
+
+/* Paste Area (mismo patrón que Convertidor de Tablas) */
+.paste-area {
+    flex-grow: 1;
+    min-height: 140px;
+    background: var(--input-bg);
+    border: 2px dashed var(--input-border);
+    border-radius: 16px;
+    padding: 20px;
+    overflow: auto;
+    overflow-wrap: break-word;
+    transition: all 0.3s ease;
+    cursor: text;
+    position: relative;
+}
+.paste-area:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--input-bg-focus);
+    box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.1);
+}
+.paste-area:empty::before {
+    content: attr(data-placeholder);
+    color: var(--text-muted);
+    font-style: italic;
+    position: absolute;
+    pointer-events: none;
+}
+.paste-area table {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-collapse: collapse;
+}
+.paste-area td, .paste-area th {
+    border: 1px solid var(--input-border);
+    padding: 5px;
+}
+
+/* Zona de carga del .docx */
+.dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    text-align: center;
+    padding: 22px 18px;
+    border: 2px dashed var(--input-border);
+    border-radius: 16px;
+    background: var(--input-bg);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.dropzone:hover { border-color: var(--accent); background: var(--input-bg-focus); }
+.dropzone--activa {
+    border-color: var(--accent);
+    background: var(--input-bg-focus);
+    box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.12);
+    transform: scale(1.01);
+}
+.dropzone > i { font-size: 34px; color: var(--text-muted); }
+.dropzone-titulo { font-size: 14.5px; }
+.dropzone-nota { font-size: 12.5px; color: var(--text-muted); }
+
+.campo-nota--ok { color: var(--success); }
+
+.separador-o {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 0 12px;
+    color: var(--text-muted);
+    font-size: 12.5px;
+}
+.separador-o::before, .separador-o::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--control-border);
+}
+
+/* Resumen de suma de puntos (red de seguridad contra errores de puntaje) */
+.resumen-puntos { margin-bottom: 12px; }
+.resumen-puntos code {
+    font-family: 'Courier New', Courier, monospace;
+    background: var(--control-bg);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-right: 4px;
+    display: inline-block;
+    font-size: 12px;
+}
+
+/* Criterios desmarcados: se ven pero no se van a tocar */
+.check-criterio {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    cursor: pointer;
+}
+.fila-excluida { opacity: 0.45; }
+.fila-excluida textarea, .fila-excluida .in-puntos { text-decoration: line-through; }
+
+/* Paso 2: lista de filas para elegir la de los niveles */
+.filas-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+.fila-opcion {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--control-border);
+    background: var(--control-bg);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 13px;
+}
+.fila-opcion:hover {
+    border-color: var(--accent);
+    background: var(--input-bg-focus);
+}
+.fila-opcion.activa {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+.fila-num {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--control-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11.5px;
+    font-weight: 700;
+}
+.fila-opcion.activa .fila-num { background: rgba(255, 255, 255, 0.25); }
+.fila-resumen {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Vista previa editable de la matriz criterio x nivel.
+   A diferencia de las "islas claras" que replican una página de Moodle, esto
+   es una interfaz de EDICIÓN propia de la herramienta: sigue el tema
+   claro/oscuro del panel, no el de Moodle. */
+.preview-container {
+    flex-grow: 1;
+    min-height: 0;
+    overflow: auto;
+}
+.tabla-preview-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--control-border);
+    border-radius: 12px;
+}
+.tabla-preview {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.tabla-preview th, .tabla-preview td {
+    border: 1px solid var(--control-border);
+    padding: 8px;
+    vertical-align: top;
+}
+.tabla-preview th {
+    background: var(--control-bg);
+    font-weight: 700;
+    text-align: left;
+    position: sticky;
+    top: 0;
+}
+.tabla-preview .col-criterio { width: 160px; }
+.tabla-preview textarea {
+    width: 100%;
+    min-width: 180px;
+    resize: vertical;
+    border: 1px solid var(--control-border);
+    border-radius: 8px;
+    background: var(--input-bg);
+    color: var(--text-main);
+    padding: 6px 8px;
+    font-size: 12.5px;
+    font-family: inherit;
+}
+.tabla-preview .in-criterio { min-width: 140px; font-weight: 600; }
+.tabla-preview textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--input-bg-focus);
+}
+.in-puntos-wrap {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 5px;
+}
+.in-puntos {
+    width: 64px;
+    border: 1px solid var(--control-border);
+    border-radius: 6px;
+    background: var(--input-bg);
+    color: var(--text-main);
+    padding: 4px 6px;
+    font-size: 12.5px;
+    text-align: right;
+}
+.in-puntos:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.in-puntos.sin-detectar {
+    border-color: var(--warning);
+    background: rgba(255, 149, 0, 0.1);
+}
+.in-puntos-label {
+    font-size: 11.5px;
+    color: var(--text-muted);
+}
+
+/* Script generado: opciones de entrega */
+.opcion-entrega {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--control-border);
+}
+.opcion-entrega h3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14.5px;
+    margin-bottom: 6px;
+}
+.bookmarklet-link {
+    display: inline-flex;
+    cursor: grab;
+    user-select: none;
+}
+.bookmarklet-link:active { cursor: grabbing; }
+
+@media (max-width: 1024px), (max-height: 620px) {
+    .paste-area { min-height: 220px; }
+}
+@media (max-width: 640px) {
+    .panel-section { padding: 20px; }
+    .tabla-preview .col-criterio { width: 110px; }
+}

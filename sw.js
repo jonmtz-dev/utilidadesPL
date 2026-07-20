@@ -13,7 +13,7 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.4.9';
+const VERSION = '1.5.2';
 const CACHE = `panel-herramientas-v${VERSION}`;
 
 // Rutas relativas a propósito: en GitHub Pages la app vive en un subdirectorio
@@ -44,7 +44,11 @@ const APP_SHELL = [
     'tools/micrositio-a-pagina/index.html',
     'tools/micrositio-a-pagina/script.js',
     'tools/micrositio-a-pagina/styles.css',
-    'tools/micrositio-a-pagina/hoja-moodle-default.js'
+    'tools/micrositio-a-pagina/hoja-moodle-default.js',
+    'tools/adaptador-rubricas/index.html',
+    'tools/adaptador-rubricas/script.js',
+    'tools/adaptador-rubricas/docx.js',
+    'tools/adaptador-rubricas/styles.css'
 ];
 
 self.addEventListener('install', (event) => {
