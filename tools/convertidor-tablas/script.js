@@ -18,13 +18,48 @@ document.addEventListener('DOMContentLoaded', () => {
     let globalTempDiv = null;
     let globalOriginalTable = null;
 
+    /**
+     * Muestra los errores EN LA PÁGINA, no solo en la consola. Antes, si algo
+     * reventaba (p. ej. faltaba assets/tablas.js), el botón simplemente no hacía
+     * nada y no había forma de saber por qué sin abrir DevTools.
+     */
+    function escaparTexto(s) {
+        const d = document.createElement('div');
+        d.textContent = String(s == null ? '' : s);
+        return d.innerHTML;
+    }
+
+    function mostrarError(titulo, detalle) {
+        previewEmpty.classList.add('hidden');
+        previewContainer.classList.remove('hidden');
+        previewContainer.innerHTML = `
+            <div style="background-color:#b3261e; color:white; padding:14px; border-radius:8px;
+                        margin-bottom:15px; font-weight:600; display:flex; gap:8px; align-items:flex-start">
+                <i class="ph ph-warning-octagon" style="font-size:20px"></i>
+                <span>${titulo}<br><span style="font-weight:400; font-size:13px">${detalle}</span></span>
+            </div>`;
+        tabs[0].click();
+    }
+
+    // La lógica de tablas vive en assets/tablas.js. Si no cargó, avisamos claro
+    // en vez de fallar con un ReferenceError silencioso al primer clic.
+    const FALTA_TABLAS_JS = typeof mapaDeColumnas !== 'function'
+        || typeof titulosPorColumna !== 'function'
+        || typeof traeEstiloPropio !== 'function';
+    if (FALTA_TABLAS_JS) {
+        btnProcess.disabled = true;
+        mostrarError('No se pudo cargar <code>assets/tablas.js</code>.',
+            'La herramienta necesita ese archivo. Verifica que exista en la carpeta ' +
+            '<code>assets/</code> junto a <code>theme.js</code>, y recarga la página.');
+    }
+
     pasteArea.addEventListener('input', () => {
         btnProcess.disabled = pasteArea.innerHTML.trim() === '';
     });
 
     pasteArea.addEventListener('paste', (e) => {
         setTimeout(() => {
-            btnProcess.disabled = pasteArea.innerHTML.trim() === '';
+            btnProcess.disabled = FALTA_TABLAS_JS || pasteArea.innerHTML.trim() === '';
         }, 10);
     });
 
@@ -39,6 +74,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     btnProcess.addEventListener('click', () => {
+        try { cargarTabla(); }
+        catch (e) {
+            console.error('[tablas] Paso 1:', e);
+            mostrarError('No se pudo leer la tabla.', escaparTexto(e.message));
+        }
+    });
+
+    function cargarTabla() {
         const rawHTML = pasteArea.innerHTML;
         
         globalTempDiv = document.createElement('div');
@@ -135,7 +178,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const rows = selectionTable.querySelectorAll('tr');
         rows.forEach((row, index) => {
             row.addEventListener('click', () => {
-                generateFinalTable(globalOriginalTable, index);
+                try {
+                    generateFinalTable(globalOriginalTable, index);
+                } catch (e) {
+                    console.error('[tablas] Paso 2:', e);
+                    mostrarError('No se pudo generar el código con esa fila de títulos.',
+                        escaparTexto(e.message) + ' — prueba con otra fila, o revisa que la tabla esté bien formada.');
+                }
             });
         });
         
@@ -145,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
         oldTable.parentNode.replaceChild(selectionTable, oldTable);
         
         previewContainer.appendChild(previewWrap);
-    });
+    }
 
     /**
      * ANOTA la tabla en su sitio; NO la reconstruye.

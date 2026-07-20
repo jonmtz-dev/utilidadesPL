@@ -418,7 +418,12 @@ const SEL_TEMATICOS = [
     '[class*="bg-primary"]', '[class*="bg-secondary"]', '[class*="bg-neutral"]', '[class*="bg-resalte"]',
     '[class*="text-primary"]', '[class*="text-secondary"]', '[class*="text-neutral"]', '[class*="text-resalte"]',
     '[class*="border-primary"]', '[class*="border-secondary"]', '[class*="border-neutral"]', '[class*="border-resalte"]',
-    '.accordion-button', '.btn', 'thead th', '.card'
+    // `thead td` además de `thead th`: hay micrositios que arman el encabezado
+    // con <td> en vez de <th>. El color vive en el <thead> (bg-primary-20) y el
+    // Bootstrap de Moodle pinta el fondo de CADA celda encima, tapándolo — pase
+    // lo que pase con la etiqueta. Solo se congelaba el <th> y esas tablas
+    // salían con el encabezado gris. Ver REGLAS.md §9.
+    '.accordion-button', '.btn', 'thead th', 'thead td', '.card'
 ].join(',');
 
 function esTransparente(c) {
@@ -452,7 +457,10 @@ function esInteractivo(cls) {
 function congelarElemento(src, dst) {
     const cs = getComputedStyle(src);
     const cls = ' ' + (typeof src.className === 'string' ? src.className : '') + ' ';
-    const esTh = src.tagName === 'TH';
+    // Celda de encabezado: <th> O <td> dentro de un <thead>. Lo que importa no es
+    // la etiqueta sino la posición: el color lo pone el <thead> y Moodle lo tapa
+    // pintando el fondo de la celda, sea th o td.
+    const esTh = (src.tagName === 'TH' || src.tagName === 'TD') && !!src.closest('thead');
     const esCard = / card /.test(cls);
 
     // --- Tarjetas (.card): solo reponemos lo que es DEFAULT de Bootstrap y Moodle

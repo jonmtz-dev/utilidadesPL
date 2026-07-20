@@ -67,8 +67,12 @@ Renderiza el cuerpo convertido en un **iframe oculto con el CSS del micrositio**
 
 - **Interactivos (`.accordion-button`, `.btn*`): se SALTAN.** Nada inline; un
   inline les mataría los estados. Los cubre el complemento del tema (§5).
-- **`<th>`**: fondo **efectivo** (sube por ancestros hasta hallar color — el rosa
-  vive en el `<thead>` y el `th` lo tapa con el gris de Moodle) + color de texto.
+- **Celdas de encabezado — `<th>` Y `<td>` dentro de un `<thead>`**: fondo
+  **efectivo** (sube por ancestros hasta hallar color — el rosa vive en el
+  `<thead>` y la celda lo tapa con el gris de Moodle) + color de texto.
+  ⚠️ Lo que decide **no es la etiqueta, es la posición**: hay micrositios que
+  arman el encabezado con `<td>`. Solo se miraba `thead th` y esas tablas salían
+  con el encabezado gris mientras las demás salían bien.
 - **Clases `bg-* / text-* / border-*`** (primary/secondary/neutral/resalte):
   congela el color computado correspondiente.
 - **`.card`** (contenedor sin estado con defaults divergentes):
@@ -350,6 +354,7 @@ al contenedor, **sin scroll**, y el título coincide solo. El límite superior d
 | Texto de `<th>` grisáceo | El blindaje congelaba el color **heredado**: sin el Bootstrap del micro, el `<th>` hereda `#333340` de `.mainPlantilla23` en vez del `#212529` real | Solo se congela el color si lo pide una clase `text-*`; el heredado se deja a Moodle |
 | Título de tabla más angosto | **Moodle constriñe `.container-fluid`** (max-width + márgenes auto, lo usa para el layout de página). La barra del título salía angosta y centrada, sin abarcar la tabla | `width/max-width: 100%` y márgenes `0` **inline con `!important`** en el `.container-fluid` hijo de `.table-responsive`. Además, si la tabla es `w-auto`, se le da `width: fit-content` al `.table-responsive` para que encoja como con el padre flex del micro |
 | Enlaces con subrayado de más | Moodle subraya los `<a>` por accesibilidad con una regla más específica que la clase `.text-decoration-none` de Bootstrap, así que los enlaces-botón del micro (los de `<mark>`, modales…) salían subrayados | `text-decoration: none !important` inline **solo** en elementos con la clase `.text-decoration-none`. Los demás enlaces conservan su subrayado (verificado) |
+| Encabezado gris en UNA tabla y bien en las demás | Una tabla armaba su `<thead>` con `<td>` en vez de `<th>`. El blindaje solo cubría `thead th`, así que esas celdas no recibían el fondo inline y el Bootstrap de Moodle las pintaba encima del rosa del `<thead>`. Desconcertante porque el resto de tablas del mismo micrositio salían bien | El blindaje ahora cubre `thead td` además de `thead th`, y `esTh` se decide por **posición** (`closest('thead')`), no por etiqueta |
 | Iconos enormes tras el arreglo anterior | La flechita de las cajas de instrucción pasó de 80px a **1162px**. El `width:100%` inline puesto para las ilustraciones fluidas le ganaba a `.mainPlantilla23 .instrucciones img { width:56px }` de la hoja de Moodle, y se aplicaba a **toda** imagen sin medidas en px, no solo a las de los modales | Dos cambios: (1) `max-width` en vez de `width` (y sin `height:auto`), que no compite con el CSS que dimensiona iconos; (2) **acotado** a imágenes dentro de modales o con ancho en `%`. Ver §4-ter |
 | Imagen del modal más chica que en el micrositio | La ilustración salía a 800px dentro de un modal de 1138px, con espacio sobrando a los lados; en el micrositio llenaba el modal. **No era deformación** (proporción idéntica, 2.5723 en ambos): el SVG sin medidas en px es fluido y llena su contenedor, el PNG con `width="800"` queda clavado. `img-fluid` no ayuda: solo limita, nunca agranda | `medidasSVG()` devuelve `fluido`; si el SVG no traía px, la salida lleva `style="width:100%; height:auto"` en vez de los atributos. Ver §4-ter |
 | SVG responsivo rasterizado cuadrado | `medidasSVG()` hacía `parseFloat` del atributo: un `width="100%"` daba **100** y se tomaba como 100px, así que un SVG responsivo salía como PNG **cuadrado de 100×100** con el dibujo deformado. Igual con unidades (`600pt`) | Solo se aceptan medidas en px (o sin unidad); cualquier otra cosa cae al `viewBox`, que además repone la medida que falte **conservando su proporción** |
