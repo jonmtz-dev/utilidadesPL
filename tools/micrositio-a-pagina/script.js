@@ -181,18 +181,22 @@ function aplicarResponsive(tabla, { headerIndex = null, colorear = false, colore
         idx = theadTr ? filas.indexOf(theadTr) : 0;
     }
 
-    const titulos = [...filas[idx].querySelectorAll('th, td')]
-        .map(c => (c.textContent || '').trim().replace(/\s+/g, ' '));
-    if (titulos.every(t => t === '')) return null;
+    // Los títulos se toman POR COLUMNA REAL (contando colspan/rowspan), no por
+    // posición dentro del <tr>: con rowspan la posición miente y las tarjetas de
+    // celular acaban con el encabezado de otra columna. Ver assets/tablas.js.
+    const mapa = mapaDeColumnas(filas);
+    const titulos = titulosPorColumna(filas[idx], mapa);
+    if (!titulos.length || titulos.every(t => !t)) return null;
 
     // El cuerpo es siempre lo que va DESPUÉS de la fila de títulos: así funciona
     // igual con encabezado en <thead> o en una fila cualquiera que se elija.
     const cuerpo = filas.slice(idx + 1);
 
     cuerpo.forEach((fila, rowIndex) => {
-        const celdas = [...fila.querySelectorAll('td, th')];
-        celdas.forEach((celda, i) => {
-            if (titulos[i]) celda.setAttribute('data-label', titulos[i]);
+        const celdas = [...fila.children].filter(n => n.tagName === 'TD' || n.tagName === 'TH');
+        celdas.forEach(celda => {
+            const pos = mapa.get(celda);
+            if (pos && titulos[pos.col]) celda.setAttribute('data-label', titulos[pos.col]);
         });
         if (colorear && celdas[0]) {
             // Normaliza cualquier color previo del micrositio y aplica el alternado.

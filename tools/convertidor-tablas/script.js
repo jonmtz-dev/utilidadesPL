@@ -1,3 +1,6 @@
+/* mapaDeColumnas(), titulosPorColumna() y traeEstiloPropio() viven en
+   assets/tablas.js, compartidas con Micrositio a Página. */
+
 document.addEventListener('DOMContentLoaded', () => {
     const pasteArea = document.getElementById('paste-area');
     const btnProcess = document.getElementById('btn-process');
@@ -59,9 +62,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Limpiar estilos en línea inyectados por el navegador al copiar
+        // Limpiar estilos en línea inyectados por el navegador al copiar.
+        // OJO: solo en tablas "desnudas" (Word), donde los style son basura. Si la
+        // tabla ya llega maquetada, esos style son DELIBERADOS (los `width: 25%` de
+        // los <th>, por ejemplo) y borrarlos descuadraba las columnas.
+        const traeDiseno = traeEstiloPropio(tabla);
         globalTempDiv.querySelectorAll('*').forEach(el => {
-            el.removeAttribute('style');
+            if (!traeDiseno) el.removeAttribute('style');
             // A veces Moodle/Chrome inyecta atributos raros al copiar, los quitamos por si acaso
             el.removeAttribute('data-darkreader-inline-color');
             el.removeAttribute('data-darkreader-inline-bgcolor');
@@ -140,105 +147,115 @@ document.addEventListener('DOMContentLoaded', () => {
         previewContainer.appendChild(previewWrap);
     });
 
+    /**
+     * ANOTA la tabla en su sitio; NO la reconstruye.
+     *
+     * Antes se armaba una tabla nueva con createElement copiando solo el texto,
+     * y todo lo que no se reconstruía explícitamente se perdía: la fila de
+     * título con colspan, los bg-primary-10 de los <th>, los width en %, los
+     * rowspan, los align-middle… La herramienta es para AGREGAR las tarjetas
+     * (data-label + tabla-responsive-cards); el diseño ya vive en la hoja de
+     * Moodle y hay que respetarlo tal cual llega.
+     */
     function generateFinalTable(sourceTable, headerIndex) {
-        const newTable = document.createElement('table');
-        newTable.className = "table tabla-responsive-cards";
-        if (optBordered.checked) {
-            newTable.classList.add("table-bordered", "border-neutral");
-        }
-        
-        const allSourceRows = Array.from(sourceTable.querySelectorAll('tr'));
-        const headerRow = allSourceRows[headerIndex];
-        
-        if (!headerRow) return;
-        
-        const thead = document.createElement('thead');
-        thead.className = optHeaderColor && optHeaderColor.checked ? "thead bg-primary-20" : "thead";
-        const newHeaderRow = document.createElement('tr');
-        if (optHeaderColor && optHeaderColor.checked) {
-            newHeaderRow.style.setProperty('background-color', '#d8a7b6', 'important');
-        }
-        
-        const headers = [];
-        const headerCells = headerRow.querySelectorAll('th, td');
-        
-        headerCells.forEach(cell => {
-            let text = cell.innerText || cell.textContent || "";
-            text = text.trim().replace(/\s+/g, ' '); 
-            headers.push(text);
-            
-            const th = document.createElement('th');
-            th.scope = "col";
-            th.className = "text-center align-middle";
-            th.textContent = text;
-            newHeaderRow.appendChild(th);
-        });
-        
-        thead.appendChild(newHeaderRow);
-        newTable.appendChild(thead);
-        
-        const tbody = document.createElement('tbody');
-        const dataRows = allSourceRows.slice(headerIndex + 1);
-        
-        dataRows.forEach((row, rowIndex) => {
-            const newRow = document.createElement('tr');
-            newRow.className = "align-middle";
-            
-            const cells = Array.from(row.querySelectorAll('td, th'));
-            
-            cells.forEach((cell, cellIndex) => {
-                const newCell = document.createElement('td');
-                
-                if (cellIndex === 0 && optAltColors.checked) {
-                    if (rowIndex % 2 === 0) {
-                        newCell.className = "bg-primary-10";
-                    } else {
-                        newCell.className = "bg-secondary-10";
-                    }
-                }
-                
-                if (headers[cellIndex]) {
-                    newCell.setAttribute('data-label', headers[cellIndex]);
-                }
-                
-                const cleanContent = document.createElement('div');
-                cleanContent.innerHTML = cell.innerHTML;
-                
-                const elements = cleanContent.querySelectorAll('*');
-                elements.forEach(el => {
-                    el.removeAttribute('style');
-                    el.removeAttribute('class');
-                    el.removeAttribute('lang');
-                    el.removeAttribute('dir');
-                    el.removeAttribute('valign');
-                    el.removeAttribute('width');
-                });
-                
-                newCell.innerHTML = cleanContent.innerHTML.trim();
-                newRow.appendChild(newCell);
-            });
-            
-            tbody.appendChild(newRow);
-        });
-        
-        newTable.appendChild(tbody);
-        
-        // Reemplazar la tabla original en el contenedor completo para no perder el título
         const outputDiv = globalTempDiv.cloneNode(true);
-        const oldTableToReplace = outputDiv.querySelector('table');
-        oldTableToReplace.parentNode.replaceChild(newTable, oldTableToReplace);
-        
+        const tabla = outputDiv.querySelector('table');
+        if (!tabla) return;
+
+        const filas = Array.from(tabla.querySelectorAll('tr'));
+        const headerRow = filas[headerIndex];
+        if (!headerRow) return;
+
+        const mapa = mapaDeColumnas(filas);
+        const conEstilo = traeEstiloPropio(sourceTable);
+        // Los toggles solo actúan sobre tablas "desnudas" (Word). Si la tabla ya
+        // llega maquetada, pintarle encima le cambiaría el color que eligió su autor.
+        const pintar = !conEstilo;
+
+        const titulos = titulosPorColumna(headerRow, mapa);
+
+        // Cuerpo: lo que va DESPUÉS de la fila de títulos. Las filas anteriores
+        // (p. ej. un título con colspan) se quedan intactas y sin data-label.
+        let indiceCuerpo = 0;
+        filas.slice(headerIndex + 1).forEach(fila => {
+            const celdas = Array.from(fila.children)
+                .filter(n => n.tagName === 'TD' || n.tagName === 'TH');
+            if (!celdas.length) return;
+
+            celdas.forEach(celda => {
+                const pos = mapa.get(celda);
+                if (pos && titulos[pos.col]) celda.setAttribute('data-label', titulos[pos.col]);
+            });
+
+            if (pintar && optAltColors.checked) {
+                const primera = celdas[0];
+                if (primera) {
+                    primera.classList.add(indiceCuerpo % 2 === 0 ? 'bg-primary-10' : 'bg-secondary-10');
+                }
+            }
+            indiceCuerpo++;
+        });
+
+        // Lo único que se agrega siempre: las clases que activan las tarjetas.
+        tabla.classList.add('table', 'tabla-responsive-cards');
+
+        if (pintar) {
+            // Word entrega la fila de títulos como <td> sueltos dentro del tbody.
+            // La promovemos a <thead> con <th scope="col">, que es lo semántico y
+            // lo que hace que los lectores de pantalla anuncien la columna. En una
+            // tabla que ya llega maquetada NO se toca: su autor ya decidió.
+            if (!tabla.querySelector('thead')) {
+                const thead = document.createElement('thead');
+                thead.className = 'thead';
+                Array.from(headerRow.children).forEach(celda => {
+                    if (celda.tagName === 'TH') return;
+                    const th = document.createElement('th');
+                    th.setAttribute('scope', 'col');
+                    th.className = 'text-center align-middle';
+                    if (celda.getAttribute('colspan')) th.setAttribute('colspan', celda.getAttribute('colspan'));
+                    if (celda.getAttribute('rowspan')) th.setAttribute('rowspan', celda.getAttribute('rowspan'));
+                    th.innerHTML = celda.innerHTML;
+                    celda.replaceWith(th);
+                });
+                thead.appendChild(headerRow);
+                tabla.insertBefore(thead, tabla.firstChild);
+            }
+
+            if (optBordered.checked) tabla.classList.add('table-bordered', 'border-neutral');
+            if (optHeaderColor && optHeaderColor.checked) {
+                // Solo la CLASE, nunca un hex: el color lo resuelve el módulo de la
+                // página en Moodle (MM, M01, M02…). Aquí había un
+                // background-color:#d8a7b6 !important inline —el rosa de MM— que
+                // pintaba del color equivocado cualquier página de otro módulo.
+                // Mismo bug que ya se quitó en Micrositio a Página (REGLAS.md §6-bis).
+                const thead = tabla.querySelector('thead');
+                (thead && thead.contains(headerRow) ? thead : headerRow)
+                    .classList.add('bg-primary-20');
+            }
+        }
+
+        // Colores fijos, no tokens: el banner vive en .preview-container, isla clara.
         previewContainer.innerHTML = `
             <div style="background-color: #1e8e3e; color: white; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-weight: 600; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px;">
                 <i class="ph ph-check-circle"></i> ¡Tabla Procesada Correctamente!
             </div>
+            <div style="background-color: ${conEstilo ? '#e7f1ff' : '#fff4e5'}; color: #333; padding: 10px 12px; border-radius: 8px; margin-bottom: 15px; font-size: 14px;">
+                ${conEstilo
+                    ? '<strong>La tabla ya traía su propio diseño.</strong> Se conservó tal cual (encabezados, colores, anchos, colspan y rowspan) y solo se le agregaron las tarjetas. Los toggles de color no se aplicaron.'
+                    : '<strong>La tabla llegó sin diseño</strong> (típico de Word), así que se le aplicaron los toggles de color que tengas encendidos.'}
+            </div>
         `;
         previewContainer.appendChild(outputDiv);
-        
+
         let finalOutputHTML = outputDiv.innerHTML;
-        
+
         if (optMoodleWrap && optMoodleWrap.checked) {
-            if (!finalOutputHTML.includes('class="row') && !finalOutputHTML.includes("class='row")) {
+            // Antes se buscaba 'class="row' como texto. Si la tabla ya venía en su
+            // propio contenedor (col-12 > .table-responsive, como el HTML de una
+            // página nuestra), no había 'row' y se envolvía otra vez: quedaba un
+            // .table-responsive dentro de otro. Ahora se revisa en el DOM.
+            const yaEnvuelta = outputDiv.querySelector('.row, .table-responsive');
+            if (!yaEnvuelta) {
                 finalOutputHTML = `
 <!-- Contenedor Moodle -->
 <div class="row bloque mt-3">

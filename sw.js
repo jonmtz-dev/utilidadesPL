@@ -13,7 +13,7 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.4.3';
+const VERSION = '1.4.4';
 const CACHE = `panel-herramientas-v${VERSION}`;
 
 // Rutas relativas a propósito: en GitHub Pages la app vive en un subdirectorio
@@ -27,6 +27,7 @@ const APP_SHELL = [
     'assets/launcher.css',
     'assets/launcher.js',
     'assets/tools.js',
+    'assets/tablas.js',
     'assets/theme.js',
     'assets/pwa.js',
     'assets/icons/icon-192.png',

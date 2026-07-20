@@ -224,6 +224,22 @@ deformación, era tamaño.
   Las dos listas van creciendo conforme aparecen casos: así entraron `.card`, el
   `<th>` y `.btn-secondary`.
 
+## 6-0. La lógica de tablas es COMPARTIDA (`assets/tablas.js`)
+
+`mapaDeColumnas()`, `titulosPorColumna()` y `traeEstiloPropio()` viven en
+`assets/tablas.js`, no duplicadas aquí. Motivo: el Convertidor de Tablas y esta
+herramienta tenían cada uno su copia, se quitó el hex `#d8a7b6` del encabezado
+en una y **en la otra siguió vivo**. Cualquier arreglo de tablas va al archivo
+compartido para que le llegue a las dos.
+
+**`data-label` por columna REAL, no por posición.** Con `rowspan`, la posición
+de una celda dentro de su `<tr>` miente: si una celda de la fila 1 baja a la
+fila 2, la fila 2 tiene menos celdas físicas pero ocupan columnas salteadas.
+Medido: la 3ª celda de la fila 2 recibía `data-label="Propósito formativo"`
+cuando le tocaba `"Contenidos formativos"`, y en celular la tarjeta le mostraba
+al estudiante un encabezado que no correspondía a su contenido. `mapaDeColumnas()`
+recorre la cuadrícula contando `colspan`/`rowspan` y da la columna verdadera.
+
 ## 6-bis. Los toggles de colorear tabla: NUNCA un hex
 
 `Colorear 1ª columna` y `Colorear encabezado` van **apagados por defecto** y son
