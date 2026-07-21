@@ -177,6 +177,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const previewContainer = document.getElementById('preview-container');
     const scriptEmpty = document.getElementById('script-empty');
     const scriptResultado = document.getElementById('script-resultado');
+    const qaEmpty = document.getElementById('qa-empty');
+    const qaResultado = document.getElementById('qa-resultado');
 
     let estructura = null;   // estructura neutral de la tabla elegida
     let matriz = null;       // resultado del análisis
@@ -394,9 +396,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <tbody>${filasHtml}</tbody>
                 </table>
             </div>
-            <button id="btn-generar" class="btn-primary mt-4">
-                <i class="ph ph-magic-wand"></i> Generar script para Moodle
-            </button>`;
+            <div class="acciones-generar mt-4">
+                <button id="btn-generar" class="btn-primary">
+                    <i class="ph ph-magic-wand"></i> Generar script para Moodle
+                </button>
+                <button id="btn-generar-qa" class="btn-secondary">
+                    <i class="ph ph-shield-check"></i> Generar verificador (QA)
+                </button>
+            </div>`;
 
         previewContainer.querySelectorAll('.in-incluir').forEach(el => {
             el.addEventListener('change', () => {
@@ -427,6 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
             borrarSobrantes = e.target.checked;
         });
         document.getElementById('btn-generar').addEventListener('click', generarScript);
+        document.getElementById('btn-generar-qa').addEventListener('click', generarQA);
 
         pintarResumenPuntos();
     }
@@ -470,25 +478,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /* ------------------------------------------------ Generar el script --- */
 
-    function generarScript() {
+    /**
+     * Arma la rúbrica que se va a escribir (o a verificar). Es UNA sola función
+     * para los dos scripts a propósito: si el QA construyera su propia versión
+     * del texto esperado, cualquier diferencia entre ambas daría falsas alarmas
+     * (o peor, aprobaría algo mal escrito). El verificador tiene que comparar
+     * contra exactamente lo mismo que se escribió.
+     *
+     * El nombre del nivel (EXPERTO, CAPACITADO…) se antepone SOLO en el primer
+     * criterio: así están las rúbricas reales en Moodle —Cognitivo lleva
+     * "EXPERTO\n\nUtiliza…" y Actitudinal, Comunicativo y Pensamiento crítico
+     * van sin nombre— porque en el Word esos nombres viven en el encabezado de
+     * la tabla y solo hacen falta una vez, como referencia de la columna.
+     */
+    function construirDATA() {
         const incluidos = matriz.criterios.filter(c => c.incluir);
         if (!incluidos.length) {
-            alert('No hay ningún criterio marcado para actualizar.');
-            return;
+            alert('No hay ningún criterio marcado.');
+            return null;
         }
-        const faltaPuntos = incluidos.some(c => c.celdas.some(x => x.puntos === ''));
-        if (faltaPuntos) {
-            alert('Todavía hay celdas sin puntaje. Complétalas en la vista previa antes de generar el script.');
-            return;
+        if (incluidos.some(c => c.celdas.some(x => x.puntos === ''))) {
+            alert('Todavía hay celdas sin puntaje. Complétalas en la vista previa antes de continuar.');
+            return null;
         }
-
-        // El nombre del nivel (EXPERTO, CAPACITADO…) se antepone SOLO en el
-        // primer criterio. No es un capricho: así están las rúbricas reales en
-        // Moodle —Cognitivo lleva "EXPERTO\n\nUtiliza…" y Actitudinal,
-        // Comunicativo y Pensamiento crítico van sin nombre— porque en el Word
-        // esos nombres viven en el encabezado de la tabla y solo hacen falta una
-        // vez, como referencia de la columna.
-        const DATA = incluidos.map((crit, ci) => ({
+        return incluidos.map((crit, ci) => ({
             nombre: crit.nombre,
             niveles: crit.celdas.map((cel, li) => ({
                 texto: (anteponerNivel && ci === 0 && matriz.niveles[li])
@@ -497,9 +510,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 puntos: cel.puntos   // string, tal cual venía del Word
             }))
         }));
+    }
 
+    function generarScript() {
+        const DATA = construirDATA();
+        if (!DATA) return;
         pintarScript(construirScriptInyectable(DATA));
         activarTab('script');
+    }
+
+    function generarQA() {
+        const DATA = construirDATA();
+        if (!DATA) return;
+        pintarQA(construirScriptQA(DATA));
+        activarTab('qa');
     }
 
     /**
@@ -746,6 +770,253 @@ document.addEventListener('DOMContentLoaded', () => {
 
     terminar();
 })();`.trim();
+    }
+
+    /**
+     * Verificador (QA). Mismo lector del DOM de Moodle que el script de llenado,
+     * pero de SOLO LECTURA: no escribe, no borra, no guarda. Compara lo que hay
+     * en la página contra la rúbrica del Word y pinta un informe flotante.
+     *
+     * Se usa DESPUÉS de guardar: al reabrir "Definir rúbrica" los textareas
+     * traen los valores ya guardados, así que verifica lo que quedó de verdad
+     * en la base de datos, no lo que se acaba de teclear.
+     *
+     * Distingue tres grados, en vez de un sí/no que daría falsas alarmas:
+     *   · igual             -> coincide carácter por carácter
+     *   · solo espacios     -> mismo contenido, distinto espaciado (Moodle y
+     *                          Word difieren en saltos y espacios finales)
+     *   · DIFIERE           -> el contenido no es el mismo
+     */
+    function construirScriptQA(DATA) {
+        return `
+(function() {
+    var DATA = ${JSON.stringify(DATA)};
+
+    function normalizar(s) {
+        return (s || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
+            .replace(/\\s+/g, ' ').trim();
+    }
+    // Para comparar contenido: colapsa espacios y quita el espacio duro que
+    // Word mete a menudo, pero respeta mayúsculas y acentos.
+    function limpiar(s) {
+        return (s || '').replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim();
+    }
+
+    var filas = [].slice.call(document.querySelectorAll('tr.criterion')).filter(function (tr) {
+        return tr.querySelector('textarea[name*="[criteria]"][name$="[description]"]');
+    });
+    if (!filas.length) {
+        alert('No encontré la tabla de la rúbrica en esta página.\\n' +
+            'Abre "Calificación avanzada > Definir rúbrica" y vuelve a intentar.');
+        return;
+    }
+
+    var existentes = filas.map(function (tr) {
+        var descTA = tr.querySelector('textarea[name*="[criteria]"][name$="[description]"]');
+        var niveles = [].slice.call(tr.querySelectorAll('td.level')).map(function (td) {
+            var defTA = td.querySelector('textarea[name*="[levels]"][name$="[definition]"]');
+            var sc = td.querySelector('input[name*="[levels]"][name$="[score]"]');
+            return { td: td, texto: defTA ? defTA.value : '', puntos: sc ? sc.value : '' };
+        });
+        return { tr: tr, nombre: (descTA.value || '').trim(), niveles: niveles, usado: false };
+    });
+
+    function buscar(nombre) {
+        var n = normalizar(nombre), i;
+        for (i = 0; i < existentes.length; i++)
+            if (!existentes[i].usado && normalizar(existentes[i].nombre) === n) {
+                existentes[i].usado = true; return existentes[i];
+            }
+        for (i = 0; i < existentes.length; i++) {
+            if (existentes[i].usado) continue;
+            var en = normalizar(existentes[i].nombre);
+            if (en && n && (en.indexOf(n) !== -1 || n.indexOf(en) !== -1)) {
+                existentes[i].usado = true; return existentes[i];
+            }
+        }
+        return null;
+    }
+
+    var problemas = [], revisadas = 0, exactas = 0, soloEspacios = 0;
+    var criteriosFaltantes = [];
+
+    DATA.forEach(function (crit) {
+        var ex = buscar(crit.nombre);
+        if (!ex) { criteriosFaltantes.push(crit.nombre); return; }
+
+        crit.niveles.forEach(function (nivel, i) {
+            var real = ex.niveles[i];
+            if (!real) {
+                problemas.push({ criterio: crit.nombre, nivel: i + 1, tipo: 'FALTA EL NIVEL',
+                    esperado: nivel.texto, encontrado: '(no existe)', td: null });
+                return;
+            }
+            revisadas++;
+
+            // --- texto
+            if (real.texto === nivel.texto) { exactas++; }
+            else if (limpiar(real.texto) === limpiar(nivel.texto)) {
+                soloEspacios++;
+                problemas.push({ criterio: crit.nombre, nivel: i + 1, tipo: 'Solo espacios',
+                    esperado: nivel.texto, encontrado: real.texto, td: real.td, leve: true });
+            } else {
+                problemas.push({ criterio: crit.nombre, nivel: i + 1, tipo: 'TEXTO DISTINTO',
+                    esperado: nivel.texto, encontrado: real.texto, td: real.td });
+            }
+
+            // --- puntos (se comparan como número: "40" y "40.0" son lo mismo)
+            var pEsp = parseFloat(String(nivel.puntos).replace(',', '.'));
+            var pReal = parseFloat(String(real.puntos).replace(',', '.'));
+            var igualNum = !isNaN(pEsp) && !isNaN(pReal) && Math.abs(pEsp - pReal) < 0.0001;
+            if (!igualNum) {
+                problemas.push({ criterio: crit.nombre, nivel: i + 1, tipo: 'PUNTOS DISTINTOS',
+                    esperado: String(nivel.puntos), encontrado: String(real.puntos), td: real.td });
+            }
+        });
+    });
+
+    var sobrantes = existentes.filter(function (e) { return !e.usado; })
+        .map(function (e) { return e.nombre; });
+
+    /* --------------------------------------------------------- informe --- */
+
+    var previo = document.getElementById('qa-rubricas-panel');
+    if (previo) previo.remove();
+    [].slice.call(document.querySelectorAll('.qa-marca')).forEach(function (m) {
+        m.style.outline = ''; m.classList.remove('qa-marca');
+    });
+
+    var graves = problemas.filter(function (p) { return !p.leve; });
+
+    problemas.forEach(function (p) {
+        if (!p.td) return;
+        p.td.style.outline = p.leve ? '2px solid #ef6c00' : '3px solid #c62828';
+        p.td.classList.add('qa-marca');
+    });
+
+    function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+    }
+    function recorta(s, n) {
+        s = String(s == null ? '' : s);
+        return s.length > n ? s.slice(0, n) + '…' : s;
+    }
+
+    var panel = document.createElement('div');
+    panel.id = 'qa-rubricas-panel';
+    panel.style.cssText = 'position:fixed;top:12px;right:12px;width:430px;max-height:88vh;overflow:auto;' +
+        'z-index:2147483647;background:#fff;color:#222;border-radius:10px;padding:14px 16px;' +
+        'box-shadow:0 10px 40px rgba(0,0,0,.35);font:13px/1.45 system-ui,sans-serif;border:1px solid #ddd';
+
+    var estado = graves.length ? 'ERRORES' : (problemas.length ? 'CON AVISOS' : 'TODO CORRECTO');
+    var colorEstado = graves.length ? '#c62828' : (problemas.length ? '#ef6c00' : '#2e7d32');
+
+    var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+        '<strong style="font-size:15px">QA de rúbrica</strong>' +
+        '<button id="qa-cerrar" style="border:0;background:#eee;border-radius:6px;padding:4px 9px;cursor:pointer">Cerrar</button></div>';
+
+    html += '<div style="background:' + colorEstado + ';color:#fff;padding:8px 10px;border-radius:7px;font-weight:700;margin-bottom:10px">' +
+        estado + '</div>';
+
+    html += '<div style="margin-bottom:10px">' +
+        revisadas + ' celdas revisadas · <span style="color:#2e7d32">' + exactas + ' idénticas</span>' +
+        (soloEspacios ? ' · <span style="color:#ef6c00">' + soloEspacios + ' solo espacios</span>' : '') +
+        (graves.length ? ' · <span style="color:#c62828">' + graves.length + ' con error</span>' : '') +
+        '</div>';
+
+    if (criteriosFaltantes.length) {
+        html += '<div style="background:#fdecea;border-left:3px solid #c62828;padding:7px 9px;border-radius:5px;margin-bottom:8px">' +
+            '<strong>Criterios del Word que no están en Moodle:</strong><br>' +
+            criteriosFaltantes.map(esc).join('<br>') + '</div>';
+    }
+    if (sobrantes.length) {
+        html += '<div style="background:#fff4e5;border-left:3px solid #ef6c00;padding:7px 9px;border-radius:5px;margin-bottom:8px">' +
+            '<strong>Criterios en Moodle que no vienen en el Word:</strong><br>' +
+            sobrantes.map(esc).join('<br>') + '</div>';
+    }
+
+    if (!problemas.length && !criteriosFaltantes.length && !sobrantes.length) {
+        html += '<div style="background:#e8f5e9;border-left:3px solid #2e7d32;padding:9px;border-radius:5px">' +
+            'La rúbrica de Moodle coincide con el Word en todas las celdas.</div>';
+    } else if (problemas.length) {
+        html += '<strong>Detalle (' + problemas.length + '):</strong>';
+        problemas.forEach(function (p) {
+            var c = p.leve ? '#ef6c00' : '#c62828';
+            html += '<div style="border-left:3px solid ' + c + ';padding:6px 9px;margin:7px 0;background:#fafafa;border-radius:5px">' +
+                '<div style="font-weight:700;color:' + c + '">' + esc(p.criterio) + ' · nivel ' + p.nivel + ' · ' + esc(p.tipo) + '</div>' +
+                '<div style="margin-top:3px"><span style="color:#666">Word:</span> ' + esc(recorta(p.esperado, 160)) + '</div>' +
+                '<div><span style="color:#666">Moodle:</span> ' + esc(recorta(p.encontrado, 160)) + '</div></div>';
+        });
+        html += '<div style="margin-top:10px;color:#666">Las celdas con diferencia quedaron recuadradas en la página ' +
+            '(rojo = error, naranja = solo espacios).</div>';
+    }
+
+    panel.innerHTML = html;
+    document.body.appendChild(panel);
+    document.getElementById('qa-cerrar').addEventListener('click', function () {
+        [].slice.call(document.querySelectorAll('.qa-marca')).forEach(function (m) {
+            m.style.outline = ''; m.classList.remove('qa-marca');
+        });
+        panel.remove();
+    });
+
+    var primera = document.querySelector('.qa-marca');
+    if (primera) primera.scrollIntoView({ behavior: 'smooth', block: 'center' });
+})();`.trim();
+    }
+
+    function pintarQA(codigo) {
+        qaEmpty.classList.add('hidden');
+        qaResultado.classList.remove('hidden');
+        const bookmarklet = 'javascript:' + encodeURIComponent(codigo);
+
+        qaResultado.innerHTML = `
+            <div class="aviso aviso-info">
+                <i class="ph ph-shield-check"></i>
+                <span><strong>Verificador de solo lectura.</strong> Úsalo <strong>después de guardar</strong>:
+                reabre <em>Definir rúbrica</em> y ejecútalo. Compara celda por celda lo que quedó guardado en
+                Moodle contra tu Word, y pinta un informe flotante en la misma página.
+                <strong>No escribe, no borra y no guarda nada.</strong></span>
+            </div>
+
+            <div class="opcion-entrega">
+                <h3><i class="ph ph-bookmark-simple"></i> Opción A — Marcador</h3>
+                <p class="campo-nota">Arrástralo a tus marcadores y púlsalo estando en la rúbrica ya guardada.</p>
+                <a class="btn-secondary bookmarklet-link" href="${escapar(bookmarklet)}"
+                   onclick="return false;" title="Arrastra esto a tus marcadores">
+                   <i class="ph ph-shield-check"></i> Verificar rúbrica
+                </a>
+            </div>
+
+            <div class="opcion-entrega">
+                <h3><i class="ph ph-terminal-window"></i> Opción B — Pegar en la consola</h3>
+                <p class="campo-nota">F12 → <em>Console</em>. Si Chrome bloquea el pegado, escribe
+                    <code>allow pasting</code>, Enter, y vuelve a pegar.</p>
+                <div class="code-wrapper">
+                    <button class="btn-icon js-copiar-qa" title="Copiar"><i class="ph ph-copy"></i></button>
+                    <textarea class="code-output" readonly>${escapar(codigo)}</textarea>
+                </div>
+                <button class="btn-secondary btn-chico js-copiar-qa" type="button">
+                    <i class="ph ph-copy"></i> Copiar verificador
+                </button>
+            </div>`;
+
+        qaResultado.querySelectorAll('.js-copiar-qa').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const ta = qaResultado.querySelector('.code-output');
+                navigator.clipboard.writeText(ta.value).then(() => {
+                    const icono = btn.querySelector('i');
+                    const previa = icono.className;
+                    icono.className = 'ph ph-check';
+                    setTimeout(() => { icono.className = previa; }, 1200);
+                }).catch(() => {
+                    ta.focus(); ta.select();
+                    alert('No se pudo copiar solo. El texto ya quedó seleccionado: usa Ctrl+C.');
+                });
+            });
+        });
     }
 
     function pintarScript(codigo) {

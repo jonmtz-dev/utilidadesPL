@@ -95,6 +95,7 @@
                 <div class="tabs">
                     <button class="tab-btn active" data-target="preview"><i class="ph ph-table"></i> Vista previa</button>
                     <button class="tab-btn" data-target="script"><i class="ph ph-code"></i> Script para Moodle</button>
+                    <button class="tab-btn" data-target="qa"><i class="ph ph-shield-check"></i> Verificar (QA)</button>
                 </div>
 
                 <div class="tab-content active" id="preview-content">
@@ -111,6 +112,14 @@
                         <p>Revisa la vista previa y pulsa "Generar script" para continuar</p>
                     </div>
                     <div id="script-resultado" class="hidden"></div>
+                </div>
+
+                <div class="tab-content" id="qa-content">
+                    <div id="qa-empty" class="empty-state">
+                        <i class="ph ph-shield-check"></i>
+                        <p>Carga la rúbrica para generar el verificador</p>
+                    </div>
+                    <div id="qa-resultado" class="hidden"></div>
                 </div>
 
             </section>
