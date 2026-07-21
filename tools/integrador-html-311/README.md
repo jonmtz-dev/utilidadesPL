@@ -97,17 +97,22 @@ queden pegados al borde si Moodle restablece estilos por tema.
 El botón **Generar verificador (QA)** produce código de solo lectura. No
 agrega, elimina ni guarda contenido en Moodle.
 
-Antes de comparar fragmentos, el QA exige que el `h1` de la página coincida
-con el título generado. Si no coincide, informa **PÁGINA DISTINTA**, no acepta
-coincidencias parciales de frases genéricas y encierra en rojo los nodos del
-contenido mostrado. Esto evita aprobar accidentalmente otra actividad con una
-lista parecida.
+El QA usa el título como señal fuerte, pero Moodle puede cambiar o eliminar la
+etiqueta `h1` al guardar. Por eso compara primero una **huella completa** del
+contenido con normalización de espacios, tildes y puntuación. Solo informa
+**PÁGINA DISTINTA** si el título no se reconoce **y** menos del 55% de los
+textos esperados coinciden. Así evita aprobar otra actividad con frases
+parecidas sin rechazar una actividad correcta por un cambio de etiqueta.
 
 Si el título sí coincide, el QA revisa:
 
 - título, encabezados, párrafos, elementos de lista y celdas esperadas;
 - enlaces: texto, URL, archivo final de Moodle y `target="_blank"`;
 - texto adicional publicado en Moodle que no viene del documento.
+
+Los elementos repetidos por Moodle (`li` con un `p` interno, o un párrafo
+partido en nodos) no se consideran texto extra: el QA compara también las
+firmas contenidas en el texto esperado antes de reportarlos.
 
 Regenera siempre el QA después de importar/corregir bloques: el código incluye
 los textos y enlaces de ese estado exacto.

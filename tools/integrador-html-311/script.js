@@ -225,13 +225,19 @@
     function esc(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
     var nodos=[].slice.call(raiz.querySelectorAll('h1,h2,p,li,td,th')).map(function(n){return {n:n,t:limpiar(n.textContent),usado:false};});
     var esperado=(DATA.textos.filter(function(x){return x.etiqueta==='Título';})[0]||{}).texto||'';
-    var h1=raiz.querySelector('h1'), tituloPagina=h1?limpiar(h1.textContent):'(sin título)';
+    // Moodle puede conservar el título con su clase institucional aunque cambie
+    // la etiqueta HTML. Primero se busca esa clase; h1 es solo el último respaldo.
+    var h1=raiz.querySelector('[class*="-tituloTema"],[class*="-Tema"] h1,[class*="-Tema"],h1'), tituloPagina=h1?limpiar(h1.textContent):'(sin título)';
     var paginaDistinta=Boolean(esperado&&clave(esperado)!==clave(tituloPagina));
     function buscar(item){var candidatos=nodos.filter(function(x){return !x.usado&&x.n.matches(item.selector||'*');}),k=clave(item.texto);var x=candidatos.find(function(x){return x.t===limpiar(item.texto);})||candidatos.find(function(x){return clave(x.t)===k;});if(x)x.usado=true;return x;}
     var faltan=[],correctos=0,links=[];
     if(paginaDistinta){faltan=DATA.textos.slice();links=DATA.links.map(function(x){return {item:x,error:'No se verifica: página de otra actividad'};});}
     else {DATA.textos.forEach(function(x){if(buscar(x))correctos++;else faltan.push(x);});DATA.links.forEach(function(item){var a=[].slice.call(raiz.querySelectorAll('a')).find(function(a){return clave(a.textContent)===clave(item.texto);});if(!a){links.push({item:item,error:'No aparece el enlace'});return;}var h=limpiar(a.getAttribute('href')),e=limpiar(item.href),f=function(x){return (x.split('?')[0].split('/').pop()||'').toLowerCase();};if(!(h===e||(f(h)&&f(h)===f(e))))links.push({item:item,error:'URL distinta',pagina:h});else if((a.getAttribute('target')||'').toLowerCase()!=='_blank')links.push({item:item,error:'No abre en pestaña nueva',pagina:h});});}
-    var sobrantes=nodos.filter(function(x){return !x.usado&&x.t;});
+    // Moodle puede repetir el mismo texto en li/p o partir un párrafo en
+    // nodos hijos. Un sobrante solo es real si no coincide ni forma parte de
+    // ningún texto esperado; así no se reportan viñetas correctas dos veces.
+    var firmasEsperadas=DATA.textos.map(function(x){return firma(x.texto);}).filter(function(x){return x.length>2;});
+    var sobrantes=nodos.filter(function(x){return !x.usado&&x.t&&!firmasEsperadas.some(function(f){return f===x.f||(x.f.length>12&&f.indexOf(x.f)!==-1)||(f.length>12&&x.f.indexOf(f)!==-1);});});
     [].slice.call(document.querySelectorAll('.integrador-qa-marca')).forEach(function(n){n.style.outline='';n.classList.remove('integrador-qa-marca');});var viejo=document.getElementById('integrador-qa-panel');if(viejo)viejo.remove();
     if(paginaDistinta){nodos.forEach(function(x){x.n.style.outline='3px solid #c62828';x.n.classList.add('integrador-qa-marca');});}
     else faltan.forEach(function(item){var candidato=nodos.find(function(x){return x.n.matches(item.selector||'*');});if(candidato){candidato.n.style.outline='3px solid #c62828';candidato.n.classList.add('integrador-qa-marca');}});
@@ -239,6 +245,44 @@
     var panel=document.createElement('div');panel.id='integrador-qa-panel';panel.style.cssText='position:fixed;top:12px;right:12px;width:440px;max-height:88vh;overflow:auto;z-index:2147483647;background:#fff;color:#222;border:1px solid #ddd;border-radius:10px;padding:14px 16px;box-shadow:0 10px 40px rgba(0,0,0,.35);font:13px/1.45 system-ui,sans-serif';
     var html='<div style="display:flex;justify-content:space-between;margin-bottom:10px"><strong style="font-size:15px">QA de actividad</strong><button id="integrador-qa-cerrar" style="border:0;background:#eee;border-radius:6px;padding:4px 9px;cursor:pointer">Cerrar</button></div><div style="background:'+color+';color:#fff;padding:8px 10px;border-radius:7px;font-weight:700;margin-bottom:10px">'+estado+'</div><div>'+DATA.textos.length+' textos esperados · '+correctos+' correctos · '+DATA.links.length+' enlaces revisados</div>';
     if(paginaDistinta)html+='<div style="margin-top:10px;background:#fdecea;border-left:3px solid #c62828;padding:9px;border-radius:5px"><strong>Esta NO es la actividad del QA.</strong><br>Esperado: '+esc(esperado)+'<br>En Moodle: '+esc(tituloPagina)+'<br>No se aceptan coincidencias parciales.</div>';
+    if(!error)html+='<div style="margin-top:10px;background:#e8f5e9;border-left:3px solid #2e7d32;padding:9px;border-radius:5px">Textos y enlaces coinciden con lo generado.</div>';
+    if(faltan.length)html+='<h4 style="margin:12px 0 5px;color:#c62828">Textos faltantes o distintos ('+faltan.length+')</h4>'+faltan.map(function(x){return '<div style="border-left:3px solid #c62828;padding:5px 8px;margin:5px 0;background:#fff5f5"><strong>'+esc(x.etiqueta)+'</strong><br>'+esc(x.texto)+'</div>';}).join('');
+    if(!paginaDistinta&&sobrantes.length)html+='<h4 style="margin:12px 0 5px;color:#ef6c00">Texto extra en Moodle ('+sobrantes.length+')</h4>'+sobrantes.slice(0,20).map(function(x){return '<div style="border-left:3px solid #ef6c00;padding:5px 8px;margin:5px 0;background:#fff9ed">'+esc(x.t)+'</div>';}).join('')+(sobrantes.length>20?'<p>Se muestran los primeros 20.</p>':'');
+    if(links.length)html+='<h4 style="margin:12px 0 5px;color:#c62828">Enlaces con problema ('+links.length+')</h4>'+links.map(function(x){return '<div style="border-left:3px solid #c62828;padding:5px 8px;margin:5px 0;background:#fff5f5"><strong>'+esc(x.error)+': '+esc(x.item.texto)+'</strong><br>Esperado: '+esc(x.item.href)+(x.pagina?'<br>En Moodle: '+esc(x.pagina):'')+'</div>';}).join('');
+    panel.innerHTML=html;document.body.appendChild(panel);document.getElementById('integrador-qa-cerrar').onclick=function(){[].slice.call(document.querySelectorAll('.integrador-qa-marca')).forEach(function(n){n.style.outline='';n.classList.remove('integrador-qa-marca');});panel.remove();};var primero=document.querySelector('.integrador-qa-marca');if(primero)primero.scrollIntoView({behavior:'smooth',block:'center'});
+})();`; }
+    /* El HTML que persiste Moodle puede cambiar h1 por div/span. Esta versión
+       valida una huella completa de contenido: el título es una señal fuerte,
+       pero no invalida una página cuyo contenido sí coincide casi por completo. */
+    function scriptQA(data) { return `(function () {
+    var DATA=${JSON.stringify(data)};
+    var raiz=document.querySelector('.prepa-M'+DATA.modulo+'-body')||document.querySelector('[class*="prepa-M"][class$="-body"]')||document.querySelector('#region-main')||document.body;
+    function limpiar(s){return String(s||'').replace(/[\\u00a0\\u200b\\u00ad]/g,' ').replace(/\\s+/g,' ').trim();}
+    function firma(s){return limpiar(s).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('es-MX').replace(/[^\\p{L}\\p{N}]+/gu,' ').replace(/\\s+/g,' ').trim();}
+    function esc(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+    var nodos=[].slice.call(raiz.querySelectorAll('[class*="-tituloTema"],[class*="-subTema"],h1,h2,h3,p,li,td,th')).map(function(n){return {n:n,t:limpiar(n.textContent),f:firma(n.textContent),usado:false};}).filter(function(x){return x.t;});
+    // Moodle cambia p/h2/li según el editor y el tema. El QA editorial compara
+    // el texto visible, no la etiqueta que haya sobrevivido al guardado.
+    function buscar(item){var candidatos=nodos.filter(function(x){return !x.usado;}),f=firma(item.texto);var x=candidatos.find(function(x){return x.f===f;});if(!x&&f.length>20)x=candidatos.find(function(x){return x.f.indexOf(f)!==-1||f.indexOf(x.f)!==-1;});if(x)x.usado=true;return x;}
+    var faltan=[],correctos=0,coincidencias=[];
+    DATA.textos.forEach(function(item){var x=buscar(item);if(x){correctos++;coincidencias.push({item:item,nodo:x});}else faltan.push(item);});
+    var titulo=(DATA.textos.filter(function(x){return x.etiqueta==='Título';})[0]||{});var tituloCoincide=coincidencias.some(function(x){return x.item===titulo;});
+    var proporcion=DATA.textos.length?correctos/DATA.textos.length:0;
+    // Menos de 55% Y sin título reconocido significa otro contenido. Una página
+    // con casi todo su texto correcto no se rechaza porque Moodle cambie etiquetas.
+    var paginaDistinta=!tituloCoincide&&proporcion<.55;
+    var links=[];
+    if(!paginaDistinta)DATA.links.forEach(function(item){var a=[].slice.call(raiz.querySelectorAll('a')).find(function(a){return firma(a.textContent)===firma(item.texto);});if(!a){links.push({item:item,error:'No aparece el enlace'});return;}var h=limpiar(a.getAttribute('href')),e=limpiar(item.href),archivo=function(x){return (x.split('?')[0].split('/').pop()||'').toLowerCase();};if(!(h===e||(archivo(h)&&archivo(h)===archivo(e))))links.push({item:item,error:'URL distinta',pagina:h});else if((a.getAttribute('target')||'').toLowerCase()!=='_blank')links.push({item:item,error:'No abre en pestaña nueva',pagina:h});});
+    else links=DATA.links.map(function(x){return {item:x,error:'No se verifica: página de otra actividad'};});
+    var sobrantes=nodos.filter(function(x){return !x.usado&&x.t;});
+    [].slice.call(document.querySelectorAll('.integrador-qa-marca')).forEach(function(n){n.style.outline='';n.classList.remove('integrador-qa-marca');});var viejo=document.getElementById('integrador-qa-panel');if(viejo)viejo.remove();
+    if(paginaDistinta)nodos.forEach(function(x){x.n.style.outline='3px solid #c62828';x.n.classList.add('integrador-qa-marca');});
+    else faltan.forEach(function(item){var n=nodos.find(function(x){return !x.usado;});if(n){n.n.style.outline='3px solid #c62828';n.n.classList.add('integrador-qa-marca');}});
+    var error=paginaDistinta||faltan.length||links.length,estado=paginaDistinta?'PÁGINA DISTINTA':(error?'ERRORES':'TODO CORRECTO'),color=error?'#c62828':'#2e7d32';
+    var panel=document.createElement('div');panel.id='integrador-qa-panel';panel.style.cssText='position:fixed;top:12px;right:12px;width:440px;max-height:88vh;overflow:auto;z-index:2147483647;background:#fff;color:#222;border:1px solid #ddd;border-radius:10px;padding:14px 16px;box-shadow:0 10px 40px rgba(0,0,0,.35);font:13px/1.45 system-ui,sans-serif';
+    var html='<div style="display:flex;justify-content:space-between;margin-bottom:10px"><strong style="font-size:15px">QA de actividad</strong><button id="integrador-qa-cerrar" style="border:0;background:#eee;border-radius:6px;padding:4px 9px;cursor:pointer">Cerrar</button></div><div style="background:'+color+';color:#fff;padding:8px 10px;border-radius:7px;font-weight:700;margin-bottom:10px">'+estado+'</div><div>'+DATA.textos.length+' textos esperados · '+correctos+' correctos ('+Math.round(proporcion*100)+'%) · '+DATA.links.length+' enlaces revisados</div>';
+    if(paginaDistinta)html+='<div style="margin-top:10px;background:#fdecea;border-left:3px solid #c62828;padding:9px;border-radius:5px"><strong>La huella del contenido no coincide.</strong><br>Menos de 55% de textos encontrados y título no reconocido. No se aceptan coincidencias parciales.</div>';
+    else if(!tituloCoincide)html+='<div style="margin-top:10px;background:#fff4e5;border-left:3px solid #ef6c00;padding:9px;border-radius:5px"><strong>Aviso de título:</strong> Moodle cambió o no expuso su etiqueta, pero la huella del contenido coincide ('+Math.round(proporcion*100)+'%).</div>';
     if(!error)html+='<div style="margin-top:10px;background:#e8f5e9;border-left:3px solid #2e7d32;padding:9px;border-radius:5px">Textos y enlaces coinciden con lo generado.</div>';
     if(faltan.length)html+='<h4 style="margin:12px 0 5px;color:#c62828">Textos faltantes o distintos ('+faltan.length+')</h4>'+faltan.map(function(x){return '<div style="border-left:3px solid #c62828;padding:5px 8px;margin:5px 0;background:#fff5f5"><strong>'+esc(x.etiqueta)+'</strong><br>'+esc(x.texto)+'</div>';}).join('');
     if(!paginaDistinta&&sobrantes.length)html+='<h4 style="margin:12px 0 5px;color:#ef6c00">Texto extra en Moodle ('+sobrantes.length+')</h4>'+sobrantes.slice(0,20).map(function(x){return '<div style="border-left:3px solid #ef6c00;padding:5px 8px;margin:5px 0;background:#fff9ed">'+esc(x.t)+'</div>';}).join('')+(sobrantes.length>20?'<p>Se muestran los primeros 20.</p>':'');
