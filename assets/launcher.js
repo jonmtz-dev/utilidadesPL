@@ -26,6 +26,19 @@ function initLauncher() {
         icon.style.setProperty('--accent-to', tool.accent[1]);
         icon.innerHTML = `<i class="ph ph-${tool.icon}"></i>`;
 
+        // Insignia de versión: no todas las herramientas sirven para el mismo
+        // Moodle (el editor de rúbricas y el de libros cambiaron entre 3.11 y
+        // 5.1). Sale del campo `moodle` de tools.js, que es la fuente única.
+        if (tool.moodle) {
+            const badge = document.createElement('span');
+            badge.className = `tool-moodle tool-moodle--${tool.moodle.replace('.', '-')}`;
+            badge.textContent = `Moodle ${tool.moodle}`;
+            badge.title = `Esta herramienta está hecha para Moodle ${tool.moodle}`;
+            card.appendChild(badge);
+            // Buscable: para poder filtrar escribiendo "3.11" en el buscador.
+            card.dataset.search += ` moodle ${tool.moodle}`;
+        }
+
         const title = document.createElement('h2');
         title.textContent = tool.title;
 

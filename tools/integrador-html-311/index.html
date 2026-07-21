@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integrador HTML 3.11 - Moodle</title>
+    <link rel="manifest" href="../../manifest.json">
+    <meta name="theme-color" content="#f0f2f5">
+    <link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="../../assets/icons/apple-touch-icon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../assets/shared.css">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="../../assets/theme.js"></script>
+    <script src="../../assets/pwa.js"></script>
+    <script src="../../assets/tools.js"></script>
+    <script src="../../assets/version-moodle.js" defer></script>
+</head>
+<body>
+    <div class="background-mesh"><div class="shape shape-1"></div><div class="shape shape-2"></div><div class="shape shape-3"></div></div>
+    <main class="app-container glass-panel">
+        <header class="app-header">
+            <div class="logo logo--integrador"><i class="ph ph-layout"></i></div>
+            <div><h1>Integrador HTML</h1><p>Maqueta actividades visualmente y genera HTML para Moodle 3.11</p></div>
+            <a class="btn-back" href="../../index.html"><i class="ph ph-arrow-left"></i> Panel</a>
+        </header>
+        <div class="aviso aviso-info"><i class="ph ph-info"></i><span><strong>Flujo recomendado.</strong> Sube el Word o arma los bloques, revisa visualmente la página y genera el HTML. El QA se usa <strong>después de guardar en Moodle</strong>: compara textos y enlaces, pero nunca modifica la actividad.</span></div>
+        <div class="workspace integrador-workspace">
+            <section class="panel-section glass-panel editor-panel">
+                <div class="section-header section-header--acciones"><h2><i class="ph ph-pencil-simple-line"></i> Maquetación</h2><button id="btn-ampliar-editor" class="btn-secondary btn-chico" type="button"><i class="ph ph-arrows-out"></i> Ampliar edición</button></div>
+                <div class="field-row"><label for="modulo"><i class="ph ph-palette"></i> Módulo</label><select id="modulo"></select><span id="paleta" class="paleta" title="Colores del módulo"></span></div>
+                <label class="field-label" for="titulo">Título de la actividad</label>
+                <input id="titulo" class="plain-input plain-input--single" placeholder="Actividad integradora 4. ¿Será verdad?">
+                <div id="dropzone" class="dropzone"><i class="ph ph-file-doc"></i><span class="dropzone-titulo"><strong>Importar Word (.docx)</strong></span><span class="dropzone-nota">Toma la primera barra gris como inicio del contenido Moodle</span><input id="input-docx" type="file" accept=".docx" hidden></div>
+                <p id="import-info" class="field-hint hidden"></p>
+                <div class="toolbar" aria-label="Agregar bloque">
+                    <button class="btn-secondary btn-chico" data-add="section"><i class="ph ph-text-h-two"></i> Sección</button>
+                    <button class="btn-secondary btn-chico" data-add="text"><i class="ph ph-text-t"></i> Texto</button>
+                    <button class="btn-secondary btn-chico" data-add="list"><i class="ph ph-list-bullets"></i> Lista</button>
+                    <button class="btn-secondary btn-chico" data-add="table"><i class="ph ph-table"></i> Tabla</button>
+                    <button class="btn-secondary btn-chico" data-add="image"><i class="ph ph-image"></i> Imagen</button>
+                    <button class="btn-secondary btn-chico" data-add="link"><i class="ph ph-link"></i> Enlace</button>
+                </div>
+                <p id="insert-hint" class="insert-hint">Selecciona un bloque para insertar después de él. Sin selección, se agrega al final.</p>
+                <div id="blocks" class="blocks"></div>
+                <div class="acciones"><button id="btn-generate" class="btn-primary"><i class="ph ph-code"></i> Generar HTML</button><button id="btn-generate-qa" class="btn-secondary"><i class="ph ph-shield-check"></i> Generar verificador (QA)</button></div>
+            </section>
+            <section class="panel-section glass-panel output-panel">
+                <div class="tabs"><button class="tab-btn active" data-target="preview"><i class="ph ph-eye"></i> Vista previa</button><button class="tab-btn" data-target="code"><i class="ph ph-code"></i> HTML</button><button class="tab-btn" data-target="qa"><i class="ph ph-shield-check"></i> Verificar (QA)</button></div>
+                <div id="preview-content" class="tab-content active"><div id="preview-empty" class="empty-state"><i class="ph ph-layout"></i><p>Agrega bloques para ver tu actividad Moodle</p></div><div id="preview" class="preview-container hidden"></div></div>
+                <div id="code-content" class="tab-content"><div class="code-wrapper"><button id="btn-copy" class="btn-icon" title="Copiar HTML"><i class="ph ph-copy"></i></button><textarea id="code" class="code-output" readonly placeholder="El HTML listo para Moodle aparecerá aquí..."></textarea></div></div>
+                <div id="qa-content" class="tab-content"><div id="qa-empty" class="empty-state"><i class="ph ph-shield-check"></i><p>Genera el HTML para obtener el verificador</p></div><div id="qa-result" class="hidden"></div></div>
+            </section>
+        </div>
+    </main>
+    <script src="../../assets/docx.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

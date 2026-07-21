@@ -82,6 +82,35 @@
     transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
+/* Insignia de versión de Moodle (esquina superior derecha de la tarjeta).
+   Va sobre el brillo del cursor (z-index) porque este es position:absolute. */
+.tool-moodle {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 2;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    border: 1px solid;
+    white-space: nowrap;
+}
+
+/* Dos colores distintos a propósito: de un vistazo se ve cuáles herramientas
+   son de la plataforma vieja y cuáles de la nueva. */
+.tool-moodle--5-1 {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.tool-moodle--3-11 {
+    color: var(--warning);
+    border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
+}
+
 /* Brillo que sigue al cursor */
 .tool-card::before {
     content: "";

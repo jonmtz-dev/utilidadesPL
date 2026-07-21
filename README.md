@@ -1,8 +1,21 @@
 # Panel de Herramientas Moodle
 
-Cajón de apps con utilidades propias para maquetar contenido en Moodle 5.1.
+Cajón de apps con utilidades propias para maquetar contenido en Moodle.
 Sin build, sin dependencias, sin `npm install`: son archivos HTML/CSS/JS planos.
 Se abre `index.html` en el navegador y funciona.
+
+**Ojo: no todas las herramientas son para la misma versión de Moodle.** Cada una
+lo indica con una insignia, en su tarjeta del panel y en su propio encabezado:
+
+| Herramienta | Moodle |
+|---|---|
+| Adaptador de Rúbricas · Generador de Bibliografías · Integrador HTML | **3.11** |
+| Convertidor de Tablas · Micrositio a Página · Bibliografías Margarita Maza | **5.1** |
+
+El editor de rúbricas y el de libros cambiaron entre una versión y otra, así que
+usar la herramienta equivocada genera HTML que se ve bien en la vista previa y
+falla al pegarlo. La versión vive **solo** en el campo `moodle` de
+`assets/tools.js` (§ del launcher): de ahí salen las dos insignias.
 
 Es además una **PWA instalable** (PC y móvil) que funciona sin conexión y avisa
 cuando hay una versión nueva.
@@ -71,6 +84,8 @@ tools/
   convertidor-tablas/       Tablas de Word/HTML → tarjetas responsivas
     index.html · script.js · styles.css
   generador-bibliografias/  Fuentes de consulta → párrafos <p> con enlaces
+  integrador-html-311/      Word de actividad → bloques editables + HTML + QA
+    README.md                Reglas de importación, editor, QA y pruebas
     index.html · script.js · styles.css
   micrositio-a-pagina/      Micrositio .zip → recurso Página (@@PLUGINFILE@@)
     index.html · script.js · styles.css

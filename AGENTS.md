@@ -1,4 +1,4 @@
-# Contexto para Claude
+# Contexto para Codex
 
 **Lee `README.md` antes de tocar nada.** Tiene el porqué del proyecto, el
 contrato con el CSS que vive en Moodle, el sistema de diseño y las trampas ya

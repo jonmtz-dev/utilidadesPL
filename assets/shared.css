@@ -244,6 +244,39 @@ body {
     box-shadow: var(--hover-shadow);
 }
 
+/* Insignia de versión de Moodle en el encabezado de cada herramienta.
+   La inyecta version-moodle.js leyendo el campo `moodle` de tools.js: NO se
+   escribe en el HTML, para que exista una sola fuente de la verdad. */
+.moodle-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;          /* empuja el conjunto insignia+botón a la derecha */
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid;
+    font-size: 12.5px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.moodle-badge i { font-size: 14px; }
+
+/* Dos colores a propósito: de un vistazo se distingue la plataforma vieja de
+   la nueva, sin tener que leer el número. */
+.moodle-badge--5-1 {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.moodle-badge--3-11 {
+    color: var(--warning);
+    border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
+}
+
+/* Con la insignia presente, el margin-left:auto lo aporta ella. */
+.app-header .moodle-badge ~ .btn-back { margin-left: 0; }
+
 /* Acciones de la derecha del header (tema + regreso). Lo inyecta theme.js. */
 .header-actions {
     margin-left: auto;
