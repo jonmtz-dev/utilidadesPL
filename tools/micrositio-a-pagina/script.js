@@ -1408,6 +1408,23 @@ function initMicrositio() {
             el.style.setProperty('text-decoration', 'none', 'important');
         });
 
+        // --- Fórmulas MathML en línea.
+        // La herramienta SÍ conserva el <math> dentro del <p> (comprobado), pero al
+        // pegar, TinyMCE no lo reconoce como contenido en línea: parte el <p> en dos
+        // y le pone display:block, así que la fórmula salta de renglón a media frase.
+        //
+        // Envolverlo en un <span> NO sirve: TinyMCE borra el span. Lo que SÍ
+        // sobrevive es el estilo inline, así que al menos evitamos el display:block.
+        // El salto de renglón que provoca el <p> partido se resuelve con una regla
+        // `:has()` en el complemento del tema (ver REGLAS.md §6-quater).
+        //
+        // Las fórmulas de BLOQUE (display="block") no se tocan: esas sí van solas.
+        doc.querySelectorAll('math').forEach(m => {
+            if (m.getAttribute('display') === 'block') return;   // fórmula de bloque
+            m.style.setProperty('display', 'inline-block', 'important');
+            m.style.setProperty('vertical-align', 'middle');
+        });
+
         // --- Enlaces a otras páginas del micrositio: no se pueden resolver solos
         doc.querySelectorAll('a[href]').forEach(a => {
             const href = a.getAttribute('href');
