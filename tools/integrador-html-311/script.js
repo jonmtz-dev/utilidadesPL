@@ -191,7 +191,10 @@
             if (b.tipo === 'link' && (clean(b.texto)||clean(b.href))) links.push({etiqueta, texto:clean(b.texto||b.href), href:clean(b.href)});
         }); return { modulo:$('#modulo').value, textos, links };
     }
-    function scriptQA(data) { return `(function () {
+    /* MUERTA v1: NO se usa. Solo corre la última scriptQA de este archivo (una
+       declaración de función posterior sustituye a la anterior). Renombrada para
+       que solo exista un scriptQA activo y nadie edite la copia equivocada. */
+    function scriptQA_MUERTA_1(data) { return `(function () {
     var DATA = ${JSON.stringify(data)};
     var raiz = document.querySelector('.prepa-M' + DATA.modulo + '-body') || document.querySelector('[class*="prepa-M"][class$="-body"]') || document.querySelector('#region-main') || document.body;
     function limpiar(s) { return String(s || '').replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim(); }
@@ -217,7 +220,7 @@
     /* Versión estricta del QA. Se declara después de la primera para sustituirla:
        la identidad de la actividad (H1) es requisito previo, no una coincidencia
        más entre muchos fragmentos de texto. */
-    function scriptQA(data) { return `(function () {
+    function scriptQA_MUERTA_2(data) { return `(function () {
     var DATA=${JSON.stringify(data)};
     var raiz=document.querySelector('.prepa-M'+DATA.modulo+'-body')||document.querySelector('[class*="prepa-M"][class$="-body"]')||document.querySelector('#region-main')||document.body;
     function limpiar(s){return String(s||'').replace(/\\u00a0/g,' ').replace(/\\s+/g,' ').trim();}
@@ -274,7 +277,13 @@
     var links=[];
     if(!paginaDistinta)DATA.links.forEach(function(item){var a=[].slice.call(raiz.querySelectorAll('a')).find(function(a){return firma(a.textContent)===firma(item.texto);});if(!a){links.push({item:item,error:'No aparece el enlace'});return;}var h=limpiar(a.getAttribute('href')),e=limpiar(item.href),archivo=function(x){return (x.split('?')[0].split('/').pop()||'').toLowerCase();};if(!(h===e||(archivo(h)&&archivo(h)===archivo(e))))links.push({item:item,error:'URL distinta',pagina:h});else if((a.getAttribute('target')||'').toLowerCase()!=='_blank')links.push({item:item,error:'No abre en pestaña nueva',pagina:h});});
     else links=DATA.links.map(function(x){return {item:x,error:'No se verifica: página de otra actividad'};});
-    var sobrantes=nodos.filter(function(x){return !x.usado&&x.t;});
+    // Un "sobrante" solo es real si su texto NO forma parte de lo esperado.
+    // TinyMCE envuelve el contenido de una viñeta en <li><p>texto</p></li>: el
+    // <li> y su <p> son DOS nodos con el mismo texto, y como buscar() marca solo
+    // uno, el otro salía como "extra" aunque la viñeta sí estaba en el Word.
+    // Comparar por firma (no por etiqueta) los descarta.
+    var firmasEsperadas=DATA.textos.map(function(x){return firma(x.texto);}).filter(function(x){return x.length>2;});
+    var sobrantes=nodos.filter(function(x){return !x.usado&&x.t&&!firmasEsperadas.some(function(f){return f===x.f||(x.f.length>12&&f.indexOf(x.f)!==-1)||(f.length>12&&x.f.indexOf(f)!==-1);});});
     [].slice.call(document.querySelectorAll('.integrador-qa-marca')).forEach(function(n){n.style.outline='';n.classList.remove('integrador-qa-marca');});var viejo=document.getElementById('integrador-qa-panel');if(viejo)viejo.remove();
     if(paginaDistinta)nodos.forEach(function(x){x.n.style.outline='3px solid #c62828';x.n.classList.add('integrador-qa-marca');});
     else faltan.forEach(function(item){var n=nodos.find(function(x){return !x.usado;});if(n){n.n.style.outline='3px solid #c62828';n.n.classList.add('integrador-qa-marca');}});
