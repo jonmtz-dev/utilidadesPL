@@ -3,9 +3,9 @@
    fuente de verdad para HTML, vista previa y QA. Así no pueden divergir.
    ========================================================================== */
 (function () {
-    const MODULOS = {
-        1:['#704073','#4C264C','#ECE6DB'],2:['#80AA2E','#1F622A','#ECE6DB'],3:['#F69B1F','#B8761E','#ECE6DB'],4:['#F05825','#BD471F','#ECE6DB'],5:['#2CA8DF','#227EA8','#ECE6DB'],6:['#B57DB2','#815881','#ECE6DB'],7:['#1AAE5C','#007D3C','#DDECDE'],8:['#FB6769','#B64C4D','#FDE5E0'],9:['#934C98','#803E85','#FDE5E0'],10:['#A7D664','#7B9E47','#FDE5E0'],11:['#F69B1F','#B8761E','#FDE5E0'],12:['#F05825','#BD471F','#FDE5E0'],13:['#2CA8DF','#227EA8','#FDE5E0'],14:['#B57DB2','#815881','#FDE5E0'],15:['#1AAE5C','#007D3C','#DDECDE'],16:['#FB6769','#B64C4D','#FFDADA'],17:['#934C98','#803E85','#FFDADA'],18:['#F05825','#BD471F','#FFDADA'],19:['#F69B1F','#B8761E','#FFDADA'],20:['#A7D664','#7B9E47','#FCFEE1'],21:['#2CA8DF','#227EA8','#E4F6FE'],22:['#B57DB2','#815881','#EEDDEE'],23:['#1AAE5C','#007D3C','#DDECDE']
-    };
+    // La paleta vive en assets/modulos-311.js (fuente única compartida con el
+    // Generador de Bibliografías).
+    const MODULOS = MODULOS_311;
     let blocks = [];
     let serial = 0;
     let selectedBlockId = null;
@@ -13,12 +13,19 @@
     const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const clean = (s) => String(s || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
     const key = (s) => clean(s).toLocaleLowerCase('es-MX');
+    // Las negritas viajan como marcas **texto** (así las entrega el importador
+    // y así se pueden teclear a mano). Se convierten DESPUÉS de escapar.
+    const negritas = (html) => String(html).replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+    // Para el QA y otras comparaciones: el texto como lo mostrará Moodle.
+    const sinMarcas = (s) => String(s || '').replace(/\*\*/g, '');
 
     function init() {
         const modulo = $('#modulo');
         Object.keys(MODULOS).forEach(n => modulo.insertAdjacentHTML('beforeend', `<option value="${n}"${n === '17' ? ' selected' : ''}>Módulo ${n}</option>`));
         actualizarPaleta();
-        modulo.addEventListener('change', () => { actualizarPaleta(); actualizar(); });
+        // renderEditor: los selectores de color de las tablas muestran el color
+        // del módulo cuando no hay uno propio, y deben refrescarse al cambiarlo.
+        modulo.addEventListener('change', () => { actualizarPaleta(); renderEditor(); actualizar(); });
         $('#titulo').addEventListener('input', actualizar);
         document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => agregar(b.dataset.add)));
         $('#btn-generate').addEventListener('click', () => { actualizar(); activarTab('code'); });
@@ -35,7 +42,7 @@
         const c = MODULOS[$('#modulo').value];
         $('#paleta').innerHTML = c.map(x => `<i style="background:${x}"></i>`).join('');
     }
-    function nuevo(tipo, datos) { return Object.assign({ id: ++serial, tipo, titulo: '', texto: '', href: '', alt: '', encabezados: '', filas: '', alineacion: 'izquierda', tipoLista: 'vinetas', nivelLista: 0, inicioLista: 1 }, datos || {}); }
+    function nuevo(tipo, datos) { return Object.assign({ id: ++serial, tipo, titulo: '', texto: '', href: '', alt: '', encabezados: '', filas: '', tituloTabla: '', colorEncabezado: '', archivoImagen: '', urlLocal: '', alineacion: 'izquierda', tipoLista: 'vinetas', nivelLista: 0, inicioLista: 1 }, datos || {}); }
     function agregar(tipo, datos) {
         const bloque = nuevo(tipo, datos);
         const posicion = selectedBlockId == null ? -1 : blocks.findIndex(b => b.id === selectedBlockId);
@@ -54,17 +61,29 @@
         const holder = $('#blocks');
         if (!blocks.length) { holder.innerHTML = '<div class="empty-state"><i class="ph ph-plus-circle"></i><p>Agrega un bloque para empezar.</p></div>'; return; }
         $('#insert-hint').textContent = selectedBlockId == null ? 'Selecciona un bloque para insertar después de él. Sin selección, se agrega al final.' : 'Los botones agregan el nuevo bloque justo después del bloque seleccionado.';
-        holder.innerHTML = blocks.map(b => {
-            const head = `<div class="block-head"><i class="ph ${icono(b.tipo)}"></i>${nombre(b.tipo)}<button class="block-remove" data-remove="${b.id}" title="Eliminar bloque"><i class="ph ph-trash"></i></button></div>`;
+        holder.innerHTML = blocks.map((b, idx) => {
+            const head = `<div class="block-head"><i class="ph ${icono(b.tipo)}"></i>${nombre(b.tipo)}<span class="block-tools"><button class="block-move" data-move="${b.id}:-1" title="Subir bloque"${idx === 0 ? ' disabled' : ''}><i class="ph ph-caret-up"></i></button><button class="block-move" data-move="${b.id}:1" title="Bajar bloque"${idx === blocks.length - 1 ? ' disabled' : ''}><i class="ph ph-caret-down"></i></button><button class="block-remove" data-remove="${b.id}" title="Eliminar bloque"><i class="ph ph-trash"></i></button></span></div>`;
             const clase = `block${selectedBlockId === b.id ? ' block--seleccionado' : ''}`;
-            if (b.tipo === 'section') return `<article class="${clase}" data-id="${b.id}">${head}<input class="block-field block-title" data-field="titulo" placeholder="Título de sección (ej. Propósito)" value="${esc(b.titulo)}"><textarea class="block-field" data-field="texto" rows="4" placeholder="Contenido de la sección. Un renglón en blanco crea otro párrafo.">${esc(b.texto)}</textarea>${controlAlineacion(b)}</article>`;
-            if (b.tipo === 'text') return `<article class="${clase}" data-id="${b.id}">${head}<textarea class="block-field" data-field="texto" rows="5" placeholder="Pega o escribe el texto introductorio...">${esc(b.texto)}</textarea>${controlAlineacion(b)}</article>`;
-            if (b.tipo === 'list') return `<article class="${clase}" data-id="${b.id}">${head}<textarea class="block-field" data-field="texto" rows="5" placeholder="Un elemento por renglón">${esc(b.texto)}</textarea><div class="block-controls"><label>Tipo <select class="block-field" data-field="tipoLista"><option value="vinetas"${b.tipoLista==='vinetas'?' selected':''}>Viñetas</option><option value="ordenada"${b.tipoLista==='ordenada'?' selected':''}>Numerada (1, 2)</option><option value="letras"${b.tipoLista==='letras'?' selected':''}>Letras (a, b)</option><option value="romana"${b.tipoLista==='romana'?' selected':''}>Romana (i, ii)</option></select></label><label>Nivel <select class="block-field" data-field="nivelLista"><option value="0"${Number(b.nivelLista)===0?' selected':''}>Principal</option><option value="1"${Number(b.nivelLista)===1?' selected':''}>Segundo</option><option value="2"${Number(b.nivelLista)===2?' selected':''}>Tercero</option></select></label></div><small>Un elemento por renglón. Se conserva la numeración y el nivel del Word.</small></article>`;
-            if (b.tipo === 'table') return `<article class="${clase}" data-id="${b.id}">${head}<div class="table-fields"><input class="block-field" data-field="encabezados" placeholder="Encabezados separados por tabulador o |" value="${esc(b.encabezados)}"><textarea class="block-field" data-field="filas" rows="4" placeholder="Una fila por renglón; celdas separadas por tabulador o |">${esc(b.filas)}</textarea></div><small>La primera caja contiene encabezados; la segunda, las filas.</small></article>`;
-            if (b.tipo === 'image') return `<article class="${clase}" data-id="${b.id}">${head}<input class="block-field" data-field="href" placeholder="URL de la imagen" value="${esc(b.href)}"><input class="block-field" data-field="alt" placeholder="Texto alternativo" value="${esc(b.alt)}"></article>`;
+            if (b.tipo === 'section') return `<article class="${clase}" data-id="${b.id}">${head}<input class="block-field block-title" data-field="titulo" placeholder="Título de sección (ej. Propósito)" value="${esc(b.titulo)}"><textarea class="block-field" data-field="texto" rows="4" placeholder="Contenido de la sección. Un renglón en blanco crea otro párrafo. **texto** = negritas.">${esc(b.texto)}</textarea>${controlAlineacion(b)}</article>`;
+            if (b.tipo === 'text') return `<article class="${clase}" data-id="${b.id}">${head}<textarea class="block-field" data-field="texto" rows="5" placeholder="Pega o escribe el texto introductorio... **texto** = negritas.">${esc(b.texto)}</textarea>${controlAlineacion(b)}</article>`;
+            if (b.tipo === 'list') return `<article class="${clase}" data-id="${b.id}">${head}<textarea class="block-field" data-field="texto" rows="5" placeholder="Un elemento por renglón">${esc(b.texto)}</textarea><div class="block-controls"><label>Tipo <select class="block-field" data-field="tipoLista"><option value="vinetas"${b.tipoLista==='vinetas'?' selected':''}>Viñetas</option><option value="ordenada"${b.tipoLista==='ordenada'?' selected':''}>Numerada (1, 2)</option><option value="letras"${b.tipoLista==='letras'?' selected':''}>Letras (a, b)</option><option value="romana"${b.tipoLista==='romana'?' selected':''}>Romana (i, ii)</option></select></label><label>Nivel <select class="block-field" data-field="nivelLista"><option value="0"${Number(b.nivelLista)===0?' selected':''}>Principal</option><option value="1"${Number(b.nivelLista)===1?' selected':''}>Segundo</option><option value="2"${Number(b.nivelLista)===2?' selected':''}>Tercero</option></select></label></div><small>Un elemento por renglón. Se conserva la numeración y el nivel del Word. **texto** = negritas.</small></article>`;
+            if (b.tipo === 'table') { const paleta = MODULOS[$('#modulo').value]; return `<article class="${clase}" data-id="${b.id}">${head}<div class="table-fields"><input class="block-field" data-field="tituloTabla" placeholder="Fila título que abarca todas las columnas (opcional)" value="${esc(b.tituloTabla)}"><input class="block-field" data-field="encabezados" placeholder="Encabezados separados por tabulador o |" value="${esc(b.encabezados)}"><textarea class="block-field" data-field="filas" rows="4" placeholder="Una fila por renglón; celdas separadas por tabulador o |">${esc(b.filas)}</textarea></div><div class="block-controls"><label>Color de encabezado <input type="color" class="block-field" data-field="colorEncabezado" value="${esc(b.colorEncabezado || paleta[1])}" title="Color de fondo de encabezados y fila título"></label>${b.colorEncabezado ? `<button class="btn-secondary btn-chico" data-color-modulo="${b.id}" type="button">Usar color del módulo</button>` : ''}</div><small>Un encabezado vacío se combina con el anterior (colspan). Un renglón con solo "|" crea una fila vacía de plantilla.</small></article>`; }
+            if (b.tipo === 'image') return `<article class="${clase}" data-id="${b.id}">${head}${b.urlLocal ? `<div class="img-word"><img src="${esc(b.urlLocal)}" alt=""><div class="img-word-info"><strong>${esc(b.archivoImagen)}</strong> viene del Word.<span>Descárgala y arrástrala al editor de Moodle: el HTML ya la llama por su nombre (@@PLUGINFILE@@). Si prefieres URL, pégala abajo.</span><a class="btn-secondary btn-chico" href="${esc(b.urlLocal)}" download="${esc(b.archivoImagen)}"><i class="ph ph-download-simple"></i> Descargar imagen</a></div></div>` : ''}<input class="block-field" data-field="href" placeholder="${b.urlLocal ? 'URL en Moodle (opcional: sin URL se usa @@PLUGINFILE@@)' : 'URL de la imagen'}" value="${esc(b.href)}"><input class="block-field" data-field="alt" placeholder="Texto alternativo" value="${esc(b.alt)}"></article>`;
             return `<article class="${clase}" data-id="${b.id}">${head}<input class="block-field" data-field="texto" placeholder="Texto visible del enlace" value="${esc(b.texto)}"><input class="block-field" data-field="href" placeholder="https://..." value="${esc(b.href)}"><small>Se generará con target="_blank".</small></article>`;
         }).join('');
         holder.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => borrar(Number(b.dataset.remove))));
+        holder.querySelectorAll('[data-move]').forEach(btn => btn.addEventListener('click', () => {
+            const [id, delta] = btn.dataset.move.split(':').map(Number);
+            const i = blocks.findIndex(b => b.id === id), j = i + delta;
+            if (i < 0 || j < 0 || j >= blocks.length) return;
+            [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
+            selectedBlockId = id;
+            renderEditor(); actualizar();
+        }));
+        holder.querySelectorAll('[data-color-modulo]').forEach(btn => btn.addEventListener('click', () => {
+            const block = blocks.find(b => b.id === Number(btn.dataset.colorModulo));
+            if (block) { block.colorEncabezado = ''; renderEditor(); actualizar(); }
+        }));
         holder.querySelectorAll('.block').forEach(b => b.addEventListener('click', (e) => {
             if (e.target.closest('input, textarea, select, button')) return;
             seleccionarBloque(Number(b.dataset.id));
@@ -74,6 +93,9 @@
             block[e.target.dataset.field] = e.target.value;
             actualizar();
         }));
+        // Al cerrar el selector de color aparece el botón "Usar color del módulo".
+        // Se re-renderiza en change (no en input) para no robar el foco al teclear.
+        holder.querySelectorAll('[data-field="colorEncabezado"]').forEach(input => input.addEventListener('change', renderEditor));
     }
     function controlAlineacion(b) { return `<div class="block-controls"><label>Alineación <select class="block-field" data-field="alineacion"><option value="izquierda"${b.alineacion==='izquierda'?' selected':''}>Izquierda</option><option value="justificado"${b.alineacion==='justificado'?' selected':''}>Justificada</option><option value="centro"${b.alineacion==='centro'?' selected':''}>Centrada</option><option value="derecha"${b.alineacion==='derecha'?' selected':''}>Derecha</option></select></label></div>`; }
     function icono(t) { return ({section:'ph-text-h-two',text:'ph-text-t',list:'ph-list-bullets',table:'ph-table',image:'ph-image',link:'ph-link'})[t]; }
@@ -83,22 +105,64 @@
     function parrafos(texto, alineacion) {
         const valor = alineacion === 'centro' ? 'center' : (alineacion === 'derecha' ? 'right' : (alineacion === 'justificado' ? 'justify' : 'left'));
         const style = alineacion && alineacion !== 'izquierda' ? ` style="text-align: ${valor};"` : '';
-        return String(texto || '').split(/\n\s*\n/).map(clean).filter(Boolean).map(t => `<p${style}>${esc(t).replace(/\n/g, '<br>')}</p>`).join('');
+        return String(texto || '').split(/\n\s*\n/).map(clean).filter(Boolean).map(t => `<p${style}>${negritas(esc(t)).replace(/\n/g, '<br>')}</p>`).join('');
     }
     function celdas(linea) { return String(linea || '').split(/\t|\|/).map(clean); }
-    function tablaHTML(b, paleta) {
-        const headers = celdas(b.encabezados).filter(Boolean);
-        const rows = String(b.filas || '').split('\n').map(celdas).filter(r => r.some(Boolean));
-        if (!headers.length && !rows.length) return '';
-        const n = Math.max(headers.length, ...rows.map(r => r.length), 1);
-        const h = headers.length ? `<thead><tr>${Array.from({length:n}, (_,i) => `<th style="background-color:${paleta[1]};color:#ffffff;">${esc(headers[i] || '')}</th>`).join('')}</tr></thead>` : '';
-        return `<div style="overflow:auto;"><table border="1" cellspacing="0" cellpadding="5">${h}<tbody>${rows.map(r => `<tr>${Array.from({length:n}, (_,i) => `<td>${esc(r[i] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    // Texto negro o blanco según la luminosidad del fondo: los sombreados del
+    // Word suelen ser claros (#dde6f2, #f7bf77) y el blanco fijo era ilegible.
+    function contrasteTexto(hex) {
+        const h = String(hex || '').replace('#', '');
+        if (h.length < 6) return '#ffffff';
+        const [r, g, b] = [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16));
+        return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#000000' : '#ffffff';
     }
-    function contenidoBloque(b, paleta) {
+    function tablaHTML(b, paleta) {
+        // Se conservan las filas vacías de plantilla ("| | |"): en las
+        // actividades son los renglones que el estudiante debe llenar.
+        const headers = celdas(b.encabezados);
+        while (headers.length && !headers[headers.length - 1]) headers.pop();
+        const rows = String(b.filas || '').split('\n').filter(l => clean(l)).map(celdas);
+        const tituloTabla = clean(b.tituloTabla);
+        if (!headers.some(Boolean) && !rows.length && !tituloTabla) return '';
+        const n = Math.max(headers.length, ...rows.map(r => r.length), 1);
+        const fondo = clean(b.colorEncabezado) || paleta[1];
+        const th = `style="background-color:${fondo};color:${contrasteTexto(fondo)};text-align:center;"`;
+        // Un encabezado vacío se combina con el anterior (colspan), igual que
+        // las celdas combinadas del Word ("Clases (rangos de edad)" sobre dos columnas).
+        const grupos = [];
+        for (let i = 0; i < n; i++) {
+            const t = headers[i] || '';
+            if (!t && grupos.length) grupos[grupos.length - 1].span++;
+            else grupos.push({ t, span: 1 });
+        }
+        const filaTitulo = tituloTabla ? `<tr><th colspan="${n}" scope="colgroup" ${th}>${esc(tituloTabla)}</th></tr>` : '';
+        const filaEncabezados = headers.some(Boolean) ? `<tr>${grupos.map(g => `<th${g.span > 1 ? ` colspan="${g.span}"` : ''} scope="col" ${th}>${esc(g.t) || '&nbsp;'}</th>`).join('')}</tr>` : '';
+        const thead = filaTitulo || filaEncabezados ? `<thead>${filaTitulo}${filaEncabezados}</thead>` : '';
+        const cuerpo = rows.map(r => `<tr>${Array.from({ length: n }, (_, i) => `<td>${esc(r[i] || '') || '&nbsp;'}</td>`).join('')}</tr>`).join('');
+        // Responsive sin depender del CSS del tema 3.11: las tablas anchas van a
+        // 100% con un mínimo por columna, y el contenedor scrollea en pantallas
+        // chicas en vez de aplastar el texto (el width:0px de Word hacía justo eso).
+        // Las angostas quedan centradas a su ancho natural, como en el Word.
+        const ancha = n >= 4;
+        const estiloTabla = ancha
+            ? `border-collapse:collapse;width:100%;min-width:${n * 110}px;`
+            : 'border-collapse:collapse;margin:0 auto;min-width:280px;';
+        return `<div style="overflow-x:auto;"><table border="1" cellspacing="0" cellpadding="8" style="${estiloTabla}">${thead}<tbody>${cuerpo}</tbody></table></div>`;
+    }
+    function contenidoBloque(b, paleta, paraPreview) {
         if (b.tipo === 'text' || b.tipo === 'section') return parrafos(b.texto, b.alineacion);
-        if (b.tipo === 'list') { const tag = b.tipoLista === 'vinetas' ? 'ul' : 'ol'; const estilo = b.tipoLista === 'letras' ? 'lower-alpha' : (b.tipoLista === 'romana' ? 'lower-roman' : 'decimal'); const reglas = [`padding-left: ${38 + Number(b.nivelLista) * 30}px`, `list-style-type: ${estilo}`]; const start = tag === 'ol' && Number(b.inicioLista) > 1 ? ` start="${Number(b.inicioLista)}"` : ''; return `<${tag}${start} style="${reglas.join('; ')};">${String(b.texto || '').split('\n').map(clean).filter(Boolean).map(x => `<li>${esc(x)}</li>`).join('')}</${tag}>`; }
+        if (b.tipo === 'list') { const tag = b.tipoLista === 'vinetas' ? 'ul' : 'ol'; const estilo = b.tipoLista === 'letras' ? 'lower-alpha' : (b.tipoLista === 'romana' ? 'lower-roman' : 'decimal'); const reglas = [`padding-left: ${38 + Number(b.nivelLista) * 30}px`, `list-style-type: ${estilo}`]; const start = tag === 'ol' && Number(b.inicioLista) > 1 ? ` start="${Number(b.inicioLista)}"` : ''; return `<${tag}${start} style="${reglas.join('; ')};">${String(b.texto || '').split('\n').map(clean).filter(Boolean).map(x => `<li>${negritas(esc(x))}</li>`).join('')}</${tag}>`; }
         if (b.tipo === 'table') return tablaHTML(b, paleta);
-        if (b.tipo === 'image') return b.href ? `<p style="text-align:center;"><img src="${esc(b.href)}" alt="${esc(b.alt)}" style="max-width:100%;height:auto;"></p>` : '';
+        if (b.tipo === 'image') {
+            // Sin URL manual, una imagen importada del Word sale como
+            // @@PLUGINFILE@@/nombre: Moodle la resuelve sola cuando el archivo
+            // descargado se arrastra al editor (mismo flujo que Micrositio a Página).
+            // La vista previa usa la imagen local, que @@PLUGINFILE@@ no puede pintar.
+            const src = paraPreview
+                ? (b.urlLocal || clean(b.href))
+                : (clean(b.href) || (b.archivoImagen ? `@@PLUGINFILE@@/${b.archivoImagen}` : ''));
+            return src ? `<p style="text-align:center;"><img src="${esc(src)}" alt="${esc(b.alt)}" style="max-width:100%;height:auto;"></p>` : '';
+        }
         if (b.tipo === 'link') return b.href || b.texto ? `<p><a href="${esc(b.href)}" target="_blank">${esc(b.texto || b.href)}</a></p>` : '';
         return '';
     }
@@ -113,14 +177,14 @@
     function previewHTML() {
         const m = $('#modulo').value, p = MODULOS[m], title = esc(clean($('#titulo').value) || 'Título de la actividad');
         const cuerpo = blocks.map(b => {
-            const content = contenidoBloque(b, p); if (!content && !(b.tipo === 'section' && clean(b.titulo))) return '';
+            const content = contenidoBloque(b, p, true); if (!content && !(b.tipo === 'section' && clean(b.titulo))) return '';
             const head = b.tipo === 'section' && clean(b.titulo) ? `<h2 class="subtema" style="background:${p[1]}">${esc(clean(b.titulo))}</h2>` : '';
             return `${head}<div class="content" style="background:${p[2]}">${content}</div>`;
         }).join('');
         return `<div class="moodle-preview" style="background:${p[0]}"><h1 class="tema" style="background:${p[1]}">${title}</h1>${cuerpo}</div>`;
     }
     function actualizar() {
-        const hay = blocks.some(b => clean(b.texto) || clean(b.titulo) || clean(b.href) || clean(b.encabezados) || clean(b.filas));
+        const hay = blocks.some(b => clean(b.texto) || clean(b.titulo) || clean(b.href) || clean(b.encabezados) || clean(b.filas) || clean(b.tituloTabla) || b.urlLocal);
         $('#code').value = buildHTML();
         $('#preview').innerHTML = previewHTML();
         $('#preview').classList.toggle('hidden', !hay); $('#preview-empty').classList.toggle('hidden', hay);
@@ -138,6 +202,7 @@
         if (!/\.docx$/i.test(file.name)) return infoImport('El archivo debe ser .docx.', false);
         try {
             const fuente = await leerBloquesDeDocx(file);
+            const imagenesWord = await leerImagenesDeDocx(file);
             // El inicio no es una "página" (Word no guarda páginas fiables): es la primera
             // tabla de una celda, que es exactamente la primera barra gris del formato de actividades.
             const inicio = fuente.findIndex(x => x.tipo === 'tabla' && x.celdas === 1 && x.texto);
@@ -149,9 +214,23 @@
                 if (x.tipo === 'tabla' && x.celdas === 1) {
                     if (esTitulo) { $('#titulo').value = x.texto; esTitulo = false; actual = nuevo('text'); nuevos.push(actual); }
                     else { actual = nuevo('section', { titulo:x.texto }); nuevos.push(actual); }
+                } else if (x.tipo === 'tabla' && x.filas && x.filas.length) {
+                    // Tabla real de contenido (caso AI3/PI). Se respeta lo que trae
+                    // el Word: celdas combinadas, color de sombreado y filas vacías
+                    // de plantilla que el estudiante llenará.
+                    nuevos.push(bloqueDesdeTablaWord(x));
+                    actual = null;
+                } else if (x.tipo === 'parrafo' && x.imagenes && x.imagenes.length && !x.texto) {
+                    // Imagen suelta (caso AI4: la tabla pegada como captura). Se
+                    // extrae del Word para verla, descargarla y referenciarla.
+                    x.imagenes.forEach(id => {
+                        const img = imagenesWord.get(id);
+                        if (img) nuevos.push(nuevo('image', { archivoImagen: img.nombre, urlLocal: URL.createObjectURL(img.blob) }));
+                    });
+                    actual = null;
                 } else if (x.tipo === 'parrafo' && x.texto) {
                     // Son marcas visuales del formato Word, no contenido que deba llegar a Moodle.
-                    const marca = clean(x.texto).toLocaleLowerCase('es-MX');
+                    const marca = clean(sinMarcas(x.texto)).toLocaleLowerCase('es-MX');
                     if (marca === '<h2>' || marca === '</h2>' || marca.includes('lista numerada')) return;
                     if (x.lista) {
                         const llave = `${x.idLista}:${x.nivelLista}`;
@@ -172,10 +251,37 @@
                     }
                 }
             });
-            blocks = nuevos.filter(b => clean(b.texto) || clean(b.titulo)); selectedBlockId = null; renderEditor(); actualizar();
+            blocks = nuevos.filter(b => clean(b.texto) || clean(b.titulo) || clean(b.encabezados) || clean(b.filas) || clean(b.tituloTabla) || b.urlLocal);
+            selectedBlockId = null; renderEditor(); actualizar();
             $('#dropzone').classList.add('dropzone--loaded');
-            infoImport(`${file.name}: ${blocks.length} bloque(s) creados. Revisa especialmente tablas, imágenes y enlaces antes de generar.`, true);
+            const tablas = blocks.filter(b => b.tipo === 'table').length;
+            const imagenes = blocks.filter(b => b.tipo === 'image').length;
+            const extras = [tablas ? `${tablas} tabla(s)` : '', imagenes ? `${imagenes} imagen(es): descárgalas y arrástralas al editor de Moodle` : ''].filter(Boolean).join(' · ');
+            infoImport(`${file.name}: ${blocks.length} bloque(s) creados${extras ? ` (${extras})` : ''}. Revisa tablas, imágenes y enlaces antes de generar.`, true);
         } catch (e) { console.error(e); infoImport(`No se pudo importar: ${e.message}`, false); }
+    }
+    /* La tabla del Word llega con celdas combinadas (gridSpan) y sombreados.
+       Aquí se traduce al modelo del bloque Tabla:
+       - cada celda combinada se expande en columnas vacías, que al generar se
+         vuelven de nuevo un colspan;
+       - una primera fila de una sola celda combinada es la fila título
+         (caso "Variable:" del Proyecto Integrador);
+       - el color de sombreado del Word se conserva como color de encabezado. */
+    function bloqueDesdeTablaWord(x) {
+        const filas = x.filas.map(f => f.flatMap(c => [c.texto, ...Array(c.span - 1).fill('')]));
+        const total = Math.max(...filas.map(f => f.length), 1);
+        let tituloTabla = '', resto = filas;
+        if (x.filas.length > 1 && x.filas[0].length === 1 && x.filas[0][0].span >= total) {
+            tituloTabla = filas[0][0];
+            resto = filas.slice(1);
+        }
+        const colorEncabezado = (x.filas.flat().find(c => c.fondo) || {}).fondo || '';
+        return nuevo('table', {
+            tituloTabla,
+            colorEncabezado,
+            encabezados: (resto[0] || []).join(' | '),
+            filas: resto.slice(1).map(f => f.join(' | ')).join('\n')
+        });
     }
     function infoImport(msg, ok) { const el=$('#import-info'); el.textContent=msg; el.classList.remove('hidden'); el.style.color=ok?'var(--success)':'var(--danger)'; }
 
@@ -185,9 +291,9 @@
         blocks.forEach((b, n) => {
             const etiqueta = b.tipo === 'section' ? (clean(b.titulo) || `Sección ${n+1}`) : `${nombre(b.tipo)} ${n+1}`;
             if (b.tipo === 'section' && clean(b.titulo)) textos.push({etiqueta:`Encabezado: ${etiqueta}`,texto:clean(b.titulo),selector:'h2'});
-            if (b.tipo === 'text' || b.tipo === 'section') String(b.texto||'').split(/\n\s*\n/).map(clean).filter(Boolean).forEach(t => textos.push({etiqueta,texto:t,selector:'p'}));
-            if (b.tipo === 'list') String(b.texto||'').split('\n').map(clean).filter(Boolean).forEach(t => textos.push({etiqueta,texto:t,selector:'li'}));
-            if (b.tipo === 'table') { celdas(b.encabezados).filter(Boolean).forEach(t=>textos.push({etiqueta:`Tabla ${n+1}`,texto:t,selector:'th,td'})); String(b.filas||'').split('\n').flatMap(celdas).filter(Boolean).forEach(t=>textos.push({etiqueta:`Tabla ${n+1}`,texto:t,selector:'td,th'})); }
+            if (b.tipo === 'text' || b.tipo === 'section') String(b.texto||'').split(/\n\s*\n/).map(clean).filter(Boolean).forEach(t => textos.push({etiqueta,texto:sinMarcas(t),selector:'p'}));
+            if (b.tipo === 'list') String(b.texto||'').split('\n').map(clean).filter(Boolean).forEach(t => textos.push({etiqueta,texto:sinMarcas(t),selector:'li'}));
+            if (b.tipo === 'table') { if (clean(b.tituloTabla)) textos.push({etiqueta:`Tabla ${n+1}`,texto:clean(b.tituloTabla),selector:'th,td'}); celdas(b.encabezados).filter(Boolean).forEach(t=>textos.push({etiqueta:`Tabla ${n+1}`,texto:t,selector:'th,td'})); String(b.filas||'').split('\n').flatMap(celdas).filter(Boolean).forEach(t=>textos.push({etiqueta:`Tabla ${n+1}`,texto:t,selector:'td,th'})); }
             if (b.tipo === 'link' && (clean(b.texto)||clean(b.href))) links.push({etiqueta, texto:clean(b.texto||b.href), href:clean(b.href)});
         }); return { modulo:$('#modulo').value, textos, links };
     }
