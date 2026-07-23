@@ -105,7 +105,7 @@
     function parrafos(texto, alineacion) {
         const valor = alineacion === 'centro' ? 'center' : (alineacion === 'derecha' ? 'right' : (alineacion === 'justificado' ? 'justify' : 'left'));
         const style = alineacion && alineacion !== 'izquierda' ? ` style="text-align: ${valor};"` : '';
-        return String(texto || '').split(/\n\s*\n/).map(clean).filter(Boolean).map(t => `<p${style}>${negritas(esc(t)).replace(/\n/g, '<br>')}</p>`).join('');
+        return String(texto || '').split(/\n\s*\n/).map(clean).filter(Boolean).map(t => `<p${style}><span style="color: #000000;">${negritas(esc(t)).replace(/\n/g, '<br>')}</span></p>`).join('');
     }
     function celdas(linea) { return String(linea || '').split(/\t|\|/).map(clean); }
     // Texto negro o blanco según la luminosidad del fondo: los sombreados del
@@ -126,7 +126,7 @@
         if (!headers.some(Boolean) && !rows.length && !tituloTabla) return '';
         const n = Math.max(headers.length, ...rows.map(r => r.length), 1);
         const fondo = clean(b.colorEncabezado) || paleta[1];
-        const th = `style="background-color:${fondo};color:${contrasteTexto(fondo)};text-align:center;"`;
+        const th = `style="border:1px solid #000000;padding:8px;background-color:${fondo};color:${contrasteTexto(fondo)};text-align:center;"`;
         // Un encabezado vacío se combina con el anterior (colspan), igual que
         // las celdas combinadas del Word ("Clases (rangos de edad)" sobre dos columnas).
         const grupos = [];
@@ -138,7 +138,7 @@
         const filaTitulo = tituloTabla ? `<tr><th colspan="${n}" scope="colgroup" ${th}>${esc(tituloTabla)}</th></tr>` : '';
         const filaEncabezados = headers.some(Boolean) ? `<tr>${grupos.map(g => `<th${g.span > 1 ? ` colspan="${g.span}"` : ''} scope="col" ${th}>${esc(g.t) || '&nbsp;'}</th>`).join('')}</tr>` : '';
         const thead = filaTitulo || filaEncabezados ? `<thead>${filaTitulo}${filaEncabezados}</thead>` : '';
-        const cuerpo = rows.map(r => `<tr>${Array.from({ length: n }, (_, i) => `<td>${esc(r[i] || '') || '&nbsp;'}</td>`).join('')}</tr>`).join('');
+        const cuerpo = rows.map(r => `<tr>${Array.from({ length: n }, (_, i) => `<td style="border:1px solid #000000;padding:8px;"><span style="color: #000000;">${esc(r[i] || '') || '&nbsp;'}</span></td>`).join('')}</tr>`).join('');
         // Responsive sin depender del CSS del tema 3.11: las tablas anchas van a
         // 100% con un mínimo por columna, y el contenedor scrollea en pantallas
         // chicas en vez de aplastar el texto (el width:0px de Word hacía justo eso).
@@ -151,7 +151,7 @@
     }
     function contenidoBloque(b, paleta, paraPreview) {
         if (b.tipo === 'text' || b.tipo === 'section') return parrafos(b.texto, b.alineacion);
-        if (b.tipo === 'list') { const tag = b.tipoLista === 'vinetas' ? 'ul' : 'ol'; const estilo = b.tipoLista === 'letras' ? 'lower-alpha' : (b.tipoLista === 'romana' ? 'lower-roman' : 'decimal'); const reglas = [`padding-left: ${38 + Number(b.nivelLista) * 30}px`, `list-style-type: ${estilo}`]; const start = tag === 'ol' && Number(b.inicioLista) > 1 ? ` start="${Number(b.inicioLista)}"` : ''; return `<${tag}${start} style="${reglas.join('; ')};">${String(b.texto || '').split('\n').map(clean).filter(Boolean).map(x => `<li>${negritas(esc(x))}</li>`).join('')}</${tag}>`; }
+        if (b.tipo === 'list') { const tag = b.tipoLista === 'vinetas' ? 'ul' : 'ol'; const estilo = b.tipoLista === 'letras' ? 'lower-alpha' : (b.tipoLista === 'romana' ? 'lower-roman' : 'decimal'); const reglas = [`padding-left: ${38 + Number(b.nivelLista) * 30}px`, `list-style-type: ${estilo}`]; const start = tag === 'ol' && Number(b.inicioLista) > 1 ? ` start="${Number(b.inicioLista)}"` : ''; return `<${tag}${start} style="${reglas.join('; ')};">${String(b.texto || '').split('\n').map(clean).filter(Boolean).map(x => `<li><span style="color: #000000;">${negritas(esc(x))}</span></li>`).join('')}</${tag}>`; }
         if (b.tipo === 'table') return tablaHTML(b, paleta);
         if (b.tipo === 'image') {
             // Sin URL manual, una imagen importada del Word sale como
