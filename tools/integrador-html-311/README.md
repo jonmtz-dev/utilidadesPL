@@ -37,11 +37,6 @@ herramienta expone `leerBloquesDeDocx()` en el mismo orden del documento.
 - Una tabla de una celda es título principal o barra de sección.
 - Los párrafos mantienen su texto y alineación: izquierda, justificada,
   centrada o derecha.
-- Las **negritas** del Word se conservan como marcas `**texto**` (los runs
-  contiguos con el mismo formato se fusionan). Al generar se vuelven
-  `<strong>`; también se pueden teclear a mano en cualquier bloque de texto,
-  sección o lista. El QA compara el texto sin las marcas, como lo muestra
-  Moodle.
 - La numeración se consulta en `word/numbering.xml`, no se adivina por el
   texto. Se distingue viñeta, decimal, letras y romanos, además de su nivel.
 - Cada lista conserva `numId`; si una lista decimal vuelve después de una
@@ -49,23 +44,12 @@ herramienta expone `leerBloquesDeDocx()` en el mismo orden del documento.
   para no reiniciar en 1.
 - Las marcas de guía `<h2>` y `<Lista numerada; ...>` se descartan: son
   instrucciones de Word, no contenido publicable.
-- Las **tablas reales de contenido** (más de una celda) se importan como
-  bloques Tabla respetando lo que trae el Word: celdas combinadas
-  (`gridSpan` → colspan), el color de sombreado del encabezado, una primera
-  fila combinada como fila título ("Variable:") y las filas vacías de
-  plantilla que el estudiante llenará.
-- Las **imágenes** (incluidas las tablas pegadas como captura) se extraen del
-  `.docx` y se importan como bloques Imagen: miniatura en el editor, botón de
-  descarga y `@@PLUGINFILE@@/nombre` en el HTML. El flujo es el mismo que en
-  Micrositio a Página: descargar la imagen, arrastrarla al editor de Moodle y
-  pegar el HTML; Moodle la resuelve por nombre. Si se prefiere una URL fija,
-  se pega en el campo y sustituye al `@@PLUGINFILE@@`.
 
-Una tabla pegada como imagen no tiene filas ni texto estructurado, así que NO
-se convierte a tabla HTML: queda como imagen (o se transcribe a mano en un
-bloque Tabla). El OCR experimental se retiró porque el navegador de escritorio
-no garantiza OCR nativo y el proyecto no incorpora dependencias ni servicios
-externos.
+El Word puede contener imágenes o tablas como imagen. Esas imágenes no tienen
+filas, celdas ni texto estructurado, por lo que no se convierten a tabla HTML.
+Se agrega una tabla manual desde el editor y se transcribe/revisa allí. El OCR
+experimental se retiró porque el navegador de escritorio no garantiza OCR
+nativo y el proyecto no incorpora dependencias ni servicios externos.
 
 ## Editor por bloques
 
@@ -74,25 +58,13 @@ Los bloques son la fuente única para HTML, vista previa y QA. Tipos actuales:
 - **Sección:** barra `h2` más área de contenido.
 - **Texto:** párrafos; permite alineación.
 - **Lista:** viñetas, decimal, letras o romanos; mantiene el nivel.
-- **Tabla:** encabezados y filas separadas por tabulador o `|`. Además: fila
-  título opcional (abarca todas las columnas), color de encabezado (por
-  defecto el del módulo; al importar, el del Word) con texto negro o blanco
-  según contraste, un encabezado vacío se combina con el anterior (colspan) y
-  un renglón con solo `|` crea una fila vacía de plantilla. La salida es
-  responsive sin depender del CSS del tema: tablas de 4+ columnas van a
-  `width:100%` con `min-width` por columna dentro de un contenedor con
-  `overflow-x:auto` (en celular scrollean en vez de aplastarse); las angostas
-  quedan centradas a su ancho natural, como en el Word.
-- **Imagen:** URL y texto alternativo. Si viene del Word trae miniatura,
-  descarga y `@@PLUGINFILE@@/nombre` automático.
+- **Tabla:** encabezados y filas separadas por tabulador o `|`.
+- **Imagen:** URL y texto alternativo.
 - **Enlace:** texto y URL, generado con `target="_blank"`.
 
 Para insertar entre secciones, haz clic en el borde o encabezado de un bloque.
 El bloque seleccionado se ilumina en azul y los botones de la barra insertan el
-nuevo bloque **después** de él. Sin selección, insertan al final. Además, cada
-bloque tiene botones ▲ ▼ para subirlo o bajarlo un lugar (p. ej. para sustituir
-una tabla-imagen: selecciona el bloque Imagen, inserta la Tabla, acomódala y
-borra la imagen).
+nuevo bloque **después** de él. Sin selección, insertan al final.
 
 ### Ampliar edición
 
@@ -164,10 +136,3 @@ los textos y enlaces de ese estado exacto.
 6. Generar HTML y comprobar sus clases `prepa-M{n}`.
 7. Ejecutar QA en la actividad correcta y en una distinta: la segunda debe
    marcarse como `PÁGINA DISTINTA` y no aprobar coincidencias parciales.
-8. Importar un Word con tabla real (AI3/PI de M17): debe crear bloques Tabla
-   con el color del Word, el colspan del encabezado combinado y las filas
-   vacías de plantilla; angostar la ventana debe scrollear la tabla ancha, no
-   aplastarla.
-9. Importar un Word con tabla pegada como imagen (AI4 de M17): debe crear un
-   bloque Imagen con miniatura y descarga, y el HTML debe referenciarla como
-   `@@PLUGINFILE@@/nombre`.

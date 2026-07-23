@@ -22,8 +22,6 @@
    ========================================================================== */
 
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
-const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
 /** Lee el directorio central del ZIP y devuelve Map<nombre, Uint8Array>. */
 async function leerZip(buffer) {
@@ -145,33 +143,6 @@ async function leerTablasDeDocx(file) {
 }
 
 /**
- * Texto de un párrafo conservando las negritas como marcas `**texto**`.
- * Word parte un mismo texto en varios runs (por el corrector, por ediciones);
- * aquí se fusionan los runs contiguos con el mismo formato para no generar
- * `**guárdalo** **en tu equipo**`. Los espacios de orilla quedan FUERA de las
- * marcas: un `** texto**` no se reconocería al convertirlo a <strong>.
- */
-function textoDeParrafoConNegritas(p) {
-    const segmentos = [];
-    for (const r of [...p.getElementsByTagNameNS(W_NS, 'r')]) {
-        const texto = [...r.getElementsByTagNameNS(W_NS, 't')].map(t => t.textContent || '').join('');
-        if (!texto) continue;
-        const rPr = r.getElementsByTagNameNS(W_NS, 'rPr')[0];
-        const b = rPr && rPr.getElementsByTagNameNS(W_NS, 'b')[0];
-        const val = b && (b.getAttributeNS(W_NS, 'val') || 'true');
-        const negrita = Boolean(b) && val !== 'false' && val !== '0' && val !== 'none';
-        const previo = segmentos[segmentos.length - 1];
-        if (previo && previo.negrita === negrita) previo.texto += texto;
-        else segmentos.push({ texto, negrita });
-    }
-    return segmentos.map(s => {
-        if (!s.negrita || !s.texto.trim()) return s.texto;
-        const m = s.texto.match(/^(\s*)([\s\S]*?)(\s*)$/);
-        return `${m[1]}**${m[2]}**${m[3]}`;
-    }).join('');
-}
-
-/**
  * Lee el cuerpo de un Word en el orden en que aparece. Sirve para documentos
  * de actividades: las barras grises son tablas de una celda y el texto que
  * sigue pertenece a esa sección. No intenta reproducir el diseño de Word;
@@ -185,7 +156,8 @@ async function leerBloquesDeDocx(file) {
 
     return hijos.map(n => {
         if (n.localName === 'p') {
-            const texto = textoDeParrafoConNegritas(n)
+            const texto = [...n.getElementsByTagNameNS(W_NS, 't')]
+                .map(t => t.textContent || '').join('')
                 .replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').trim();
             const numPr = n.getElementsByTagNameNS(W_NS, 'numPr')[0];
             const ilvl = numPr && numPr.getElementsByTagNameNS(W_NS, 'ilvl')[0];
@@ -193,15 +165,9 @@ async function leerBloquesDeDocx(file) {
             const jc = n.getElementsByTagNameNS(W_NS, 'jc')[0];
             const idLista = numId && numId.getAttributeNS(W_NS, 'val');
             const nivel = Number(ilvl && ilvl.getAttributeNS(W_NS, 'val') || 0);
-            // Las imágenes van como <a:blip r:embed="rIdN"> dentro del párrafo.
-            // Se entrega el id para que la herramienta las resuelva con
-            // leerImagenesDeDocx (aquí no se cargan bytes: no siempre se usan).
-            const imagenes = [...n.getElementsByTagNameNS(A_NS, 'blip')]
-                .map(b => b.getAttributeNS(REL_NS, 'embed')).filter(Boolean);
             return {
                 tipo: 'parrafo',
                 texto,
-                imagenes,
                 lista: Boolean(numPr),
                 idLista,
                 tipoLista: formatosLista[`${idLista}:${nivel}`] || 'ordenada',
@@ -212,9 +178,9 @@ async function leerBloquesDeDocx(file) {
             };
         }
         if (n.localName === 'tbl') {
-            const filasXml = [...n.getElementsByTagNameNS(W_NS, 'tr')]
+            const filas = [...n.getElementsByTagNameNS(W_NS, 'tr')]
                 .filter(tr => tr.closest ? tr.closest('*|tbl') === n : true);
-            const celdas = filasXml.flatMap(tr => [...tr.getElementsByTagNameNS(W_NS, 'tc')]
+            const celdas = filas.flatMap(tr => [...tr.getElementsByTagNameNS(W_NS, 'tc')]
                 .filter(tc => tc.closest ? tc.closest('*|tbl') === n : true));
             const texto = celdas.map(textoDeCelda).filter(Boolean).join(' ').replace(/[ \t]+/g, ' ').trim();
             const sombreado = celdas.some(tc => {
@@ -222,56 +188,10 @@ async function leerBloquesDeDocx(file) {
                 const fill = shd && (shd.getAttributeNS(W_NS, 'fill') || '').toLowerCase();
                 return fill && fill !== 'auto' && fill !== 'ffffff';
             });
-            // Estructura real de la tabla, para que una herramienta pueda
-            // reconstruirla: texto por celda, columnas que abarca (gridSpan)
-            // y color de sombreado. Las de una celda siguen siendo "barras".
-            const filas = filasXml.map(tr => [...tr.getElementsByTagNameNS(W_NS, 'tc')]
-                .filter(tc => (tc.closest ? tc.closest('*|tbl') === n : true))
-                .map(tc => {
-                    const tcPr = tc.getElementsByTagNameNS(W_NS, 'tcPr')[0];
-                    const span = tcPr && tcPr.getElementsByTagNameNS(W_NS, 'gridSpan')[0];
-                    const shd = tcPr && tcPr.getElementsByTagNameNS(W_NS, 'shd')[0];
-                    const fill = shd && (shd.getAttributeNS(W_NS, 'fill') || '').toLowerCase();
-                    return {
-                        texto: textoDeCelda(tc).replace(/ /g, ' ').replace(/\s+/g, ' ').trim(),
-                        span: Number((span && span.getAttributeNS(W_NS, 'val')) || 1),
-                        fondo: fill && fill !== 'auto' && fill !== 'ffffff' ? '#' + fill : ''
-                    };
-                }));
-            return { tipo: 'tabla', texto, celdas: celdas.length, sombreado, filas };
+            return { tipo: 'tabla', texto, celdas: celdas.length, sombreado };
         }
         return { tipo: 'otro', texto: '' };
-    }).filter(b => b.texto || (b.imagenes && b.imagenes.length));
-}
-
-/**
- * Extrae las imágenes del .docx: Map<rId, { nombre, blob }>.
- * Los rId son los mismos que entrega leerBloquesDeDocx en `imagenes`, así la
- * herramienta puede mostrar la imagen real (URL.createObjectURL) y ofrecerla
- * para descargar. Las tablas "pegadas como imagen" en el Word viven aquí.
- */
-async function leerImagenesDeDocx(file) {
-    const archivos = await leerZip(await file.arrayBuffer());
-    const rels = archivos.get('word/_rels/document.xml.rels');
-    if (!rels) return new Map();
-    const doc = new DOMParser().parseFromString(new TextDecoder('utf-8').decode(await inflar(rels)), 'application/xml');
-    const MIMES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', svg: 'image/svg+xml', bmp: 'image/bmp', webp: 'image/webp' };
-    const mapa = new Map();
-    for (const rel of [...doc.getElementsByTagName('Relationship')]) {
-        const destino = rel.getAttribute('Target') || '';
-        if (!destino.includes('media/')) continue;
-        // El Target es relativo a word/ ("media/image1.png"), pero por si
-        // viniera absoluto se intentan las dos rutas.
-        const entrada = archivos.get('word/' + destino.replace(/^\.?\//, '')) || archivos.get(destino.replace(/^\//, ''));
-        if (!entrada) continue;
-        const nombre = destino.split('/').pop();
-        const ext = (nombre.split('.').pop() || '').toLowerCase();
-        mapa.set(rel.getAttribute('Id'), {
-            nombre,
-            blob: new Blob([await inflar(entrada)], { type: MIMES[ext] || 'application/octet-stream' })
-        });
-    }
-    return mapa;
+    }).filter(b => b.texto);
 }
 
 /** Obtiene el formato real de cada numeración de Word. `numPr` solo dice que

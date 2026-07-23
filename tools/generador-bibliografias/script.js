@@ -97,32 +97,9 @@ function initBiblio() {
         if (e.dataTransfer.files[0]) cargarDocx(e.dataTransfer.files[0]);
     });
 
-    /* ----------------------------------------------- Selector de módulo --- */
-    // La paleta viene de assets/modulos-311.js (fuente única compartida con el
-    // Integrador HTML): [fondo de página, barra de título, fondo de contenido].
-    const paleta = document.getElementById('paleta');
-
-    Object.keys(MODULOS_311).forEach(n => numModulo.insertAdjacentHTML('beforeend',
-        `<option value="${n}"${n === '3' ? ' selected' : ''}>Módulo ${n}</option>`));
-
-    function actualizarPaleta() {
-        paleta.innerHTML = MODULOS_311[numModulo.value].map(c => `<i style="background:${c}"></i>`).join('');
-    }
-    actualizarPaleta();
-
-    numModulo.addEventListener('change', () => {
+    numModulo.addEventListener('input', () => {
         moduloEcho.textContent = numModulo.value || '0';
-        actualizarPaleta();
-        // Si ya se generó, el cambio de módulo refresca la clase del código y
-        // los colores de la vista previa sin obligar a otro clic en Generar.
-        if (outputCode.value.trim()) renderSalida();
     });
-
-    // Los toggles también refrescan en vivo: quitar la sangría (o el nolink, o
-    // el corte de URLs) se ve al instante en la vista previa y en el código.
-    [optSangria, optNolink, optBreak].forEach(toggle => toggle.addEventListener('change', () => {
-        if (outputCode.value.trim()) renderSalida();
-    }));
 
     // El estilo del <p> depende de los toggles: sin sangría no tiene sentido
     // arrastrar el text-indent negativo ni el padding que lo compensa.
@@ -149,7 +126,7 @@ function initBiblio() {
         });
     }
 
-    function renderSalida() {
+    function generar() {
         const modulo = numModulo.value || '0';
         const style = buildStyle();
         const styleAttr = style ? ` style="${style}"` : '';
@@ -159,26 +136,15 @@ function initBiblio() {
             .filter(linea => linea.trim() !== '')
             .map(linea => `<p class="prepa-M${modulo}-textosParrafo"${styleAttr}>${linkify(linea)}</p>`);
 
-        if (parrafos.length === 0) return false;
+        if (parrafos.length === 0) return;
 
         outputCode.value = parrafos.join('\n');
 
-        // La vista previa reproduce dónde viven estos párrafos en Moodle: el
-        // fondo del módulo, la barra de título y el área de contenido, con los
-        // colores reales del módulo elegido. Colores fijos (isla clara), no tokens.
-        const p = MODULOS_311[modulo] || MODULOS_311['3'];
         previewEmpty.classList.add('hidden');
         previewContainer.classList.remove('hidden');
-        previewContainer.innerHTML =
-            `<div class="moodle-preview" style="background:${p[0]}">` +
-            `<h1 class="tema" style="background:${p[1]}">Fuentes de consulta</h1>` +
-            `<div class="content" style="background:${p[2]}">${parrafos.join('\n')}</div>` +
-            `</div>`;
-        return true;
-    }
+        previewContainer.innerHTML = parrafos.join('\n');
 
-    function generar() {
-        if (renderSalida()) activateTab('code');
+        activateTab('code');
     }
 
     btnGenerate.addEventListener('click', generar);
@@ -264,18 +230,10 @@ function initBiblio() {
         var sinEnlace = urlsPag.filter(function (u) {
             return !anclas.some(function (h) { return h && (h === u || h.indexOf(u) === 0 || u.indexOf(h) === 0); });
         });
-        // El generador entrega <span class="nolink"><a>…</a></span>, pero el
-        // editor de Moodle puede INVERTIR la estructura al guardar y dejar
-        // <a …><span class="nolink">url</span></a> (comprobado en M18). Ambas
-        // formas bloquean el reproductor, así que el span cuenta como ancestro,
-        // como hijo del enlace o como clase del propio <a>.
         var ytSinNolink = [].slice.call(m.nodo.querySelectorAll('a')).filter(function (a) {
             var h = a.getAttribute('href') || '';
             var esYT = h.indexOf('youtube.com') !== -1 || h.indexOf('youtu.be') !== -1;
-            if (!esYT) return false;
-            var protegido = a.closest('.nolink') || a.querySelector('.nolink') ||
-                (' ' + a.className + ' ').indexOf(' nolink ') !== -1;
-            return !protegido;
+            return esYT && !a.closest('.nolink');
         }).map(function (a) { return a.getAttribute('href'); });
 
         // En bibliografías los enlaces DEBEN abrir en pestaña nueva: es la regla

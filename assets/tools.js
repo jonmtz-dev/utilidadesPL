@@ -12,11 +12,18 @@
            de la herramienta. No la repitas en el HTML o se desincronizan.
    ========================================================================== */
 
-// Agrupadas por versión de Moodle a propósito: primero las de 3.11 y al final
-// las de 5.1, para que en el panel se vean juntas las de cada plataforma.
-// El launcher pinta en este mismo orden.
 const TOOLS = [
-    /* ---------- Moodle 3.11 ---------- */
+    {
+        slug: 'convertidor-tablas',
+        moodle: '5.1',
+        title: 'Convertidor de Tablas',
+        description: 'Convierte tablas de Word o HTML crudo al formato responsivo de tarjetas (data-label) para Moodle.',
+        icon: 'table',
+        accent: ['#0066cc', '#00c6ff'],
+        tags: ['Tablas', 'Responsive', 'HTML'],
+        url: 'tools/convertidor-tablas/index.html',
+        status: 'ready'
+    },
     {
         slug: 'generador-bibliografias',
         moodle: '3.11',
@@ -26,6 +33,17 @@ const TOOLS = [
         accent: ['#8C6793', '#D98522'],
         tags: ['Bibliografía', 'Enlaces', 'HTML'],
         url: 'tools/generador-bibliografias/index.html',
+        status: 'ready'
+    },
+    {
+        slug: 'micrositio-a-pagina',
+        moodle: '5.1',
+        title: 'Micrositio a Página',
+        description: 'Convierte un micrositio .zip en un recurso Página: reescribe las imágenes a @@PLUGINFILE@@ y avisa qué se rompe.',
+        icon: 'package',
+        accent: ['#7048e8', '#22b8cf'],
+        tags: ['Micrositios', 'Imágenes', 'ZIP'],
+        url: 'tools/micrositio-a-pagina/index.html',
         status: 'ready'
     },
     {
@@ -48,29 +66,6 @@ const TOOLS = [
         accent: ['#934C98', '#F05825'],
         tags: ['Actividades', 'Word', 'HTML', 'QA'],
         url: 'tools/integrador-html-311/index.html',
-        status: 'ready'
-    },
-    /* ---------- Moodle 5.1 ---------- */
-    {
-        slug: 'convertidor-tablas',
-        moodle: '5.1',
-        title: 'Convertidor de Tablas',
-        description: 'Convierte tablas de Word o HTML crudo al formato responsivo de tarjetas (data-label) para Moodle.',
-        icon: 'table',
-        accent: ['#0066cc', '#00c6ff'],
-        tags: ['Tablas', 'Responsive', 'HTML'],
-        url: 'tools/convertidor-tablas/index.html',
-        status: 'ready'
-    },
-    {
-        slug: 'micrositio-a-pagina',
-        moodle: '5.1',
-        title: 'Micrositio a Página',
-        description: 'Convierte un micrositio .zip en un recurso Página: reescribe las imágenes a @@PLUGINFILE@@ y avisa qué se rompe.',
-        icon: 'package',
-        accent: ['#7048e8', '#22b8cf'],
-        tags: ['Micrositios', 'Imágenes', 'ZIP'],
-        url: 'tools/micrositio-a-pagina/index.html',
         status: 'ready'
     },
     {

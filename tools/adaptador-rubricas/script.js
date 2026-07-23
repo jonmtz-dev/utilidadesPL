@@ -184,7 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let matriz = null;       // resultado del análisis
     // Los dos encendidos por defecto:
     //  · anteponerNivel: en las rúbricas reales el primer criterio lleva el
-    //    nombre del nivel ("EXPERTO - Utiliza hojas de cálculo…").
+    //    nombre del nivel ("EXPERTO\n\nUtiliza hojas de cálculo…").
     //  · borrarSobrantes: se probó contra un Moodle REAL y borra bien. Si algún
     //    día no pudiera, no rompe nada: aborta, marca en rojo y lo dice.
     let anteponerNivel = true;
@@ -379,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="checkbox" id="opt-anteponer-nivel" ${anteponerNivel ? 'checked' : ''}>
                 <span class="slider"></span>
                 <span class="label-text">Anteponer el nombre del nivel al texto
-                    <small>(solo en el primer criterio: <code>EXPERTO - Interpreta…</code>, como en tus rúbricas)</small></span>
+                    <small>(solo en el primer criterio: "EXPERTO", "CAPACITADO"… como en tus rúbricas)</small></span>
             </label>
             <label class="toggle-switch mb-3">
                 <input type="checkbox" id="opt-borrar-sobrantes" ${borrarSobrantes ? 'checked' : ''}>
@@ -487,13 +487,9 @@ document.addEventListener('DOMContentLoaded', () => {
      *
      * El nombre del nivel (EXPERTO, CAPACITADO…) se antepone SOLO en el primer
      * criterio: así están las rúbricas reales en Moodle —Cognitivo lleva
-     * "EXPERTO - Utiliza…" y Actitudinal, Comunicativo y Pensamiento crítico
+     * "EXPERTO\n\nUtiliza…" y Actitudinal, Comunicativo y Pensamiento crítico
      * van sin nombre— porque en el Word esos nombres viven en el encabezado de
      * la tabla y solo hacen falta una vez, como referencia de la columna.
-     *
-     * El separador es " - " en la misma línea (no un salto doble): el editor de
-     * rúbricas de Moodle muestra la celda como un bloque corrido, así el nombre
-     * del nivel se lee como etiqueta del texto y no como un párrafo suelto.
      */
     function construirDATA() {
         const incluidos = matriz.criterios.filter(c => c.incluir);
@@ -508,9 +504,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return incluidos.map((crit, ci) => ({
             nombre: crit.nombre,
             niveles: crit.celdas.map((cel, li) => ({
-                // Sin texto no se deja un guion colgando: queda solo el nombre.
                 texto: (anteponerNivel && ci === 0 && matriz.niveles[li])
-                    ? (cel.texto ? `${matriz.niveles[li]} - ${cel.texto}` : matriz.niveles[li])
+                    ? `${matriz.niveles[li]}\n\n${cel.texto}`
                     : cel.texto,
                 puntos: cel.puntos   // string, tal cual venía del Word
             }))
@@ -909,76 +904,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return s.length > n ? s.slice(0, n) + '…' : s;
     }
 
-    /* ------------------------------------------- diferencias resaltadas ---
-     * Dos muros de texto casi idénticos no dicen DÓNDE está el problema: hay
-     * que compararlos palabra por palabra a ojo. Se hace un diff por palabras
-     * (LCS) y solo lo que cambia va resaltado en amarillo.
-     *
-     * Y los espacios se dibujan con símbolos: una diferencia de espaciado es,
-     * por definición, invisible —resaltar un espacio en amarillo no se vería—.
-     * Es justo el caso de "Solo espacios", que sin esto no hay forma de leer. */
-    function trozos(s) { return String(s == null ? '' : s).match(/\\s+|[^\\s]+/g) || []; }
-
-    function juntar(lista, texto, dif) {
-        var ultimo = lista[lista.length - 1];
-        if (ultimo && ultimo.dif === dif) ultimo.t += texto;
-        else lista.push({ t: texto, dif: dif });
-    }
-
-    function diffPartes(a, b) {
-        var A = trozos(a), B = trozos(b), n = A.length, m = B.length, i, j;
-        var dp = [];
-        for (i = 0; i <= n; i++) { dp.push([]); for (j = 0; j <= m; j++) dp[i][j] = 0; }
-        for (i = n - 1; i >= 0; i--) {
-            for (j = m - 1; j >= 0; j--) {
-                dp[i][j] = (A[i] === B[j]) ? dp[i + 1][j + 1] + 1
-                    : (dp[i + 1][j] >= dp[i][j + 1] ? dp[i + 1][j] : dp[i][j + 1]);
-            }
-        }
-        var ra = [], rb = [];
-        i = 0; j = 0;
-        while (i < n && j < m) {
-            if (A[i] === B[j]) { juntar(ra, A[i], false); juntar(rb, B[j], false); i++; j++; }
-            else if (dp[i + 1][j] >= dp[i][j + 1]) { juntar(ra, A[i], true); i++; }
-            else { juntar(rb, B[j], true); j++; }
-        }
-        while (i < n) { juntar(ra, A[i], true); i++; }
-        while (j < m) { juntar(rb, B[j], true); j++; }
-        return { a: ra, b: rb };
-    }
-
-    function visible(s) {
-        return String(s).replace(/\\u00a0/g, '␣').replace(/\\n/g, '⏎')
-            .replace(/\\t/g, '⇥').replace(/ /g, '·');
-    }
-
-    function pintarDiff(partes) {
-        var salida = '', k, p, t;
-        for (k = 0; k < partes.length; k++) {
-            p = partes[k]; t = p.t;
-            if (p.dif) {
-                salida += '<mark style="background:#ffe082;color:#000;border-radius:3px;padding:0 2px">' +
-                    esc(visible(t)) + '</mark>';
-                continue;
-            }
-            // Los tramos IGUALES largos se recortan: lo que importa es el cambio,
-            // no repetir el párrafo entero dos veces en el panel. Se conserva el
-            // texto pegado a la diferencia, que es el que se compara a ojo.
-            if (t.length > 90) {
-                var primero = (k === 0), ultimo = (k === partes.length - 1);
-                // Un lado puede no tener diferencias propias (cuando el otro
-                // AÑADE algo): ahí el tramo es primero y último a la vez, y
-                // recortar solo por el final escondía el inicio de la celda.
-                if (primero && ultimo) t = t.slice(0, 45) + ' […] ' + t.slice(-45);
-                else if (primero) t = '…' + t.slice(-45);
-                else if (ultimo) t = t.slice(0, 45) + '…';
-                else t = t.slice(0, 35) + ' […] ' + t.slice(-35);
-            }
-            salida += esc(t);
-        }
-        return salida;
-    }
-
     var panel = document.createElement('div');
     panel.id = 'qa-rubricas-panel';
     panel.style.cssText = 'position:fixed;top:12px;right:12px;width:430px;max-height:88vh;overflow:auto;' +
@@ -1020,22 +945,12 @@ document.addEventListener('DOMContentLoaded', () => {
         problemas.forEach(function (p) {
             var c = p.leve ? '#ef6c00' : '#c62828';
             html += '<div style="border-left:3px solid ' + c + ';padding:6px 9px;margin:7px 0;background:#fafafa;border-radius:5px">' +
-                '<div style="font-weight:700;color:' + c + '">' + esc(p.criterio) + ' · nivel ' + p.nivel + ' · ' + esc(p.tipo) + '</div>';
-            if (p.tipo === 'FALTA EL NIVEL') {
-                html += '<div style="margin-top:3px"><span style="color:#666">Word:</span> ' + esc(recorta(p.esperado, 160)) + '</div>' +
-                    '<div><span style="color:#666">Moodle:</span> (no existe)</div>';
-            } else {
-                var d = diffPartes(p.esperado, p.encontrado);
-                html += '<div style="margin-top:3px"><span style="color:#666">Word:</span> ' + pintarDiff(d.a) + '</div>' +
-                    '<div><span style="color:#666">Moodle:</span> ' + pintarDiff(d.b) + '</div>';
-            }
-            html += '</div>';
+                '<div style="font-weight:700;color:' + c + '">' + esc(p.criterio) + ' · nivel ' + p.nivel + ' · ' + esc(p.tipo) + '</div>' +
+                '<div style="margin-top:3px"><span style="color:#666">Word:</span> ' + esc(recorta(p.esperado, 160)) + '</div>' +
+                '<div><span style="color:#666">Moodle:</span> ' + esc(recorta(p.encontrado, 160)) + '</div></div>';
         });
         html += '<div style="margin-top:10px;color:#666">Las celdas con diferencia quedaron recuadradas en la página ' +
-            '(rojo = error, naranja = solo espacios). En el detalle, lo ' +
-            '<mark style="background:#ffe082;color:#000;border-radius:3px;padding:0 2px">resaltado</mark> ' +
-            'es justo lo que cambia. Espacios: <code>·</code> normal · <code>␣</code> duro (nbsp) · ' +
-            '<code>⏎</code> salto de línea · <code>⇥</code> tabulador.</div>';
+            '(rojo = error, naranja = solo espacios).</div>';
     }
 
     panel.innerHTML = html;

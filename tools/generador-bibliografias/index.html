@@ -69,10 +69,9 @@
                     <h3><i class="ph ph-sliders"></i> Opciones de Formato</h3>
 
                     <div class="field-row">
-                        <label for="num-modulo"><i class="ph ph-palette"></i> Módulo</label>
-                        <select id="num-modulo"></select>
-                        <span id="paleta" class="paleta" title="Colores del módulo"></span>
-                        <span class="field-hint">Genera la clase <code>prepa-M<span id="modulo-echo">3</span>-textosParrafo</code> y pinta la vista previa con los colores del módulo</span>
+                        <label for="num-modulo"><i class="ph ph-hash"></i> Módulo</label>
+                        <input type="number" id="num-modulo" value="3" min="0" max="25">
+                        <span class="field-hint">Genera la clase <code>prepa-M<span id="modulo-echo">3</span>-textosParrafo</code></span>
                     </div>
 
                     <label class="toggle-switch">
@@ -160,7 +159,6 @@
     </div>
 
     <script src="../../assets/docx.js"></script>
-    <script src="../../assets/modulos-311.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

@@ -720,34 +720,3 @@ body {
     .app-header h1 { font-size: 22px; }
     .btn-back { margin-left: 0; }
 }
-
-/* --------------------------------------------------------------------------
-   Selector de módulo con muestra de paleta (Integrador HTML y Generador de
-   Bibliografías). Vive aquí porque lo usan dos herramientas: la regla del
-   proyecto es no duplicar componentes por herramienta. */
-.field-row select {
-    background: var(--input-bg);
-    color: var(--text-main);
-    border: 1px solid var(--control-border);
-    border-radius: 9px;
-    padding: 8px;
-    font: inherit;
-    color-scheme: light;
-}
-.field-row select option { background: #ffffff; color: #1d1d1f; }
-:root[data-theme="dark"] .field-row select {
-    color-scheme: dark;
-    background: #2a2d38;
-    color: #f5f5f7;
-    border-color: #5a6070;
-}
-:root[data-theme="dark"] .field-row select option { background: #2a2d38; color: #f5f5f7; }
-.paleta {
-    display: inline-flex;
-    width: 52px;
-    height: 20px;
-    overflow: hidden;
-    border-radius: 6px;
-    border: 1px solid var(--control-border);
-}
-.paleta i { flex: 1; }
