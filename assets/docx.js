@@ -114,6 +114,54 @@ async function leerParrafosDeDocx(file) {
 }
 
 /**
+ * Comentarios de revisión del Word (word/comments.xml). En las actividades se
+ * usan como indicaciones de montaje ("Vincular el PDF descargable ...") ancladas
+ * a una palabra del texto ("rúbrica"): NO es un enlace real, es una nota. No es
+ * contenido publicable, pero el montaje no debe olvidarlo. Se entrega el texto
+ * de la nota junto con la palabra que señala.
+ *   [{ autor, texto, ancla }]
+ */
+async function leerComentariosDeDocx(file) {
+    const archivos = await leerZip(await file.arrayBuffer());
+    const entradaComentarios = archivos.get('word/comments.xml');
+    if (!entradaComentarios) return [];
+    const parsear = async (entrada) => new DOMParser().parseFromString(
+        new TextDecoder('utf-8').decode(await inflar(entrada)), 'application/xml');
+
+    const docComentarios = await parsear(entradaComentarios);
+    const porId = new Map();
+    for (const c of [...docComentarios.getElementsByTagNameNS(W_NS, 'comment')]) {
+        const texto = [...c.getElementsByTagNameNS(W_NS, 't')].map(t => t.textContent || '')
+            .join('').replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+        porId.set(c.getAttributeNS(W_NS, 'id'), { autor: (c.getAttributeNS(W_NS, 'author') || '').trim(), texto });
+    }
+
+    // El texto señalado va entre <w:commentRangeStart> y <w:commentRangeEnd> con
+    // el mismo id; se recorre el documento en orden acumulando el <w:t> que quede
+    // dentro de cada rango abierto.
+    const entradaDoc = archivos.get('word/document.xml');
+    const anclas = new Map();
+    if (entradaDoc) {
+        const doc = await parsear(entradaDoc);
+        const abiertos = new Set();
+        const recorrer = (nodo) => {
+            for (const n of [...nodo.childNodes]) {
+                if (n.nodeType !== 1 || n.namespaceURI !== W_NS) { if (n.nodeType === 1) recorrer(n); continue; }
+                if (n.localName === 'commentRangeStart') abiertos.add(n.getAttributeNS(W_NS, 'id'));
+                else if (n.localName === 'commentRangeEnd') abiertos.delete(n.getAttributeNS(W_NS, 'id'));
+                else if (n.localName === 't' && abiertos.size) { const t = n.textContent || ''; abiertos.forEach(id => anclas.set(id, (anclas.get(id) || '') + t)); }
+                else recorrer(n);
+            }
+        };
+        recorrer(doc.getElementsByTagNameNS(W_NS, 'body')[0] || doc.documentElement);
+    }
+
+    return [...porId.entries()]
+        .filter(([, c]) => c.texto)
+        .map(([id, c]) => ({ ...c, ancla: (anclas.get(id) || '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim() }));
+}
+
+/**
  * Extrae las tablas del .docx como una estructura neutral:
  *   [{ filas: [{ celdas: [{ texto, vMergeInicio, vMergeSigue }] }] }]
  * La misma forma que produce el lector de HTML pegado, para que el análisis
@@ -191,6 +239,11 @@ async function leerBloquesDeDocx(file) {
             const ilvl = numPr && numPr.getElementsByTagNameNS(W_NS, 'ilvl')[0];
             const numId = numPr && numPr.getElementsByTagNameNS(W_NS, 'numId')[0];
             const jc = n.getElementsByTagNameNS(W_NS, 'jc')[0];
+            // Sangría izquierda del Word (w:ind), en twips. Sirve para el texto de
+            // cuerpo que va indentado bajo un punto de lista ("1. ..." y debajo un
+            // párrafo alineado con su texto). Se entrega crudo; la herramienta decide.
+            const ind = n.getElementsByTagNameNS(W_NS, 'ind')[0];
+            const sangria = ind ? Math.max(0, Number(ind.getAttributeNS(W_NS, 'left') || ind.getAttributeNS(W_NS, 'start') || 0)) : 0;
             const idLista = numId && numId.getAttributeNS(W_NS, 'val');
             const nivel = Number(ilvl && ilvl.getAttributeNS(W_NS, 'val') || 0);
             // Las imágenes van como <a:blip r:embed="rIdN"> dentro del párrafo.
@@ -202,6 +255,7 @@ async function leerBloquesDeDocx(file) {
                 tipo: 'parrafo',
                 texto,
                 imagenes,
+                sangria,
                 lista: Boolean(numPr),
                 idLista,
                 tipoLista: formatosLista[`${idLista}:${nivel}`] || 'ordenada',

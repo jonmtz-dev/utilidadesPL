@@ -9,6 +9,7 @@
     let blocks = [];
     let serial = 0;
     let selectedBlockId = null;
+    let comentariosMontaje = [];
     const $ = (s) => document.querySelector(s);
     const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const clean = (s) => String(s || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
@@ -28,8 +29,9 @@
         modulo.addEventListener('change', () => { actualizarPaleta(); renderEditor(); actualizar(); });
         $('#titulo').addEventListener('input', actualizar);
         document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => agregar(b.dataset.add)));
-        $('#btn-generate').addEventListener('click', () => { actualizar(); activarTab('code'); });
+        $('#btn-generate').addEventListener('click', () => { actualizar(); activarTab('code'); avisoEnlaces(); });
         $('#btn-generate-qa').addEventListener('click', generarQA);
+        configurarModalEnlaces();
         $('#btn-copy').addEventListener('click', copiarHTML);
         document.querySelectorAll('.tab-btn').forEach(t => t.addEventListener('click', () => activarTab(t.dataset.target)));
         configurarImportador();
@@ -38,11 +40,40 @@
         agregar('text');
     }
 
+    // Al generar, recuerda que los enlaces a documentos y las imágenes no viajan
+    // solos: el usuario debe volver a enlazarlos/subirlos dentro de Moodle. Solo
+    // aparece si la actividad realmente lleva bloques de enlace o imagen.
+    const CLAVE_AVISO_ENLACES = 'integrador-aviso-enlaces';
+    function avisoEnlaces() {
+        const hayBloques = blocks.some(b => b.tipo === 'image' || b.tipo === 'link');
+        // Indicaciones de montaje que venían como comentarios en el Word.
+        $('#modal-enlaces-lista').innerHTML = comentariosMontaje.map(c =>
+            `<li>${c.ancla ? `<strong>«${esc(c.ancla)}»</strong>: ` : ''}${esc(c.texto)}</li>`).join('');
+        $('#modal-enlaces-montaje').classList.toggle('hidden', !comentariosMontaje.length);
+        // El "no volver a mostrar" solo silencia el recordatorio genérico; las
+        // indicaciones concretas del Word se muestran siempre (y ocultan el check).
+        $('#modal-enlaces-nomas').closest('label').classList.toggle('hidden', comentariosMontaje.length > 0);
+        if (!comentariosMontaje.length) {
+            if (localStorage.getItem(CLAVE_AVISO_ENLACES) === 'no') return;
+            if (!hayBloques) return;
+        }
+        $('#modal-enlaces').classList.remove('hidden');
+    }
+    function configurarModalEnlaces() {
+        const modal = $('#modal-enlaces');
+        const cerrar = () => {
+            if ($('#modal-enlaces-nomas').checked) localStorage.setItem(CLAVE_AVISO_ENLACES, 'no');
+            modal.classList.add('hidden');
+        };
+        $('#modal-enlaces-ok').addEventListener('click', cerrar);
+        modal.addEventListener('click', e => { if (e.target === modal) cerrar(); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.classList.contains('hidden')) cerrar(); });
+    }
     function actualizarPaleta() {
         const c = MODULOS[$('#modulo').value];
         $('#paleta').innerHTML = c.map(x => `<i style="background:${x}"></i>`).join('');
     }
-    function nuevo(tipo, datos) { return Object.assign({ id: ++serial, tipo, titulo: '', texto: '', href: '', alt: '', encabezados: '', filas: '', tituloTabla: '', colorEncabezado: '', archivoImagen: '', urlLocal: '', alineacion: 'izquierda', tipoLista: 'vinetas', nivelLista: 0, inicioLista: 1 }, datos || {}); }
+    function nuevo(tipo, datos) { return Object.assign({ id: ++serial, tipo, titulo: '', texto: '', href: '', alt: '', encabezados: '', filas: '', tituloTabla: '', colorEncabezado: '', archivoImagen: '', urlLocal: '', alineacion: 'izquierda', sangria: 0, tipoLista: 'vinetas', nivelLista: 0, inicioLista: 1 }, datos || {}); }
     function agregar(tipo, datos) {
         const bloque = nuevo(tipo, datos);
         const posicion = selectedBlockId == null ? -1 : blocks.findIndex(b => b.id === selectedBlockId);
@@ -97,14 +128,20 @@
         // Se re-renderiza en change (no en input) para no robar el foco al teclear.
         holder.querySelectorAll('[data-field="colorEncabezado"]').forEach(input => input.addEventListener('change', renderEditor));
     }
-    function controlAlineacion(b) { return `<div class="block-controls"><label>Alineación <select class="block-field" data-field="alineacion"><option value="izquierda"${b.alineacion==='izquierda'?' selected':''}>Izquierda</option><option value="justificado"${b.alineacion==='justificado'?' selected':''}>Justificada</option><option value="centro"${b.alineacion==='centro'?' selected':''}>Centrada</option><option value="derecha"${b.alineacion==='derecha'?' selected':''}>Derecha</option></select></label></div>`; }
+    function controlAlineacion(b) { const s = Number(b.sangria) || 0; return `<div class="block-controls"><label>Alineación <select class="block-field" data-field="alineacion"><option value="izquierda"${b.alineacion==='izquierda'?' selected':''}>Izquierda</option><option value="justificado"${b.alineacion==='justificado'?' selected':''}>Justificada</option><option value="centro"${b.alineacion==='centro'?' selected':''}>Centrada</option><option value="derecha"${b.alineacion==='derecha'?' selected':''}>Derecha</option></select></label><label>Sangría izq. <select class="block-field" data-field="sangria"><option value="0"${s===0?' selected':''}>Ninguna</option><option value="1"${s===1?' selected':''}>1 nivel</option><option value="2"${s===2?' selected':''}>2 niveles</option><option value="3"${s===3?' selected':''}>3 niveles</option></select></label></div>`; }
     function icono(t) { return ({section:'ph-text-h-two',text:'ph-text-t',list:'ph-list-bullets',table:'ph-table',image:'ph-image',link:'ph-link'})[t]; }
     function nombre(t) { return ({section:'Sección',text:'Texto',list:'Lista',table:'Tabla',image:'Imagen',link:'Enlace'})[t]; }
     function activarTab(target) { document.querySelectorAll('.tab-btn').forEach(x => x.classList.toggle('active', x.dataset.target === target)); document.querySelectorAll('.tab-content').forEach(x => x.classList.toggle('active', x.id === `${target}-content`)); }
 
-    function parrafos(texto, alineacion) {
+    function parrafos(texto, alineacion, sangria) {
         const valor = alineacion === 'centro' ? 'center' : (alineacion === 'derecha' ? 'right' : (alineacion === 'justificado' ? 'justify' : 'left'));
-        const style = alineacion && alineacion !== 'izquierda' ? ` style="text-align: ${valor};"` : '';
+        const reglas = [];
+        if (alineacion && alineacion !== 'izquierda') reglas.push(`text-align: ${valor}`);
+        // Cada nivel de sangría ≈ 38px, el mismo sangrado principal de las listas,
+        // para que el párrafo quede alineado bajo el texto del punto de lista.
+        const px = (Number(sangria) || 0) * 38;
+        if (px) reglas.push(`margin-left: ${px}px`);
+        const style = reglas.length ? ` style="${reglas.join('; ')};"` : '';
         return String(texto || '').split(/\n\s*\n/).map(clean).filter(Boolean).map(t => `<p${style}><span style="color: #000000;">${negritas(esc(t)).replace(/\n/g, '<br>')}</span></p>`).join('');
     }
     function celdas(linea) { return String(linea || '').split(/\t|\|/).map(clean); }
@@ -150,7 +187,7 @@
         return `<div style="overflow-x:auto;"><table border="1" cellspacing="0" cellpadding="8" style="${estiloTabla}">${thead}<tbody>${cuerpo}</tbody></table></div>`;
     }
     function contenidoBloque(b, paleta, paraPreview) {
-        if (b.tipo === 'text' || b.tipo === 'section') return parrafos(b.texto, b.alineacion);
+        if (b.tipo === 'text' || b.tipo === 'section') return parrafos(b.texto, b.alineacion, b.sangria);
         if (b.tipo === 'list') { const tag = b.tipoLista === 'vinetas' ? 'ul' : 'ol'; const estilo = b.tipoLista === 'letras' ? 'lower-alpha' : (b.tipoLista === 'romana' ? 'lower-roman' : 'decimal'); const reglas = [`padding-left: ${38 + Number(b.nivelLista) * 30}px`, `list-style-type: ${estilo}`]; const start = tag === 'ol' && Number(b.inicioLista) > 1 ? ` start="${Number(b.inicioLista)}"` : ''; return `<${tag}${start} style="${reglas.join('; ')};">${String(b.texto || '').split('\n').map(clean).filter(Boolean).map(x => `<li><span style="color: #000000;">${negritas(esc(x))}</span></li>`).join('')}</${tag}>`; }
         if (b.tipo === 'table') return tablaHTML(b, paleta);
         if (b.tipo === 'image') {
@@ -203,6 +240,9 @@
         try {
             const fuente = await leerBloquesDeDocx(file);
             const imagenesWord = await leerImagenesDeDocx(file);
+            // Las notas de revisión del Word son indicaciones de montaje (dónde
+            // vincular un PDF o imagen): no son enlaces reales, se recuerdan al generar.
+            comentariosMontaje = await leerComentariosDeDocx(file);
             // El inicio no es una "página" (Word no guarda páginas fiables): es la primera
             // tabla de una celda, que es exactamente la primera barra gris del formato de actividades.
             const inicio = fuente.findIndex(x => x.tipo === 'tabla' && x.celdas === 1 && x.texto);
@@ -245,8 +285,12 @@
                         actual = null;
                     }
                     else {
-                        if (!actual || (actual.texto && actual.alineacion !== x.alineacion)) { actual = nuevo('text', { alineacion:x.alineacion }); nuevos.push(actual); }
-                        if (!actual.texto) actual.alineacion = x.alineacion;
+                        // Los twips del Word (567 ≈ 1 cm) se redondean a un nivel de
+                        // sangría 0-3; así el párrafo de cuerpo conserva la indentación
+                        // con que se alinea bajo un punto de lista.
+                        const sangria = Math.min(3, Math.round((Number(x.sangria) || 0) / 567));
+                        if (!actual || (actual.texto && (actual.alineacion !== x.alineacion || Number(actual.sangria) !== sangria))) { actual = nuevo('text', { alineacion:x.alineacion, sangria }); nuevos.push(actual); }
+                        if (!actual.texto) { actual.alineacion = x.alineacion; actual.sangria = sangria; }
                         actual.texto += (actual.texto ? '\n\n' : '') + x.texto;
                     }
                 }

@@ -54,6 +54,19 @@
             </section>
         </div>
     </main>
+    <div id="modal-enlaces" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-enlaces-titulo">
+        <div class="modal-caja glass-panel">
+            <div class="modal-icono"><i class="ph ph-paperclip"></i></div>
+            <h2 id="modal-enlaces-titulo">Antes de pegar en Moodle</h2>
+            <p>No olvides que si tu HTML lleva <strong>documentos enlazados o imágenes</strong>, tendrás que enlazarlos en Moodle directamente: sube el archivo o la imagen desde el editor de Moodle y apunta ahí el enlace.</p>
+            <div id="modal-enlaces-montaje" class="modal-montaje hidden">
+                <p class="modal-montaje-titulo">Indicaciones del Word por atender:</p>
+                <ul id="modal-enlaces-lista"></ul>
+            </div>
+            <label class="modal-check"><input type="checkbox" id="modal-enlaces-nomas"> No volver a mostrar</label>
+            <div class="modal-acciones"><button id="modal-enlaces-ok" class="btn-primary" type="button"><i class="ph ph-check"></i> Entendido</button></div>
+        </div>
+    </div>
     <script src="../../assets/docx.js"></script>
     <script src="../../assets/modulos-311.js"></script>
     <script src="script.js"></script>
