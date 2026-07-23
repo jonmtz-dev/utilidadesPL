@@ -141,6 +141,13 @@ Tres detalles que **no son adorno**, cada uno resuelve un problema real:
 El botón "Ver ejemplo del maquetado" abre un modal con la estructura completa
 del recurso y resaltados de color, y refleja los toggles activos.
 
+El módulo se elige con un selector con paleta (la misma
+`assets/modulos-311.js` que usa el Integrador HTML — fuente única, no se
+duplica), y la vista previa reproduce el maquetado real de Moodle 3.11: fondo
+del módulo, barra de título y área de contenido con los colores del módulo
+elegido. Cambiar el módulo con la salida ya generada refresca la clase
+`prepa-M{n}` y los colores sin volver a pulsar Generar.
+
 ### Micrositio a Página (`tools/micrositio-a-pagina/`)
 
 Otro equipo maquetó contenido como **micrositios** (un `.zip` con `index.html`,

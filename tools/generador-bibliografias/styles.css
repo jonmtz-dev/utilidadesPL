@@ -56,25 +56,9 @@
     font-weight: 600;
 }
 
-.field-row input[type="number"] {
-    width: 72px;
-    padding: 8px 10px;
-    text-align: center;
-    font-family: inherit;
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--text-main);
-    background: var(--surface-translucent);
-    border: 1px solid var(--control-border);
-    border-radius: 10px;
-    transition: all 0.2s ease;
-}
-
-.field-row input[type="number"]:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.12);
-}
+/* El campo numérico de módulo se volvió <select> con paleta; sus estilos
+   (.field-row select y .paleta) viven en shared.css, compartidos con el
+   Integrador HTML. */
 
 .field-hint {
     font-size: 13px;
@@ -111,6 +95,30 @@
 .preview-container a {
     color: #0066cc; /* Fijo: la isla de vista previa siempre es clara */
 }
+
+/* Reproduce el maquetado del recurso en Moodle 3.11: fondo del módulo, barra
+   de título y área de contenido, con los colores reales del módulo elegido
+   (van inline desde el script). Colores fijos: la isla no sigue el tema. */
+.moodle-preview {
+    font-family: Raleway, Arial, sans-serif;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.moodle-preview .tema {
+    color: #fff;
+    text-align: center;
+    padding: 14px;
+    margin: 0;
+    text-shadow: 0 4px 4px rgba(0, 0, 0, .3);
+    font-size: 1.4em;
+}
+.moodle-preview .content {
+    padding: 16px 18px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #000;
+}
+.moodle-preview .content p { margin: 0 0 14px; }
 
 /* Modal */
 .modal {
