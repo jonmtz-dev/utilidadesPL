@@ -78,7 +78,12 @@ Los bloques son la fuente única para HTML, vista previa y QA. Tipos actuales:
   título opcional (abarca todas las columnas), color de encabezado (por
   defecto el del módulo; al importar, el del Word) con texto negro o blanco
   según contraste, un encabezado vacío se combina con el anterior (colspan) y
-  un renglón con solo `|` crea una fila vacía de plantilla. La salida es
+  un renglón con solo `|` crea una fila vacía de plantilla. Los **colores del
+  cuerpo** se conservan **por columna** (el sombreado más frecuente de cada
+  columna del Word; así una tabla con la 1ª columna resaltada y el resto en
+  otro tono se respeta), con texto por contraste y un toggle *Colores de fila
+  del Word* para apagarlos. Como es por columna, sobrevive a agregar o quitar
+  renglones. La salida es
   responsive sin depender del CSS del tema: tablas de 4+ columnas van a
   `width:100%` con `min-width` por columna dentro de un contenedor con
   `overflow-x:auto` (en celular scrollean en vez de aplastarse); las angostas
@@ -137,6 +142,14 @@ Si el título sí coincide, el QA revisa:
 - título, encabezados, párrafos, elementos de lista y celdas esperadas;
 - enlaces: texto, URL, archivo final de Moodle y `target="_blank"`;
 - texto adicional publicado en Moodle que no viene del documento.
+
+**Identidad de la actividad.** Además del título morado del contenido, el QA lee
+el nombre que Moodle le pone al recurso (el `data-activityname`, el h2 tras
+`#maincontent`, el encabezado de página o el enlace del breadcrumb a
+`mod/*/view.php`) —que vive FUERA del `prepa-body`— y lo compara con el título
+esperado. Si el contenido es correcto pero está pegado en OTRA actividad, el
+estado sale **¿ACTIVIDAD EQUIVOCADA?** con los dos nombres. Tolera que Moodle
+recorte el subtítulo: basta que un nombre contenga al otro.
 
 Los elementos repetidos por Moodle (`li` con un `p` interno, o un párrafo
 partido en nodos) no se consideran texto extra: el QA compara también las

@@ -299,6 +299,28 @@ async function leerBloquesDeDocx(file) {
 }
 
 /**
+ * Texto de los encabezados del .docx (word/headerN.xml), unido por saltos.
+ * En las rúbricas el título de la actividad ("Rúbrica de la actividad
+ * integradora 5") vive AHÍ, no en el cuerpo, así que es la vía más fiel para
+ * saber a qué actividad pertenece.
+ */
+async function leerEncabezadosDeDocx(file) {
+    const archivos = await leerZip(await file.arrayBuffer());
+    const partes = [];
+    for (const [nombre, entrada] of archivos) {
+        if (!/^word\/header\d+\.xml$/.test(nombre)) continue;
+        const xml = new TextDecoder('utf-8').decode(await inflar(entrada));
+        const doc = new DOMParser().parseFromString(xml, 'application/xml');
+        [...doc.getElementsByTagNameNS(W_NS, 'p')].forEach(p => {
+            const t = [...p.getElementsByTagNameNS(W_NS, 't')].map(x => x.textContent || '').join('')
+                .replace(/ /g, ' ').replace(/[ \t]+/g, ' ').trim();
+            if (t) partes.push(t);
+        });
+    }
+    return partes.join('\n');
+}
+
+/**
  * Extrae las imágenes del .docx: Map<rId, { nombre, blob }>.
  * Los rId son los mismos que entrega leerBloquesDeDocx en `imagenes`, así la
  * herramienta puede mostrar la imagen real (URL.createObjectURL) y ofrecerla

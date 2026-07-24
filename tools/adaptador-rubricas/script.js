@@ -42,6 +42,28 @@ function normalizarNombre(s) {
         .trim();
 }
 
+/**
+ * Deriva la actividad de la rúbrica a partir de un texto. Se usa con DOS
+ * fuentes, en orden de fiabilidad: el encabezado del Word ("Rúbrica de la
+ * actividad integradora 5", que es prosa) y, si ahí no aparece, el nombre del
+ * archivo ("M11_S3_AI5_Rubrica" → AI5). El Word de rúbrica no la nombra en el
+ * cuerpo; el título vive en el encabezado.
+ */
+function detectarActividad(texto) {
+    const s = texto || '';
+    let m;
+    // Prosa (encabezado)
+    if ((m = s.match(/actividad\s+integradora\s*(\d+)/i))) return 'Actividad integradora ' + m[1];
+    if ((m = s.match(/actividad\s+formativa\s*(\d+)/i))) return 'Actividad formativa ' + m[1];
+    if (/proyecto\s+integrador/i.test(s)) return 'Proyecto integrador';
+    // Códigos del nombre de archivo
+    const u = s.toUpperCase();
+    if ((m = u.match(/(?:^|[^A-Z])AI[ _-]?(\d+)/))) return 'Actividad integradora ' + m[1];
+    if ((m = u.match(/(?:^|[^A-Z])AF[ _-]?(\d+)/))) return 'Actividad formativa ' + m[1];
+    if (/(?:^|[^A-Z])PI(?:[^A-Z]|$)/.test(u)) return 'Proyecto integrador';
+    return '';
+}
+
 /** Una celda es "de puntos" si SOLO contiene algo como "40 puntos" / "-6.25 puntos". */
 const RE_SOLO_PUNTOS = /^\s*([+-]?\d+(?:[.,]\d+)?)\s*puntos?\.?\s*$/i;
 
@@ -182,6 +204,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let estructura = null;   // estructura neutral de la tabla elegida
     let matriz = null;       // resultado del análisis
+    // Actividad a la que pertenece la rúbrica. Se deriva del nombre del archivo
+    // (el Word de rúbrica NO la nombra por dentro) y viaja al script/QA como red
+    // de seguridad contra llenar la rúbrica de otra actividad.
+    let actividadRubrica = '';
     // Los dos encendidos por defecto:
     //  · anteponerNivel: en las rúbricas reales el primer criterio lleva el
     //    nombre del nivel ("EXPERTO - Utiliza hojas de cálculo…").
@@ -233,6 +259,13 @@ document.addEventListener('DOMContentLoaded', () => {
             docxInfo.innerHTML = `<i class="ph ph-check-circle"></i> <strong>${escapar(file.name)}</strong> —
                 ${tablas.length} tabla(s) en el documento, se usó la de ${tabla.filas.length} filas.`;
             docxInfo.classList.remove('hidden');
+            // La actividad se toma del encabezado del Word (donde vive el título
+            // "Rúbrica de la actividad integradora 5"); si no, del nombre del
+            // archivo. Se propone y queda editable.
+            let encabezado = '';
+            try { encabezado = await leerEncabezadosDeDocx(file); } catch (e) { /* opcional */ }
+            const sugerida = detectarActividad(encabezado) || detectarActividad(file.name);
+            if (sugerida) { actividadRubrica = sugerida; const inp = document.getElementById('actividad-rubrica'); if (inp) inp.value = sugerida; }
             usarEstructura(tabla);
         } catch (e) {
             console.error('[rubricas] docx:', e);
@@ -256,6 +289,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     /* ------------------------------------------------ Entrada B: pegado --- */
+
+    const inputActividad = document.getElementById('actividad-rubrica');
+    if (inputActividad) inputActividad.addEventListener('input', () => { actividadRubrica = inputActividad.value.trim(); });
 
     pasteArea.addEventListener('input', () => {
         btnAnalizar.disabled = pasteArea.innerHTML.trim() === '';
@@ -550,10 +586,41 @@ document.addEventListener('DOMContentLoaded', () => {
 (function() {
     var DATA = ${JSON.stringify(DATA)};
     var BORRAR_SOBRANTES = ${borrarSobrantes ? 'true' : 'false'};
+    var ACTIVIDAD = ${JSON.stringify(actividadRubrica || '')};
 
     function normalizar(s) {
         return (s || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
             .replace(/\\s+/g, ' ').trim();
+    }
+    // Nombre de la actividad donde está el usuario (rúbrica = subpágina de una
+    // actividad): breadcrumb con enlace a mod/*/view.php, o el encabezado.
+    function actividadEnMoodle() {
+        // El nombre de la actividad es el TEXTO del enlace a mod/*/view.php dentro
+        // del breadcrumb (el atributo title="Tarea" es solo el tipo). Nunca se usa
+        // el encabezado ni document.title: en "Definir rúbrica" dirían "Definir
+        // rúbrica", no la actividad. Sin dato fiable devuelve '' (no se afirma nada).
+        var bcs = [].slice.call(document.querySelectorAll('.breadcrumb, ol.breadcrumb, [aria-label="breadcrumb"]'));
+        for (var i = 0; i < bcs.length; i++) {
+            var a = [].slice.call(bcs[i].querySelectorAll('a')).filter(function (x) {
+                return /\\/mod\\/[a-z]+\\/view\\.php/.test(x.getAttribute('href') || '') && (x.textContent || '').trim();
+            });
+            if (a.length) return (a[a.length - 1].textContent || '').replace(/\\s+/g, ' ').trim();
+        }
+        var any = [].slice.call(document.querySelectorAll('a')).filter(function (x) {
+            return /\\/mod\\/[a-z]+\\/view\\.php/.test(x.getAttribute('href') || '') && (x.textContent || '').trim();
+        });
+        return any.length ? (any[0].textContent || '').replace(/\\s+/g, ' ').trim() : '';
+    }
+    // Clave canónica (ai3, pi, af2) para comparar sin depender del subtítulo.
+    function claveAct(s) {
+        s = (s || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
+        if (/proyecto\\s+integrador/.test(s)) return 'pi';
+        var m = s.match(/actividad\\s+integradora\\s*(\\d+)/); if (m) return 'ai' + m[1];
+        m = s.match(/actividad\\s+formativa\\s*(\\d+)/); if (m) return 'af' + m[1];
+        m = s.match(/\\bai[ _-]?(\\d+)/); if (m) return 'ai' + m[1];
+        m = s.match(/\\baf[ _-]?(\\d+)/); if (m) return 'af' + m[1];
+        if (/\\bpi\\b/.test(s)) return 'pi';
+        return '';
     }
 
     function fijarValor(el, valor) {
@@ -653,6 +720,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (pendientes.length) msg += '\\n\\nPendientes:\\n- ' + pendientes.join('\\n- ');
     msg += '\\n\\nContinuar? Nada se guarda todavía.';
+
+    // Red de seguridad: si el nombre de la rúbrica no cuadra con la actividad
+    // donde estás, se avisa ANTES de escribir nada.
+    if (ACTIVIDAD) {
+        var actM = actividadEnMoodle();
+        var kRubrica = claveAct(ACTIVIDAD), kMoodle = claveAct(actM);
+        if (actM && kRubrica && kMoodle && kRubrica !== kMoodle) {
+            msg = '\\u26A0 CUIDADO: esta rúbrica es de "' + ACTIVIDAD + '", pero estás en la actividad ' +
+                '"' + actM + '".\\nVerifica que sea la rúbrica correcta antes de continuar.\\n\\n' + msg;
+        } else if (actM) {
+            msg = 'Rúbrica (Word): ' + ACTIVIDAD + '\\nActividad (Moodle): ' + actM + '\\n\\n' + msg;
+        }
+    }
 
     if (!confirm(msg)) return;
 
@@ -796,6 +876,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return `
 (function() {
     var DATA = ${JSON.stringify(DATA)};
+    var ACTIVIDAD = ${JSON.stringify(actividadRubrica || '')};
 
     function normalizar(s) {
         return (s || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
@@ -805,6 +886,34 @@ document.addEventListener('DOMContentLoaded', () => {
     // Word mete a menudo, pero respeta mayúsculas y acentos.
     function limpiar(s) {
         return (s || '').replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim();
+    }
+    // Actividad donde estás (misma lógica que el script de llenado).
+    function actividadEnMoodle() {
+        // El nombre de la actividad es el TEXTO del enlace a mod/*/view.php dentro
+        // del breadcrumb (el atributo title="Tarea" es solo el tipo). Nunca se usa
+        // el encabezado ni document.title: en "Definir rúbrica" dirían "Definir
+        // rúbrica", no la actividad. Sin dato fiable devuelve '' (no se afirma nada).
+        var bcs = [].slice.call(document.querySelectorAll('.breadcrumb, ol.breadcrumb, [aria-label="breadcrumb"]'));
+        for (var i = 0; i < bcs.length; i++) {
+            var a = [].slice.call(bcs[i].querySelectorAll('a')).filter(function (x) {
+                return /\\/mod\\/[a-z]+\\/view\\.php/.test(x.getAttribute('href') || '') && (x.textContent || '').trim();
+            });
+            if (a.length) return (a[a.length - 1].textContent || '').replace(/\\s+/g, ' ').trim();
+        }
+        var any = [].slice.call(document.querySelectorAll('a')).filter(function (x) {
+            return /\\/mod\\/[a-z]+\\/view\\.php/.test(x.getAttribute('href') || '') && (x.textContent || '').trim();
+        });
+        return any.length ? (any[0].textContent || '').replace(/\\s+/g, ' ').trim() : '';
+    }
+    function claveAct(s) {
+        s = (s || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
+        if (/proyecto\\s+integrador/.test(s)) return 'pi';
+        var m = s.match(/actividad\\s+integradora\\s*(\\d+)/); if (m) return 'ai' + m[1];
+        m = s.match(/actividad\\s+formativa\\s*(\\d+)/); if (m) return 'af' + m[1];
+        m = s.match(/\\bai[ _-]?(\\d+)/); if (m) return 'ai' + m[1];
+        m = s.match(/\\baf[ _-]?(\\d+)/); if (m) return 'af' + m[1];
+        if (/\\bpi\\b/.test(s)) return 'pi';
+        return '';
     }
 
     var filas = [].slice.call(document.querySelectorAll('tr.criterion')).filter(function (tr) {
@@ -994,6 +1103,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     html += '<div style="background:' + colorEstado + ';color:#fff;padding:8px 10px;border-radius:7px;font-weight:700;margin-bottom:10px">' +
         estado + '</div>';
+
+    // Identidad: ¿la rúbrica del Word corresponde a la actividad de esta página?
+    if (ACTIVIDAD) {
+        var actM = actividadEnMoodle();
+        var kRubrica = claveAct(ACTIVIDAD), kMoodle = claveAct(actM);
+        if (actM && kRubrica && kMoodle && kRubrica !== kMoodle) {
+            html += '<div style="background:#fdecea;border-left:3px solid #c62828;padding:8px 10px;border-radius:5px;margin-bottom:10px">' +
+                '<strong>\\u26A0 ¿Rúbrica equivocada?</strong><br>Rúbrica (Word): ' + esc(ACTIVIDAD) +
+                '<br>Actividad (Moodle): ' + esc(actM) + '</div>';
+        } else if (actM) {
+            html += '<div style="background:#e8f5e9;border-left:3px solid #2e7d32;padding:8px 10px;border-radius:5px;margin-bottom:10px">' +
+                '<strong>Actividad correcta ✓</strong><br>Rúbrica (Word): ' + esc(ACTIVIDAD) +
+                '<br>Actividad (Moodle): ' + esc(actM) + '</div>';
+        }
+    }
 
     html += '<div style="margin-bottom:10px">' +
         revisadas + ' celdas revisadas · <span style="color:#2e7d32">' + exactas + ' idénticas</span>' +
