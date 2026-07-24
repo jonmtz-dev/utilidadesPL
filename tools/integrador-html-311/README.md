@@ -78,12 +78,7 @@ Los bloques son la fuente única para HTML, vista previa y QA. Tipos actuales:
   título opcional (abarca todas las columnas), color de encabezado (por
   defecto el del módulo; al importar, el del Word) con texto negro o blanco
   según contraste, un encabezado vacío se combina con el anterior (colspan) y
-  un renglón con solo `|` crea una fila vacía de plantilla. Los **colores del
-  cuerpo** se conservan **por columna** (el sombreado más frecuente de cada
-  columna del Word; así una tabla con la 1ª columna resaltada y el resto en
-  otro tono se respeta), con texto por contraste y un toggle *Colores de fila
-  del Word* para apagarlos. Como es por columna, sobrevive a agregar o quitar
-  renglones. La salida es
+  un renglón con solo `|` crea una fila vacía de plantilla. La salida es
   responsive sin depender del CSS del tema: tablas de 4+ columnas van a
   `width:100%` con `min-width` por columna dentro de un contenedor con
   `overflow-x:auto` (en celular scrollean en vez de aplastarse); las angostas
@@ -130,26 +125,22 @@ queden pegados al borde si Moodle restablece estilos por tema.
 El botón **Generar verificador (QA)** produce código de solo lectura. No
 agrega, elimina ni guarda contenido en Moodle.
 
-El QA usa el título como señal fuerte, pero Moodle puede cambiar o eliminar la
-etiqueta `h1` al guardar. Por eso compara primero una **huella completa** del
-contenido con normalización de espacios, tildes y puntuación. Solo informa
-**PÁGINA DISTINTA** si el título no se reconoce **y** menos del 55% de los
-textos esperados coinciden. Así evita aprobar otra actividad con frases
-parecidas sin rechazar una actividad correcta por un cambio de etiqueta.
+El QA compara el texto visible completo. Tolera que Moodle cambie la etiqueta
+HTML, los espacios, los saltos de línea o las entidades, pero no acepta
+fragmentos, palabras borradas ni cambios de puntuación. También revisa el
+título visible de la actividad fuera del bloque HTML (primero
+`[data-region="activity-information"][data-activityname]`), porque ese nombre
+puede quedar truncado aunque el encabezado interno siga completo. Las
+diferencias se muestran con resaltado amarillo en el reporte y el nodo
+correspondiente de Moodle queda marcado con un contorno amarillo. Solo informa
+**PÁGINA DISTINTA** si el título interno no se reconoce **y** menos del 55% de
+los textos esperados coinciden.
 
 Si el título sí coincide, el QA revisa:
 
 - título, encabezados, párrafos, elementos de lista y celdas esperadas;
 - enlaces: texto, URL, archivo final de Moodle y `target="_blank"`;
 - texto adicional publicado en Moodle que no viene del documento.
-
-**Identidad de la actividad.** Además del título morado del contenido, el QA lee
-el nombre que Moodle le pone al recurso (el `data-activityname`, el h2 tras
-`#maincontent`, el encabezado de página o el enlace del breadcrumb a
-`mod/*/view.php`) —que vive FUERA del `prepa-body`— y lo compara con el título
-esperado. Si el contenido es correcto pero está pegado en OTRA actividad, el
-estado sale **¿ACTIVIDAD EQUIVOCADA?** con los dos nombres. Tolera que Moodle
-recorte el subtítulo: basta que un nombre contenga al otro.
 
 Los elementos repetidos por Moodle (`li` con un `p` interno, o un párrafo
 partido en nodos) no se consideran texto extra: el QA compara también las
@@ -177,10 +168,12 @@ los textos y enlaces de ese estado exacto.
 6. Generar HTML y comprobar sus clases `prepa-M{n}`.
 7. Ejecutar QA en la actividad correcta y en una distinta: la segunda debe
    marcarse como `PÁGINA DISTINTA` y no aprobar coincidencias parciales.
-8. Importar un Word con tabla real (AI3/PI de M17): debe crear bloques Tabla
+8. Borrar una palabra o un signo del título visible de Moodle y de un párrafo:
+   debe mostrar `ERRORES` y el texto esperado como faltante o distinto.
+9. Importar un Word con tabla real (AI3/PI de M17): debe crear bloques Tabla
    con el color del Word, el colspan del encabezado combinado y las filas
    vacías de plantilla; angostar la ventana debe scrollear la tabla ancha, no
    aplastarla.
-9. Importar un Word con tabla pegada como imagen (AI4 de M17): debe crear un
+10. Importar un Word con tabla pegada como imagen (AI4 de M17): debe crear un
    bloque Imagen con miniatura y descarga, y el HTML debe referenciarla como
    `@@PLUGINFILE@@/nombre`.

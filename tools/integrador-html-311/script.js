@@ -73,7 +73,7 @@
         const c = MODULOS[$('#modulo').value];
         $('#paleta').innerHTML = c.map(x => `<i style="background:${x}"></i>`).join('');
     }
-    function nuevo(tipo, datos) { return Object.assign({ id: ++serial, tipo, titulo: '', texto: '', href: '', alt: '', encabezados: '', filas: '', tituloTabla: '', colorEncabezado: '', coloresColumnas: [], mostrarColoresCuerpo: true, archivoImagen: '', urlLocal: '', alineacion: 'izquierda', sangria: 0, tipoLista: 'vinetas', nivelLista: 0, inicioLista: 1 }, datos || {}); }
+    function nuevo(tipo, datos) { return Object.assign({ id: ++serial, tipo, titulo: '', texto: '', href: '', alt: '', encabezados: '', filas: '', tituloTabla: '', colorEncabezado: '', archivoImagen: '', urlLocal: '', alineacion: 'izquierda', sangria: 0, tipoLista: 'vinetas', nivelLista: 0, inicioLista: 1 }, datos || {}); }
     function agregar(tipo, datos) {
         const bloque = nuevo(tipo, datos);
         const posicion = selectedBlockId == null ? -1 : blocks.findIndex(b => b.id === selectedBlockId);
@@ -98,7 +98,7 @@
             if (b.tipo === 'section') return `<article class="${clase}" data-id="${b.id}">${head}<input class="block-field block-title" data-field="titulo" placeholder="Título de sección (ej. Propósito)" value="${esc(b.titulo)}"><textarea class="block-field" data-field="texto" rows="4" placeholder="Contenido de la sección. Un renglón en blanco crea otro párrafo. **texto** = negritas.">${esc(b.texto)}</textarea>${controlAlineacion(b)}</article>`;
             if (b.tipo === 'text') return `<article class="${clase}" data-id="${b.id}">${head}<textarea class="block-field" data-field="texto" rows="5" placeholder="Pega o escribe el texto introductorio... **texto** = negritas.">${esc(b.texto)}</textarea>${controlAlineacion(b)}</article>`;
             if (b.tipo === 'list') return `<article class="${clase}" data-id="${b.id}">${head}<textarea class="block-field" data-field="texto" rows="5" placeholder="Un elemento por renglón">${esc(b.texto)}</textarea><div class="block-controls"><label>Tipo <select class="block-field" data-field="tipoLista"><option value="vinetas"${b.tipoLista==='vinetas'?' selected':''}>Viñetas</option><option value="ordenada"${b.tipoLista==='ordenada'?' selected':''}>Numerada (1, 2)</option><option value="letras"${b.tipoLista==='letras'?' selected':''}>Letras (a, b)</option><option value="romana"${b.tipoLista==='romana'?' selected':''}>Romana (i, ii)</option></select></label><label>Nivel <select class="block-field" data-field="nivelLista"><option value="0"${Number(b.nivelLista)===0?' selected':''}>Principal</option><option value="1"${Number(b.nivelLista)===1?' selected':''}>Segundo</option><option value="2"${Number(b.nivelLista)===2?' selected':''}>Tercero</option></select></label></div><small>Un elemento por renglón. Se conserva la numeración y el nivel del Word. **texto** = negritas.</small></article>`;
-            if (b.tipo === 'table') { const paleta = MODULOS[$('#modulo').value]; return `<article class="${clase}" data-id="${b.id}">${head}<div class="table-fields"><input class="block-field" data-field="tituloTabla" placeholder="Fila título que abarca todas las columnas (opcional)" value="${esc(b.tituloTabla)}"><input class="block-field" data-field="encabezados" placeholder="Encabezados separados por tabulador o |" value="${esc(b.encabezados)}"><textarea class="block-field" data-field="filas" rows="4" placeholder="Una fila por renglón; celdas separadas por tabulador o |">${esc(b.filas)}</textarea></div><div class="block-controls"><label>Color de encabezado <input type="color" class="block-field" data-field="colorEncabezado" value="${esc(b.colorEncabezado || paleta[1])}" title="Color de fondo de encabezados y fila título"></label>${b.colorEncabezado ? `<button class="btn-secondary btn-chico" data-color-modulo="${b.id}" type="button">Usar color del módulo</button>` : ''}${(b.coloresColumnas || []).some(Boolean) ? `<label class="chk-inline"><input type="checkbox" class="block-field" data-field="mostrarColoresCuerpo" ${b.mostrarColoresCuerpo !== false ? 'checked' : ''}> Colores de fila del Word</label>` : ''}</div><small>Un encabezado vacío se combina con el anterior (colspan). Un renglón con solo "|" crea una fila vacía de plantilla.</small></article>`; }
+            if (b.tipo === 'table') { const paleta = MODULOS[$('#modulo').value]; return `<article class="${clase}" data-id="${b.id}">${head}<div class="table-fields"><input class="block-field" data-field="tituloTabla" placeholder="Fila título que abarca todas las columnas (opcional)" value="${esc(b.tituloTabla)}"><input class="block-field" data-field="encabezados" placeholder="Encabezados separados por tabulador o |" value="${esc(b.encabezados)}"><textarea class="block-field" data-field="filas" rows="4" placeholder="Una fila por renglón; celdas separadas por tabulador o |">${esc(b.filas)}</textarea></div><div class="block-controls"><label>Color de encabezado <input type="color" class="block-field" data-field="colorEncabezado" value="${esc(b.colorEncabezado || paleta[1])}" title="Color de fondo de encabezados y fila título"></label>${b.colorEncabezado ? `<button class="btn-secondary btn-chico" data-color-modulo="${b.id}" type="button">Usar color del módulo</button>` : ''}</div><small>Un encabezado vacío se combina con el anterior (colspan). Un renglón con solo "|" crea una fila vacía de plantilla.</small></article>`; }
             if (b.tipo === 'image') return `<article class="${clase}" data-id="${b.id}">${head}${b.urlLocal ? `<div class="img-word"><img src="${esc(b.urlLocal)}" alt=""><div class="img-word-info"><strong>${esc(b.archivoImagen)}</strong> viene del Word.<span>Descárgala y arrástrala al editor de Moodle: el HTML ya la llama por su nombre (@@PLUGINFILE@@). Si prefieres URL, pégala abajo.</span><a class="btn-secondary btn-chico" href="${esc(b.urlLocal)}" download="${esc(b.archivoImagen)}"><i class="ph ph-download-simple"></i> Descargar imagen</a></div></div>` : ''}<input class="block-field" data-field="href" placeholder="${b.urlLocal ? 'URL en Moodle (opcional: sin URL se usa @@PLUGINFILE@@)' : 'URL de la imagen'}" value="${esc(b.href)}"><input class="block-field" data-field="alt" placeholder="Texto alternativo" value="${esc(b.alt)}"></article>`;
             return `<article class="${clase}" data-id="${b.id}">${head}<input class="block-field" data-field="texto" placeholder="Texto visible del enlace" value="${esc(b.texto)}"><input class="block-field" data-field="href" placeholder="https://..." value="${esc(b.href)}"><small>Se generará con target="_blank".</small></article>`;
         }).join('');
@@ -121,7 +121,7 @@
         }));
         holder.querySelectorAll('[data-field]').forEach(input => input.addEventListener('input', e => {
             const block = blocks.find(b => b.id === Number(e.target.closest('.block').dataset.id));
-            block[e.target.dataset.field] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+            block[e.target.dataset.field] = e.target.value;
             actualizar();
         }));
         // Al cerrar el selector de color aparece el botón "Usar color del módulo".
@@ -175,13 +175,7 @@
         const filaTitulo = tituloTabla ? `<tr><th colspan="${n}" scope="colgroup" ${th}>${esc(tituloTabla)}</th></tr>` : '';
         const filaEncabezados = headers.some(Boolean) ? `<tr>${grupos.map(g => `<th${g.span > 1 ? ` colspan="${g.span}"` : ''} scope="col" ${th}>${esc(g.t) || '&nbsp;'}</th>`).join('')}</tr>` : '';
         const thead = filaTitulo || filaEncabezados ? `<thead>${filaTitulo}${filaEncabezados}</thead>` : '';
-        // Colores del cuerpo por columna (los del Word). Se pueden apagar con el
-        // toggle del bloque; sin ellos las celdas van sin fondo.
-        const cols = (b.mostrarColoresCuerpo !== false && Array.isArray(b.coloresColumnas)) ? b.coloresColumnas : [];
-        const cuerpo = rows.map(r => `<tr>${Array.from({ length: n }, (_, i) => {
-            const bg = cols[i] || '';
-            return `<td style="border:1px solid #000000;padding:8px;${bg ? `background-color:${bg};` : ''}"><span style="color: ${bg ? contrasteTexto(bg) : '#000000'};">${esc(r[i] || '') || '&nbsp;'}</span></td>`;
-        }).join('')}</tr>`).join('');
+        const cuerpo = rows.map(r => `<tr>${Array.from({ length: n }, (_, i) => `<td style="border:1px solid #000000;padding:8px;"><span style="color: #000000;">${esc(r[i] || '') || '&nbsp;'}</span></td>`).join('')}</tr>`).join('');
         // Responsive sin depender del CSS del tema 3.11: las tablas anchas van a
         // 100% con un mínimo por columna, y el contenedor scrollea en pantallas
         // chicas en vez de aplastar el texto (el width:0px de Word hacía justo eso).
@@ -318,35 +312,19 @@
          (caso "Variable:" del Proyecto Integrador);
        - el color de sombreado del Word se conserva como color de encabezado. */
     function bloqueDesdeTablaWord(x) {
-        // Se expande cada celda combinada a sus columnas (la 1ª conserva texto y
-        // color; las demás quedan vacías) para poder mapear color por columna.
-        const expandir = f => f.flatMap(c => Array.from({ length: c.span }, (_, k) => ({ texto: k === 0 ? c.texto : '', fondo: c.fondo || '' })));
-        const filas = x.filas.map(expandir);
+        const filas = x.filas.map(f => f.flatMap(c => [c.texto, ...Array(c.span - 1).fill('')]));
         const total = Math.max(...filas.map(f => f.length), 1);
         let tituloTabla = '', resto = filas;
-        if (filas.length > 1 && x.filas[0].length === 1 && x.filas[0][0].span >= total) {
-            tituloTabla = filas[0][0].texto;
+        if (x.filas.length > 1 && x.filas[0].length === 1 && x.filas[0][0].span >= total) {
+            tituloTabla = filas[0][0];
             resto = filas.slice(1);
         }
-        const filaEnc = resto[0] || [];
-        const cuerpo = resto.slice(1);
-        // El color del encabezado sale de su propia fila; si no tuviera, del
-        // primer sombreado que aparezca (p. ej. la fila título).
-        const colorEncabezado = (filaEnc.find(c => c.fondo) || {}).fondo
-            || (filas.flat().find(c => c.fondo) || {}).fondo || '';
-        // Color del cuerpo por columna: el sombreado más frecuente en cada
-        // columna (las actividades pintan columnas, no celdas sueltas).
-        const coloresColumnas = Array.from({ length: total }, (_, i) => {
-            const cuenta = {};
-            cuerpo.forEach(f => { const g = (f[i] || {}).fondo; if (g) cuenta[g] = (cuenta[g] || 0) + 1; });
-            return Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a])[0] || '';
-        });
+        const colorEncabezado = (x.filas.flat().find(c => c.fondo) || {}).fondo || '';
         return nuevo('table', {
             tituloTabla,
             colorEncabezado,
-            coloresColumnas,
-            encabezados: filaEnc.map(c => c.texto).join(' | '),
-            filas: cuerpo.map(f => f.map(c => c.texto).join(' | ')).join('\n')
+            encabezados: (resto[0] || []).join(' | '),
+            filas: resto.slice(1).map(f => f.join(' | ')).join('\n')
         });
     }
     function infoImport(msg, ok) { const el=$('#import-info'); el.textContent=msg; el.classList.remove('hidden'); el.style.color=ok?'var(--success)':'var(--danger)'; }
@@ -439,39 +417,22 @@
     var DATA=${JSON.stringify(data)};
     var raiz=document.querySelector('.prepa-M'+DATA.modulo+'-body')||document.querySelector('[class*="prepa-M"][class$="-body"]')||document.querySelector('#region-main')||document.body;
     function limpiar(s){return String(s||'').replace(/[\\u00a0\\u200b\\u00ad]/g,' ').replace(/\\s+/g,' ').trim();}
+    function igualTexto(a,b){return limpiar(a).normalize('NFC')===limpiar(b).normalize('NFC');}
     function firma(s){return limpiar(s).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('es-MX').replace(/[^\\p{L}\\p{N}]+/gu,' ').replace(/\\s+/g,' ').trim();}
     function esc(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
     var nodos=[].slice.call(raiz.querySelectorAll('[class*="-tituloTema"],[class*="-subTema"],h1,h2,h3,p,li,td,th')).map(function(n){return {n:n,t:limpiar(n.textContent),f:firma(n.textContent),usado:false};}).filter(function(x){return x.t;});
     // Moodle cambia p/h2/li según el editor y el tema. El QA editorial compara
     // el texto visible, no la etiqueta que haya sobrevivido al guardado.
-    function buscar(item){var candidatos=nodos.filter(function(x){return !x.usado;}),f=firma(item.texto);var x=candidatos.find(function(x){return x.f===f;});if(!x&&f.length>20)x=candidatos.find(function(x){return x.f.indexOf(f)!==-1||f.indexOf(x.f)!==-1;});if(x)x.usado=true;return x;}
+    function buscar(item){var candidatos=nodos.filter(function(x){return !x.usado;}),esperado=limpiar(item.texto);var x=candidatos.find(function(x){return igualTexto(x.t,esperado);});if(x)x.usado=true;return x;}
     var faltan=[],correctos=0,coincidencias=[];
-    DATA.textos.forEach(function(item){var x=buscar(item);if(x){correctos++;coincidencias.push({item:item,nodo:x});}else faltan.push(item);});
+    DATA.textos.forEach(function(item){var x=buscar(item);if(x){correctos++;coincidencias.push({item:item,nodo:x});}else{var parecido=nodos.find(function(n){return !n.usado&&firma(n.t)===firma(item.texto);});faltan.push(Object.assign({},item,{actual:parecido?parecido.t:''}));}});
     var titulo=(DATA.textos.filter(function(x){return x.etiqueta==='Título';})[0]||{});var tituloCoincide=coincidencias.some(function(x){return x.item===titulo;});
-    // Identidad de la actividad: el nombre que Moodle pone al recurso (el h2
-    // verde, el encabezado de página, el breadcrumb o data-activityname). Vive
-    // FUERA del prepa-body, así que se busca en todo el documento. Sirve para
-    // cazar "pegué el contenido correcto en la actividad equivocada".
-    function nombreActMoodle(){
-        var el=document.querySelector('[data-activityname]');
-        if(el&&el.getAttribute('data-activityname'))return limpiar(el.getAttribute('data-activityname'));
-        var mc=document.getElementById('maincontent');
-        if(mc){var s=mc.nextElementSibling;while(s){if(/^H[12]$/.test(s.tagName)&&limpiar(s.textContent))return limpiar(s.textContent);s=s.nextElementSibling;}}
-        var ph=document.querySelector('.page-header-headings h1,.page-context-header h1,h1.h2');
-        if(ph&&limpiar(ph.textContent))return limpiar(ph.textContent);
-        var a=[].slice.call(document.querySelectorAll('.breadcrumb a,ol.breadcrumb a')).filter(function(x){return /\\/mod\\/[a-z]+\\/view\\.php/.test(x.getAttribute('href')||'')&&limpiar(x.textContent);});
-        if(a.length)return limpiar(a[a.length-1].textContent);
-        return '';
-    }
-    var tituloEsperado=titulo.texto||'';
-    var actMoodle=nombreActMoodle();
-    // null: no se pudo leer. true/false: coincide o no (por firma, con tolerancia
-    // a que Moodle recorte el subtítulo: basta que uno contenga al otro).
-    var idMoodle=(tituloEsperado&&actMoodle)?(function(){var a=firma(actMoodle),b=firma(tituloEsperado);return a===b||(a.length>10&&b.indexOf(a)!==-1)||(b.length>10&&a.indexOf(b)!==-1);})():null;
     var proporcion=DATA.textos.length?correctos/DATA.textos.length:0;
     // Menos de 55% Y sin título reconocido significa otro contenido. Una página
     // con casi todo su texto correcto no se rechaza porque Moodle cambie etiquetas.
     var paginaDistinta=!tituloCoincide&&proporcion<.55;
+    function tituloActividad(){var selectores=['#page-header .page-header-headings h1','#page-header h1','#page-heading h1','.page-header-headings h1'];var info=document.querySelector('[data-region="activity-information"][data-activityname]');if(info){var atributo=limpiar(info.getAttribute('data-activityname'));if(atributo){for(var k=0;k<selectores.length;k++){var candidatos=[].slice.call(document.querySelectorAll(selectores[k]));var tituloVisible=candidatos.find(function(n){return !raiz.contains(n)&&igualTexto(n.textContent,atributo);});if(tituloVisible)return {texto:atributo,nodo:tituloVisible};}return {texto:atributo,nodo:info};}}for(var i=0;i<selectores.length;i++){var encontrados=[].slice.call(document.querySelectorAll(selectores[i]));for(var j=0;j<encontrados.length;j++){var n=encontrados[j];if(!raiz.contains(n)){var t=limpiar(n.textContent);if(t)return {texto:t,nodo:n};}}}return {texto:'',nodo:null};}
+    var infoTitulo=tituloActividad(),tituloEnMoodle=infoTitulo.texto,tituloActividadDistinto=Boolean(tituloEnMoodle&&titulo.texto&&!igualTexto(tituloEnMoodle,titulo.texto));
     var links=[];
     if(!paginaDistinta)DATA.links.forEach(function(item){var a=[].slice.call(raiz.querySelectorAll('a')).find(function(a){return firma(a.textContent)===firma(item.texto);});if(!a){links.push({item:item,error:'No aparece el enlace'});return;}var h=limpiar(a.getAttribute('href')),e=limpiar(item.href),archivo=function(x){return (x.split('?')[0].split('/').pop()||'').toLowerCase();};if(!(h===e||(archivo(h)&&archivo(h)===archivo(e))))links.push({item:item,error:'URL distinta',pagina:h});else if((a.getAttribute('target')||'').toLowerCase()!=='_blank')links.push({item:item,error:'No abre en pestaña nueva',pagina:h});});
     else links=DATA.links.map(function(x){return {item:x,error:'No se verifica: página de otra actividad'};});
@@ -489,19 +450,20 @@
     var sobrantes=nodos.filter(function(x){return !x.usado&&x.t&&!firmasEsperadas.some(function(f){return f===x.f||(x.f.length>12&&f.indexOf(x.f)!==-1)||(f.length>12&&x.f.indexOf(f)!==-1);});});
     [].slice.call(document.querySelectorAll('.integrador-qa-marca')).forEach(function(n){n.style.outline='';n.classList.remove('integrador-qa-marca');});var viejo=document.getElementById('integrador-qa-panel');if(viejo)viejo.remove();
     if(paginaDistinta)nodos.forEach(function(x){x.n.style.outline='3px solid #c62828';x.n.classList.add('integrador-qa-marca');});
-    else faltan.forEach(function(item){var n=nodos.find(function(x){return !x.usado;});if(n){n.n.style.outline='3px solid #c62828';n.n.classList.add('integrador-qa-marca');}});
-    // Que el nombre de la actividad NO coincida es señal fuerte de estar en la
-    // actividad equivocada, aunque el contenido pegado sí sea el correcto.
-    var errorIdentidad=idMoodle===false;
-    var error=paginaDistinta||errorIdentidad||faltan.length||links.length||montaje.length,estado=paginaDistinta?'PÁGINA DISTINTA':(errorIdentidad?'¿ACTIVIDAD EQUIVOCADA?':(error?'ERRORES':'TODO CORRECTO')),color=error?'#c62828':'#2e7d32';
+    else faltan.forEach(function(item){var n=nodos.find(function(x){return !x.usado&&item.actual&&firma(x.t)===firma(item.actual);})||nodos.find(function(x){return !x.usado;});if(n){n.n.style.outline='3px solid #f4c400';n.n.classList.add('integrador-qa-marca');}});
+    if(tituloActividadDistinto&&infoTitulo.nodo){infoTitulo.nodo.style.outline='3px solid #f4c400';infoTitulo.nodo.classList.add('integrador-qa-marca');}
+    var error=paginaDistinta||faltan.length||links.length||montaje.length||tituloActividadDistinto,estado=paginaDistinta?'PÁGINA DISTINTA':(error?'ERRORES':'TODO CORRECTO'),color=error?'#c62828':'#2e7d32';
+    function resaltar(s){return '<mark style="background:#ffeb3b;padding:0 2px;border-radius:2px;">'+esc(s)+'</mark>';}
+    function diferencia(esperado,actual){esperado=limpiar(esperado);actual=limpiar(actual);var inicio=0,finE=esperado.length,finA=actual.length;while(inicio<finE&&inicio<finA&&esperado[inicio]===actual[inicio])inicio++;while(finE>inicio&&finA>inicio&&esperado[finE-1]===actual[finA-1]){finE--;finA--;}return {esperado:esc(esperado.slice(0,inicio))+resaltar(esperado.slice(inicio,finE))+esc(esperado.slice(finE)),actual:esc(actual.slice(0,inicio))+resaltar(actual.slice(inicio,finA))+esc(actual.slice(finA))};}
+    function bloqueDiferencia(etiqueta,esperado,actual){var d=diferencia(esperado,actual);return '<div style="border-left:3px solid #f4c400;padding:7px 8px;margin:5px 0;background:#fffde7"><strong>'+esc(etiqueta)+'</strong><div style="white-space:pre-wrap;margin-top:3px"><strong>Esperado:</strong> '+d.esperado+'<br><strong>En Moodle:</strong> '+(actual?d.actual:resaltar('no aparece'))+'</div></div>';}
     var panel=document.createElement('div');panel.id='integrador-qa-panel';panel.style.cssText='position:fixed;top:12px;right:12px;width:440px;max-height:88vh;overflow:auto;z-index:2147483647;background:#fff;color:#222;border:1px solid #ddd;border-radius:10px;padding:14px 16px;box-shadow:0 10px 40px rgba(0,0,0,.35);font:13px/1.45 system-ui,sans-serif';
     var html='<div style="display:flex;justify-content:space-between;margin-bottom:10px"><strong style="font-size:15px">QA de actividad</strong><button id="integrador-qa-cerrar" style="border:0;background:#eee;border-radius:6px;padding:4px 9px;cursor:pointer">Cerrar</button></div><div style="background:'+color+';color:#fff;padding:8px 10px;border-radius:7px;font-weight:700;margin-bottom:10px">'+estado+'</div><div>'+DATA.textos.length+' textos esperados · '+correctos+' correctos ('+Math.round(proporcion*100)+'%) · '+DATA.links.length+' enlaces revisados'+(DATA.montaje&&DATA.montaje.length?' · '+DATA.montaje.length+' de montaje':'')+'</div>';
-    if(actMoodle&&!paginaDistinta){if(idMoodle===false)html+='<div style="margin-top:10px;background:#fdecea;border-left:3px solid #c62828;padding:9px;border-radius:5px"><strong>⚠ La actividad de Moodle no coincide con el título.</strong><br>Título esperado: '+esc(tituloEsperado)+'<br>Actividad en Moodle: '+esc(actMoodle)+'<br>¿Pegaste el contenido en la actividad correcta?</div>';else html+='<div style="margin-top:10px;background:#e8f5e9;border-left:3px solid #2e7d32;padding:8px 10px;border-radius:5px"><strong>Actividad en Moodle:</strong> '+esc(actMoodle)+' ✓</div>';}
     if(montaje.length)html+='<h4 style="margin:12px 0 5px;color:#c62828">Enlaces de montaje pendientes ('+montaje.length+')</h4>'+montaje.map(function(x){return '<div style="border-left:3px solid #c62828;padding:5px 8px;margin:5px 0;background:#fff5f5"><strong>'+esc(x.error)+': «'+esc(x.item.ancla)+'»</strong><br>'+esc(x.item.nota)+(x.pagina?'<br>En Moodle: '+esc(x.pagina):'')+'</div>';}).join('');
+    if(tituloActividadDistinto)html+='<h4 style="margin:12px 0 5px;color:#c62828">Título de la actividad distinto</h4>'+bloqueDiferencia('Título visible',titulo.texto,tituloEnMoodle);
     if(paginaDistinta)html+='<div style="margin-top:10px;background:#fdecea;border-left:3px solid #c62828;padding:9px;border-radius:5px"><strong>La huella del contenido no coincide.</strong><br>Menos de 55% de textos encontrados y título no reconocido. No se aceptan coincidencias parciales.</div>';
     else if(!tituloCoincide)html+='<div style="margin-top:10px;background:#fff4e5;border-left:3px solid #ef6c00;padding:9px;border-radius:5px"><strong>Aviso de título:</strong> Moodle cambió o no expuso su etiqueta, pero la huella del contenido coincide ('+Math.round(proporcion*100)+'%).</div>';
     if(!error)html+='<div style="margin-top:10px;background:#e8f5e9;border-left:3px solid #2e7d32;padding:9px;border-radius:5px">Textos y enlaces coinciden con lo generado.</div>';
-    if(faltan.length)html+='<h4 style="margin:12px 0 5px;color:#c62828">Textos faltantes o distintos ('+faltan.length+')</h4>'+faltan.map(function(x){return '<div style="border-left:3px solid #c62828;padding:5px 8px;margin:5px 0;background:#fff5f5"><strong>'+esc(x.etiqueta)+'</strong><br>'+esc(x.texto)+'</div>';}).join('');
+    if(faltan.length)html+='<h4 style="margin:12px 0 5px;color:#c62828">Textos faltantes o distintos ('+faltan.length+')</h4>'+faltan.map(function(x){return bloqueDiferencia(x.etiqueta,x.texto,x.actual);}).join('');
     if(!paginaDistinta&&sobrantes.length)html+='<h4 style="margin:12px 0 5px;color:#ef6c00">Texto extra en Moodle ('+sobrantes.length+')</h4>'+sobrantes.slice(0,20).map(function(x){return '<div style="border-left:3px solid #ef6c00;padding:5px 8px;margin:5px 0;background:#fff9ed">'+esc(x.t)+'</div>';}).join('')+(sobrantes.length>20?'<p>Se muestran los primeros 20.</p>':'');
     if(links.length)html+='<h4 style="margin:12px 0 5px;color:#c62828">Enlaces con problema ('+links.length+')</h4>'+links.map(function(x){return '<div style="border-left:3px solid #c62828;padding:5px 8px;margin:5px 0;background:#fff5f5"><strong>'+esc(x.error)+': '+esc(x.item.texto)+'</strong><br>Esperado: '+esc(x.item.href)+(x.pagina?'<br>En Moodle: '+esc(x.pagina):'')+'</div>';}).join('');
     panel.innerHTML=html;document.body.appendChild(panel);document.getElementById('integrador-qa-cerrar').onclick=function(){[].slice.call(document.querySelectorAll('.integrador-qa-marca')).forEach(function(n){n.style.outline='';n.classList.remove('integrador-qa-marca');});panel.remove();};var primero=document.querySelector('.integrador-qa-marca');if(primero)primero.scrollIntoView({behavior:'smooth',block:'center'});
