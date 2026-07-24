@@ -52,3 +52,4 @@
 .modal-acciones{display:flex;justify-content:center}
 @keyframes modalFade{from{opacity:0}to{opacity:1}}
 @keyframes modalSube{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+#qa-result .qa-aviso::after { content:'OJO: coteja que las imágenes publicadas en Moodle coincidan con las imágenes adjuntas del Word.'; display:block; margin-top:9px; padding:8px 9px; border-left:3px solid #f4c400; background:#fffde7; color:#5d4b00; font-weight:600; }

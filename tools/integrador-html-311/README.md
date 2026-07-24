@@ -151,6 +151,10 @@ Si el título sí coincide, el QA revisa:
 - enlaces: texto, URL, archivo final de Moodle y `target="_blank"`;
 - texto adicional publicado en Moodle que no viene del documento.
 
+El verificador muestra además un aviso para cotejar manualmente que las
+imágenes publicadas en Moodle correspondan con las imágenes adjuntas del Word.
+La comparación visual de imágenes no se automatiza.
+
 Los elementos repetidos por Moodle (`li` con un `p` interno, o un párrafo
 partido en nodos) no se consideran texto extra: el QA compara también las
 firmas contenidas en el texto esperado antes de reportarlos.
