@@ -73,7 +73,13 @@ Los bloques son la fuente única para HTML, vista previa y QA. Tipos actuales:
 
 - **Sección:** barra `h2` más área de contenido.
 - **Texto:** párrafos; permite alineación.
-- **Lista:** viñetas, decimal, letras o romanos; mantiene el nivel.
+- **Lista:** viñetas, decimal, letras o romanos; mantiene el nivel. El control
+  **Nivel / sangría** conserva la jerarquía Principal → Segundo → Tercero del
+  Word, incluso cuando el archivo usa distintos `numId` para representar la
+  sangría en lugar de aumentar `ilvl`. Genera `ul` para viñetas y `ol` para
+  numeradas. La lista, sus `li` y el texto interno usan `font-size:14px` para
+  homologarse con los párrafos; la familia y la altura de línea se heredan del
+  contenido de Moodle.
 - **Tabla:** encabezados y filas separadas por tabulador o `|`. Además: fila
   título opcional (abarca todas las columnas), color de encabezado (por
   defecto el del módulo; al importar, el del Word) con texto negro o blanco
@@ -117,8 +123,11 @@ La estructura base es:
 </div>
 ```
 
-Las listas llevan `padding-left` explícito para que los números o viñetas no
-queden pegados al borde si Moodle restablece estilos por tema.
+Las listas llevan `padding-left` explícito por nivel para que los números o
+viñetas respeten la jerarquía y no queden pegados al borde si Moodle restablece
+estilos por tema. El formato se fija en la salida (`disc`, `decimal`,
+`lower-alpha` o `lower-roman`), el tamaño se fija en 14 px y la familia
+tipográfica se deja heredada del contenido.
 
 ## QA de actividad
 

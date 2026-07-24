@@ -25,6 +25,18 @@ const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
+// No todos los DOM resuelven igual el selector con namespaces usado por
+// `closest('*|tbl')`. Recorrer los padres separa de forma estable las tablas
+// reales de las tablas anidadas.
+function tablaAncestro(nodo) {
+    let actual = nodo && nodo.parentNode;
+    while (actual) {
+        if (actual.localName === 'tbl') return actual;
+        actual = actual.parentNode;
+    }
+    return null;
+}
+
 /** Lee el directorio central del ZIP y devuelve Map<nombre, Uint8Array>. */
 async function leerZip(buffer) {
     const datos = new Uint8Array(buffer);
@@ -72,7 +84,9 @@ async function inflar(entrada) {
 /** Texto de una celda, conservando el salto de línea entre párrafos (las
  *  definiciones de nivel son listas de viñetas y esos saltos importan). */
 function textoDeCelda(tc) {
-    const parrafos = [...tc.getElementsByTagNameNS(W_NS, 'p')];
+    const tabla = tablaAncestro(tc);
+    const parrafos = [...tc.getElementsByTagNameNS(W_NS, 'p')]
+        .filter(p => tablaAncestro(p) === tabla);
     return parrafos
         .map(p => [...p.getElementsByTagNameNS(W_NS, 't')].map(t => t.textContent || '').join(''))
         .join('\n')
@@ -107,7 +121,7 @@ async function leerParrafosDeDocx(file) {
     const body = doc.getElementsByTagNameNS(W_NS, 'body')[0] || doc.documentElement;
 
     return [...body.getElementsByTagNameNS(W_NS, 'p')]
-        .filter(p => !p.closest || !p.closest('*|tbl'))   // fuera lo que va en tablas
+        .filter(p => !tablaAncestro(p))   // fuera lo que va en tablas
         .map(p => [...p.getElementsByTagNameNS(W_NS, 't')].map(t => t.textContent || '').join(''))
         .map(t => t.replace(/ /g, ' ').replace(/[ \t]+/g, ' ').trim())
         .filter(Boolean);
@@ -173,11 +187,12 @@ async function leerTablasDeDocx(file) {
     return [...doc.getElementsByTagNameNS(W_NS, 'tbl')].map(tbl => {
         // Solo las filas de ESTA tabla (no las de tablas anidadas).
         const filas = [...tbl.getElementsByTagNameNS(W_NS, 'tr')]
-            .filter(tr => tr.closest ? tr.closest('*|tbl') === tbl : true);
+            .filter(tr => tablaAncestro(tr) === tbl);
 
         return {
             filas: filas.map(tr => ({
-                celdas: [...tr.getElementsByTagNameNS(W_NS, 'tc')].map(tc => {
+                celdas: [...tr.getElementsByTagNameNS(W_NS, 'tc')]
+                    .filter(tc => tablaAncestro(tc) === tbl).map(tc => {
                     const tcPr = tc.getElementsByTagNameNS(W_NS, 'tcPr')[0];
                     const vMerge = tcPr && tcPr.getElementsByTagNameNS(W_NS, 'vMerge')[0];
                     const val = vMerge && (vMerge.getAttributeNS(W_NS, 'val') || 'continue');
@@ -228,10 +243,9 @@ function textoDeParrafoConNegritas(p) {
 async function leerBloquesDeDocx(file) {
     const doc = await abrirDocumentoDocx(file);
     const body = doc.getElementsByTagNameNS(W_NS, 'body')[0] || doc.documentElement;
-    const hijos = [...body.childNodes].filter(n => n.nodeType === 1);
     const formatosLista = await leerFormatosListaDocx(file);
 
-    return hijos.map(n => {
+    const bloqueDesdeNodo = n => {
         if (n.localName === 'p') {
             const texto = textoDeParrafoConNegritas(n)
                 .replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').trim();
@@ -246,6 +260,12 @@ async function leerBloquesDeDocx(file) {
             const sangria = ind ? Math.max(0, Number(ind.getAttributeNS(W_NS, 'left') || ind.getAttributeNS(W_NS, 'start') || 0)) : 0;
             const idLista = numId && numId.getAttributeNS(W_NS, 'val');
             const nivel = Number(ilvl && ilvl.getAttributeNS(W_NS, 'val') || 0);
+            // Algunos Word no incrementan `ilvl` al anidar. En su lugar crean
+            // otro numId y guardan la sangría visual en numbering.xml. Usa esa
+            // información como respaldo para no aplanar la jerarquía.
+            const formatoLista = formatosLista[`${idLista}:${nivel}`];
+            const nivelVisual = formatoLista && typeof formatoLista === 'object' ?
+                Number.isFinite(formatoLista.nivelVisual) ? formatoLista.nivelVisual : nivel : nivel;
             // Las imágenes van como <a:blip r:embed="rIdN"> dentro del párrafo.
             // Se entrega el id para que la herramienta las resuelva con
             // leerImagenesDeDocx (aquí no se cargan bytes: no siempre se usan).
@@ -258,8 +278,8 @@ async function leerBloquesDeDocx(file) {
                 sangria,
                 lista: Boolean(numPr),
                 idLista,
-                tipoLista: formatosLista[`${idLista}:${nivel}`] || 'ordenada',
-                nivelLista: nivel,
+                tipoLista: (formatoLista && typeof formatoLista === 'object' ? formatoLista.tipo : formatoLista) || 'ordenada',
+                nivelLista: nivelVisual,
                 alineacion: jc && jc.getAttributeNS(W_NS, 'val') === 'center' ? 'centro' :
                     (jc && jc.getAttributeNS(W_NS, 'val') === 'right' ? 'derecha' :
                         (jc && jc.getAttributeNS(W_NS, 'val') === 'both' ? 'justificado' : 'izquierda'))
@@ -267,9 +287,9 @@ async function leerBloquesDeDocx(file) {
         }
         if (n.localName === 'tbl') {
             const filasXml = [...n.getElementsByTagNameNS(W_NS, 'tr')]
-                .filter(tr => tr.closest ? tr.closest('*|tbl') === n : true);
+                .filter(tr => tablaAncestro(tr) === n);
             const celdas = filasXml.flatMap(tr => [...tr.getElementsByTagNameNS(W_NS, 'tc')]
-                .filter(tc => tc.closest ? tc.closest('*|tbl') === n : true));
+                .filter(tc => tablaAncestro(tc) === n));
             const texto = celdas.map(textoDeCelda).filter(Boolean).join(' ').replace(/[ \t]+/g, ' ').trim();
             const sombreado = celdas.some(tc => {
                 const shd = tc.getElementsByTagNameNS(W_NS, 'shd')[0];
@@ -280,7 +300,7 @@ async function leerBloquesDeDocx(file) {
             // reconstruirla: texto por celda, columnas que abarca (gridSpan)
             // y color de sombreado. Las de una celda siguen siendo "barras".
             const filas = filasXml.map(tr => [...tr.getElementsByTagNameNS(W_NS, 'tc')]
-                .filter(tc => (tc.closest ? tc.closest('*|tbl') === n : true))
+                .filter(tc => tablaAncestro(tc) === n)
                 .map(tc => {
                     const tcPr = tc.getElementsByTagNameNS(W_NS, 'tcPr')[0];
                     const span = tcPr && tcPr.getElementsByTagNameNS(W_NS, 'gridSpan')[0];
@@ -295,7 +315,40 @@ async function leerBloquesDeDocx(file) {
             return { tipo: 'tabla', texto, celdas: celdas.length, sombreado, filas };
         }
         return { tipo: 'otro', texto: '' };
-    }).filter(b => b.texto || (b.imagenes && b.imagenes.length));
+    };
+
+    const salida = [];
+    const recorrer = contenedor => {
+        [...contenedor.childNodes].filter(n => n.nodeType === 1).forEach(n => {
+            if (n.localName === 'p') {
+                const bloque = bloqueDesdeNodo(n);
+                if (bloque.texto || (bloque.imagenes && bloque.imagenes.length)) salida.push(bloque);
+                return;
+            }
+            // Word puede envolver una tabla en `w:sdt` (contenido estructurado)
+            // u otro contenedor. Se atraviesan esos nodos, pero las tablas
+            // normales no se recorren por dentro para no duplicar sus celdas.
+            if (n.localName !== 'tbl') {
+                recorrer(n);
+                return;
+            }
+            const bloque = bloqueDesdeNodo(n);
+            if (bloque.texto || (bloque.imagenes && bloque.imagenes.length)) salida.push(bloque);
+
+            // En algunos Word la tabla de contenido está dentro de una barra
+            // de sección de una sola celda. La barra debe conservarse, pero su
+            // contenido interno (párrafos y tablas) también debe salir en orden.
+            const tablasInternas = [...n.getElementsByTagNameNS(W_NS, 'tbl')]
+                .filter(tbl => tablaAncestro(tbl) === n);
+            if (tablasInternas.length) {
+                [...n.getElementsByTagNameNS(W_NS, 'tc')]
+                    .filter(tc => tablaAncestro(tc) === n)
+                    .forEach(tc => recorrer(tc));
+            }
+        });
+    };
+    recorrer(body);
+    return salida;
 }
 
 /**
@@ -344,8 +397,17 @@ async function leerFormatosListaDocx(file) {
             const nivel = l.getAttributeNS(W_NS, 'ilvl') || '0';
             const formato = l.getElementsByTagNameNS(W_NS, 'numFmt')[0];
             const valor = formato && formato.getAttributeNS(W_NS, 'val');
-            abstractos[`${id}:${nivel}`] = valor === 'bullet' ? 'vinetas' :
-                (valor === 'lowerLetter' ? 'letras' : (valor === 'lowerRoman' ? 'romana' : 'ordenada'));
+            const ind = l.getElementsByTagNameNS(W_NS, 'ind')[0];
+            const izquierda = Number(ind && (ind.getAttributeNS(W_NS, 'left') || ind.getAttributeNS(W_NS, 'start')) || 0);
+            const nivelNumeracion = Number(nivel) || 0;
+            // 720 twips es el primer nivel de Word; cada 720 adicionales
+            // representan una sangría más. Si `ilvl` sí cambia, se conserva.
+            const nivelVisual = izquierda >= 720 ? Math.max(nivelNumeracion, Math.round(izquierda / 720) - 1) : nivelNumeracion;
+            abstractos[`${id}:${nivel}`] = {
+                tipo: valor === 'bullet' ? 'vinetas' :
+                    (valor === 'lowerLetter' ? 'letras' : (valor === 'lowerRoman' ? 'romana' : 'ordenada')),
+                nivelVisual
+            };
         });
     });
     const salida = {};
