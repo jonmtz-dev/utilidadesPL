@@ -222,3 +222,8 @@ y ajustar aquí: es una sola función por componente en `componentes.js`.
 7. Cambiar la paleta del aula: el color del acordeón abierto debe cambiar en la
    previa sin regenerar nada.
 8. Con la ventana a 1366×700, el panel no debe scrollear ni recortar tarjetas.
+9. En celular (≈390px de ancho): la pantalla de inicio no debe encimarse con la
+   paleta, y en un bloque anidado la cabecera y la ruta de la imagen deben
+   caber. Ojo con `.lienzo`: con las columnas apiladas va `flex: none`, porque
+   con `flex: 1 1 240px` se queda en 240px y —al tener `overflow: visible`—
+   **pinta su contenido encima** de lo que sigue.

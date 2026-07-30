@@ -497,7 +497,14 @@ Cosas que ya costaron un rato; no las vuelvas a pisar.
   columnas.
 
 - **Grid: `align-content` es `stretch` por defecto.** En el launcher hacía que
-  las tarjetas se estiraran al alto completo; va en `start`.
+  las tarjetas se estiraran al alto completo; va en `start`. Y su contrario:
+  con alto definido, las filas `auto` se **aprietan** para caber y el contenido
+  se corta; por eso el launcher usa `grid-auto-rows: max-content`.
+
+- **`overflow: visible` + un flex-basis fijo = contenido encimado.** Al apilar
+  las columnas en celular, un contenedor con `flex: 1 1 240px` se queda en
+  240px, y como ahí el overflow es visible, lo que sobra se pinta ENCIMA de lo
+  que sigue (no scrollea ni empuja). En vertical, al apilar va `flex: none`.
 
 - El texto que pega el usuario **no se escapa** (comportamiento heredado del
   código original). Con bibliografías normales no estorba, pero un `<` o `&` se

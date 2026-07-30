@@ -373,7 +373,18 @@
 @media (max-width: 1024px), (max-height: 620px) {
     .guion-workspace { grid-template-columns: 1fr; }
     .editor-panel { overflow: visible; }
-    .lienzo { max-height: none; overflow: visible; }
+
+    /* Con las columnas apiladas manda el scroll de la página, así que el lienzo
+       toma su alto natural. Con `flex: 1 1 240px` se quedaba clavado en 240px y,
+       como aquí el overflow es visible, su contenido se PINTABA ENCIMA de la
+       paleta de abajo: en celular se veían las plantillas y las piezas
+       superpuestas, ilegibles. */
+    .lienzo { flex: none; height: auto; max-height: none; overflow: visible; }
+
+    /* Por lo mismo, la paleta ya no necesita su tope de alto: aquí no le está
+       robando espacio a nadie. */
+    .paleta-grid { max-height: none; overflow: visible; }
+
     .preview-caja iframe { min-height: 460px; }
     .import-ficha { grid-template-columns: 1fr; }
     .import-opciones { grid-template-columns: repeat(auto-fit, minmax(66px, 1fr)); }
@@ -382,4 +393,29 @@
 @media (max-width: 640px) {
     .panel-section { padding: 18px; }
     .paleta-grid { grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); }
+    .modal-caja { padding: 18px 16px; }
+    .modal-acciones { flex-wrap: wrap; }
+    /* En un celular el resumen queda aplastado a cero de ancho por los botones
+       de la cabecera; el icono y el nombre ya identifican el bloque. */
+    .bloque-resumen { display: none; }
+
+    /* Y en un bloque anidado (dentro de un acordeón o una tarjeta) quedan ~230px
+       para asa + icono + nombre + cuatro botones: sin apretar el espaciado, la
+       cabecera se desbordaba 9px y el último botón quedaba cortado. */
+    /* La ruta del archivo no cabe junto a la miniatura y el botón: se le da su
+       propio renglón, si no se lee "@@P" y nada más. */
+    .campo-imagen { flex-wrap: wrap; }
+    .campo-imagen .plain-input { order: 3; flex: 1 0 100%; }
+
+    .bloque-cabeza { gap: 5px; padding: 8px 7px; }
+    .mini-btn { padding: 4px 3px; }
+    .bloque-nombre { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* En un celular angosto, dos caminos lado a lado dejan columnas de texto de
+   ocho letras. Se apilan. */
+@media (max-width: 460px) {
+    .inicio-caminos { grid-template-columns: 1fr; }
+    .camino { padding: 14px 12px; }
+    .inicio-plantillas { grid-template-columns: 1fr 1fr; }
 }
