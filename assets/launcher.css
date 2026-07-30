@@ -60,6 +60,12 @@
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 24px;
     align-content: start; /* Sin esto las filas se estiran al alto de la ventana */
+    /* Y sin esto pasa lo contrario: en una laptop (alto ~700px) la rejilla tiene
+       alto definido y las filas `auto` se APRIETAN para caber, dejando tarjetas
+       de 196px con 320px de contenido que `overflow:hidden` recortaba a media
+       frase. Con max-content cada fila toma su alto real y lo que sobra
+       scrollea aquí dentro, que es lo que se quería. */
+    grid-auto-rows: max-content;
     flex: 1;
     min-height: 0;
     overflow-y: auto;

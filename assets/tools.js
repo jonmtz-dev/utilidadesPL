@@ -52,6 +52,17 @@ const TOOLS = [
     },
     /* ---------- Moodle 5.1 ---------- */
     {
+        slug: 'guion-a-pagina',
+        moodle: '5.1',
+        title: 'Guion Instruccional a Página',
+        description: 'Arma la página visualmente desde el Word: acordeones, tablas, ventanas emergentes y tarjetas, sin escribir HTML.',
+        icon: 'magic-wand',
+        accent: ['#9d2248', '#d1607f'],
+        tags: ['Guion', 'Word', 'Visual', 'HTML'],
+        url: 'tools/guion-a-pagina/index.html',
+        status: 'ready'
+    },
+    {
         slug: 'convertidor-tablas',
         moodle: '5.1',
         title: 'Convertidor de Tablas',

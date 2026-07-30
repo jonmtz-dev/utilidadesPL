@@ -81,14 +81,56 @@ async function inflar(entrada) {
     return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-/** Texto de una celda, conservando el salto de línea entre párrafos (las
- *  definiciones de nivel son listas de viñetas y esos saltos importan). */
-function textoDeCelda(tc) {
+/**
+ * Texto de una celda, conservando el salto de línea entre párrafos (las
+ * definiciones de nivel son listas de viñetas y esos saltos importan).
+ *
+ * Con `opciones.formatosLista` (el mapa de leerFormatosListaDocx) además
+ * **reescribe la viñeta como texto**: Word no guarda el "•" ni el "1." en el
+ * párrafo, los pinta a partir de numbering.xml, así que al leer solo los `w:t`
+ * la lista se convertía en un montón de renglones sueltos. En el editor de
+ * rúbricas de Moodle la definición es un campo de texto plano: si la viñeta no
+ * va escrita, no existe.
+ *
+ * Es opcional a propósito: quien genera HTML (Guion Instruccional a Página)
+ * quiere la lista como estructura, no un "• " literal dentro del párrafo.
+ */
+function textoDeCelda(tc, opciones) {
+    const formatos = opciones && opciones.formatosLista;
     const tabla = tablaAncestro(tc);
     const parrafos = [...tc.getElementsByTagNameNS(W_NS, 'p')]
         .filter(p => tablaAncestro(p) === tabla);
+
+    // Un contador por lista y nivel, para que una numerada diga 1., 2., 3.
+    const contadores = new Map();
+
     return parrafos
-        .map(p => [...p.getElementsByTagNameNS(W_NS, 't')].map(t => t.textContent || '').join(''))
+        .map(p => {
+            const texto = [...p.getElementsByTagNameNS(W_NS, 't')].map(t => t.textContent || '').join('');
+            if (!formatos || !texto.trim()) return texto;
+
+            const numPr = p.getElementsByTagNameNS(W_NS, 'numPr')[0];
+            if (!numPr) {
+                // Un párrafo normal corta la numeración: lo que siga vuelve a 1.
+                contadores.clear();
+                return texto;
+            }
+
+            const nodoNum = numPr.getElementsByTagNameNS(W_NS, 'numId')[0];
+            const numId = nodoNum && nodoNum.getAttributeNS(W_NS, 'val');
+            const ilvl = numPr.getElementsByTagNameNS(W_NS, 'ilvl')[0];
+            const nivel = Number(ilvl && ilvl.getAttributeNS(W_NS, 'val')) || 0;
+            const formato = formatos[`${numId}:${nivel}`] || { tipo: 'vinetas', nivelVisual: nivel };
+
+            const clave = `${numId}:${nivel}`;
+            const n = (contadores.get(clave) || 0) + 1;
+            contadores.set(clave, n);
+
+            const marca = formato.tipo === 'vinetas' ? '• '
+                : (formato.tipo === 'letras' ? `${String.fromCharCode(96 + n)}. ` : `${n}. `);
+            const sangria = '  '.repeat(Math.max(0, formato.nivelVisual || 0));
+            return sangria + marca + texto;
+        })
         .join('\n')
         .trim();
 }
@@ -183,6 +225,9 @@ async function leerComentariosDeDocx(file) {
  */
 async function leerTablasDeDocx(file) {
     const doc = await abrirDocumentoDocx(file);
+    // Las rúbricas describen los niveles con listas; sin numbering.xml la
+    // viñeta se pierde, porque Word no la guarda dentro del párrafo.
+    const formatosLista = await leerFormatosListaDocx(file);
 
     return [...doc.getElementsByTagNameNS(W_NS, 'tbl')].map(tbl => {
         // Solo las filas de ESTA tabla (no las de tablas anidadas).
@@ -197,7 +242,7 @@ async function leerTablasDeDocx(file) {
                     const vMerge = tcPr && tcPr.getElementsByTagNameNS(W_NS, 'vMerge')[0];
                     const val = vMerge && (vMerge.getAttributeNS(W_NS, 'val') || 'continue');
                     return {
-                        texto: textoDeCelda(tc),
+                        texto: textoDeCelda(tc, { formatosLista }),
                         vMergeInicio: val === 'restart',
                         vMergeSigue: val === 'continue'
                     };
@@ -306,7 +351,15 @@ async function leerBloquesDeDocx(file) {
                     const span = tcPr && tcPr.getElementsByTagNameNS(W_NS, 'gridSpan')[0];
                     const shd = tcPr && tcPr.getElementsByTagNameNS(W_NS, 'shd')[0];
                     const fill = shd && (shd.getAttributeNS(W_NS, 'fill') || '').toLowerCase();
+                    // `lineas` conserva los saltos de párrafo de la celda: en
+                    // los guiones instruccionales cada marca de montaje
+                    // (<Figura>, <Pop-up>, <Crear un grupo de botones…>) viene
+                    // en su propio renglón, y aplastarlas las vuelve ilegibles.
+                    // Quien solo quiera el texto corrido sigue usando `texto`.
+                    const lineasCelda = textoDeCelda(tc).split('\n')
+                        .map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
                     return {
+                        lineas: lineasCelda,
                         texto: textoDeCelda(tc).replace(/ /g, ' ').replace(/\s+/g, ' ').trim(),
                         span: Number((span && span.getAttributeNS(W_NS, 'val')) || 1),
                         fondo: fill && fill !== 'auto' && fill !== 'ffffff' ? '#' + fill : ''
@@ -318,10 +371,15 @@ async function leerBloquesDeDocx(file) {
     };
 
     const salida = [];
-    const recorrer = contenedor => {
+    // `dentro` marca los bloques que salieron de las celdas de otra tabla. El
+    // texto de esas celdas YA viene en `filas` de la tabla contenedora, así que
+    // quien reconstruya la tabla debe saltárselos o duplica el contenido; quien
+    // solo quiera el texto corrido puede ignorar el campo.
+    const recorrer = (contenedor, dentro) => {
         [...contenedor.childNodes].filter(n => n.nodeType === 1).forEach(n => {
             if (n.localName === 'p') {
                 const bloque = bloqueDesdeNodo(n);
+                bloque.dentroDeTabla = Boolean(dentro);
                 if (bloque.texto || (bloque.imagenes && bloque.imagenes.length)) salida.push(bloque);
                 return;
             }
@@ -329,10 +387,11 @@ async function leerBloquesDeDocx(file) {
             // u otro contenedor. Se atraviesan esos nodos, pero las tablas
             // normales no se recorren por dentro para no duplicar sus celdas.
             if (n.localName !== 'tbl') {
-                recorrer(n);
+                recorrer(n, dentro);
                 return;
             }
             const bloque = bloqueDesdeNodo(n);
+            bloque.dentroDeTabla = Boolean(dentro);
             if (bloque.texto || (bloque.imagenes && bloque.imagenes.length)) salida.push(bloque);
 
             // En algunos Word la tabla de contenido está dentro de una barra
@@ -343,11 +402,11 @@ async function leerBloquesDeDocx(file) {
             if (tablasInternas.length) {
                 [...n.getElementsByTagNameNS(W_NS, 'tc')]
                     .filter(tc => tablaAncestro(tc) === n)
-                    .forEach(tc => recorrer(tc));
+                    .forEach(tc => recorrer(tc, true));
             }
         });
     };
-    recorrer(body);
+    recorrer(body, false);
     return salida;
 }
 

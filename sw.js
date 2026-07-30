@@ -13,7 +13,7 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.11.5';
+const VERSION = '1.12.0';
 const CACHE = `panel-herramientas-v${VERSION}`;
 
 // Rutas relativas a propósito: en GitHub Pages la app vive en un subdirectorio
@@ -29,6 +29,7 @@ const APP_SHELL = [
     'assets/tools.js',
     'assets/version-moodle.js',
     'assets/tablas.js',
+    'assets/zip.js',
     'assets/theme.js',
     'assets/pwa.js',
     'assets/icons/icon-192.png',
@@ -52,7 +53,17 @@ const APP_SHELL = [
     'tools/adaptador-rubricas/styles.css',
     'tools/integrador-html-311/index.html',
     'tools/integrador-html-311/script.js',
-    'tools/integrador-html-311/styles.css'
+    'tools/integrador-html-311/styles.css',
+    // Faltaban: sin ellos estas dos herramientas no abrían sin conexión.
+    'assets/modulos-311.js',
+    'tools/bibliografias-margarita/index.html',
+    'tools/bibliografias-margarita/script.js',
+    'tools/bibliografias-margarita/styles.css',
+    'tools/guion-a-pagina/index.html',
+    'tools/guion-a-pagina/script.js',
+    'tools/guion-a-pagina/componentes.js',
+    'tools/guion-a-pagina/vista-previa.js',
+    'tools/guion-a-pagina/styles.css'
 ];
 
 self.addEventListener('install', (event) => {

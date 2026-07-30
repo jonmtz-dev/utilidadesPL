@@ -10,7 +10,7 @@ lo indica con una insignia, en su tarjeta del panel y en su propio encabezado:
 | Herramienta | Moodle |
 |---|---|
 | Adaptador de Rúbricas · Generador de Bibliografías · Integrador HTML | **3.11** |
-| Convertidor de Tablas · Micrositio a Página · Bibliografías Margarita Maza | **5.1** |
+| Convertidor de Tablas · Micrositio a Página · Bibliografías Margarita Maza · Guion Instruccional a Página | **5.1** |
 
 El editor de rúbricas y el de libros cambiaron entre una versión y otra, así que
 usar la herramienta equivocada genera HTML que se ve bien en la vista previa y
@@ -79,16 +79,22 @@ assets/
   launcher.css              Estilos del launcher
   launcher.js               Dibuja las tarjetas y la búsqueda
   tools.js                  ← Registro de herramientas (la fuente de la verdad)
+  zip.js                    Escritor de .zip (Micrositio y Guion a Página)
   icons/                    Iconos PWA (generados, ver §7)
 tools/
   convertidor-tablas/       Tablas de Word/HTML → tarjetas responsivas
     index.html · script.js · styles.css
   generador-bibliografias/  Fuentes de consulta → párrafos <p> con enlaces
+  adaptador-rubricas/       Rúbrica de Word → script que llena "Definir rúbrica"
+    index.html · script.js · styles.css
   integrador-html-311/      Word de actividad → bloques editables + HTML + QA
     README.md                Reglas de importación, editor, QA y pruebas
     index.html · script.js · styles.css
   micrositio-a-pagina/      Micrositio .zip → recurso Página (@@PLUGINFILE@@)
     index.html · script.js · styles.css
+  guion-a-pagina/           Guion en Word → página 5.1 armada visualmente
+    README.md                Componentes, asistente de importación y previa
+    index.html · script.js · componentes.js · vista-previa.js · styles.css
 .claude/launch.json         Config del servidor local para previsualizar
 ```
 
@@ -148,6 +154,71 @@ del módulo, barra de título y área de contenido con los colores del módulo
 elegido. Cambiar el módulo con la salida ya generada refresca la clase
 `prepa-M{n}` y los colores sin volver a pulsar Generar.
 
+### Adaptador de Rúbricas (`tools/adaptador-rubricas/`)
+
+Lee la rúbrica del Word (o pegada como tabla) y genera un script que llena
+"Definir rúbrica" en Moodle comparando **por nombre de criterio**, nunca a
+ciegas.
+
+**Las viñetas hay que escribirlas.** Word no guarda el `•` ni el `1.` dentro del
+párrafo: los pinta a partir de `word/numbering.xml`. Al leer solo los `w:t`, una
+lista se convertía en renglones sueltos y la definición del nivel llegaba a
+Moodle sin viñetas —el campo del editor de rúbricas es **texto plano**, así que
+si la viñeta no va escrita, no existe—. Por eso `textoDeCelda()` de
+`assets/docx.js` acepta el mapa de formatos y antepone `• `, `1. ` o `a. ` según
+lo que diga `numbering.xml`, con dos espacios de sangría por nivel. Un párrafo
+sin lista reinicia la numeración.
+
+Es **opcional a propósito**: quien genera HTML (Guion Instruccional a Página)
+quiere la lista como estructura, no un `• ` literal metido en el párrafo. Solo
+`leerTablasDeDocx()` —que usa la rúbrica— pide las viñetas.
+
+### Guion Instruccional a Página (`tools/guion-a-pagina/`)
+
+Los guiones llegan en Word y hay que montarlos como recurso **Página** de 5.1.
+El problema no es teclear: es que **el montaje lo decide una persona** (esta
+tabla del guion, ¿es tabla o acordeón?, ¿la imagen va a la izquierda?) y varios
+compañeros no escriben HTML. Esta herramienta separa las dos cosas: la decisión
+la toma el usuario con clics, el HTML lo pone la herramienta.
+
+Se puede empezar de dos formas, y la herramienta lo pregunta al abrir: **con el
+guion en Word** o **de cero** (con plantillas de arranque: con acordeón, con
+tarjetas, con tabla o en blanco). Nada del editor depende de haber subido un
+Word.
+
+Importando el `.docx` (se salta las fichas de control editorial y arranca en el
+título), abre un **asistente** donde cada tabla del guion se muestra con su
+contenido para elegir en qué se convierte —*Tabla, Acordeón, Tarjetas, Texto,
+No va*— y deja todo en un lienzo de bloques que se arrastran. Hay 14 piezas
+(título, texto, lista, imagen con texto a un lado, caja de instrucción, tabla,
+acordeón, ventana emergente, tarjetas, pestañas, video, botón, aviso,
+separador) y **se anidan**: dentro de un apartado del acordeón caben una tabla,
+una imagen y otro tooltip.
+
+Las **imágenes del Word se extraen solas**: cada bloque de imagen ofrece la
+galería del guion para elegirla con un clic, la vista previa las enseña de
+verdad (cambia el `@@PLUGINFILE@@` por el archivo real) y *Antes de subir* trae
+un **.zip** con las que esa página usa, para arrastrarlas todas de un jalón al
+editor de Moodle.
+
+La vista previa es un iframe con la hoja real del tema y tres anchos; el de
+celular es el que enseña si la tabla se volvió tarjetas de verdad. Está
+**sincronizada con el lienzo**: al hacer clic en un bloque lo enmarca allá, y al
+hacer clic en la previa se abre ese bloque acá.
+
+Las marcas de montaje del guion (`<Figura>`, `<Crear un grupo de 5 botones…>`,
+las que abren y cierran las cajas de instrucción) **no se publican**: cada una
+se convierte en el bloque vacío que corresponde y queda anotada en el bloque y
+en la pestaña *Antes de subir*, para que nadie las pierda ni las imprima en la
+página.
+
+> 📐 **Detalles del HTML que produce en
+> [`tools/guion-a-pagina/README.md`](tools/guion-a-pagina/README.md).** Léelo
+> antes de tocar `componentes.js`: su markup está copiado de una página real ya
+> montada (las ventanas emergentes son modales de Bootstrap, y los botones del
+> acordeón llevan `bg-neutral-claro-50 text-primary`), y ahí está el catálogo
+> de marcas del guion.
+
 ### Micrositio a Página (`tools/micrositio-a-pagina/`)
 
 Otro equipo maquetó contenido como **micrositios** (un `.zip` con `index.html`,
@@ -179,7 +250,9 @@ descargar el zip, cada SVG se rasteriza en un `<canvas>` a 2× y el HTML ya
 referencia el `.png`. La vista previa sigue mostrando el SVG original —el
 navegador lo pinta directo— gracias a un mapa `salida.png → archivo.svg`. El
 `.zip` se **genera** sin librerías, "stored" (sin compresión: los PNG ya vienen
-comprimidos), con el mismo espíritu que el lector de zip.
+comprimidos), con el mismo espíritu que el lector de zip. Ese escritor vive en
+`assets/zip.js` porque lo comparte con Guion Instruccional a Página; el lector
+sí es propio de cada herramienta, porque leen cosas distintas.
 
 El **tamaño** se saca del `width`/`height` del SVG, o de su `viewBox` si no los
 trae. Antes se usaba `img.naturalWidth`, que para un SVG sin tamaño intrínseco

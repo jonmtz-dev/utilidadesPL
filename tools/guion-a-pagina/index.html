@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guion Instruccional a Página - Moodle</title>
+    <link rel="manifest" href="../../manifest.json">
+    <meta name="theme-color" content="#f0f2f5">
+    <link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="../../assets/icons/apple-touch-icon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../assets/shared.css">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="../../assets/theme.js"></script>
+    <script src="../../assets/pwa.js"></script>
+    <script src="../../assets/tools.js"></script>
+    <script src="../../assets/version-moodle.js" defer></script>
+</head>
+<body>
+    <div class="background-mesh"><div class="shape shape-1"></div><div class="shape shape-2"></div><div class="shape shape-3"></div></div>
+    <main class="app-container glass-panel">
+        <header class="app-header">
+            <div class="logo logo--guion"><i class="ph ph-magic-wand"></i></div>
+            <div><h1>Guion Instruccional a Página</h1><p>Arma la página visualmente: acordeones, tablas, tooltips y tarjetas, sin escribir HTML</p></div>
+            <a class="btn-back" href="../../index.html"><i class="ph ph-arrow-left"></i> Panel</a>
+        </header>
+
+        <div class="workspace guion-workspace">
+            <!-- ============ Columna izquierda: el guion ============ -->
+            <section class="panel-section glass-panel editor-panel">
+                <div class="section-header section-header--acciones">
+                    <h2><i class="ph ph-stack"></i> Tu página</h2>
+                    <div class="header-botones">
+                        <button id="btn-importar" class="btn-secondary btn-chico" type="button" title="Importar un guion en Word"><i class="ph ph-file-doc"></i> Word</button>
+                        <button id="btn-deshacer" class="btn-secondary btn-chico" type="button" title="Deshacer (Ctrl+Z)" disabled><i class="ph ph-arrow-counter-clockwise"></i></button>
+                        <button id="btn-limpiar" class="btn-secondary btn-chico" type="button" title="Vaciar la página"><i class="ph ph-trash"></i></button>
+                    </div>
+                </div>
+
+                <!-- Portada del recurso: módulo (colores) y título -->
+                <div class="ficha-pagina">
+                    <div class="campo-modulo">
+                        <span class="campo-etiqueta"><i class="ph ph-palette"></i> Paleta del aula</span>
+                        <div id="modulos" class="modulos" role="radiogroup" aria-label="Paleta del aula"></div>
+                    </div>
+                    <label class="campo-etiqueta" for="titulo-pagina"><i class="ph ph-text-h-one"></i> Título de la página</label>
+                    <input id="titulo-pagina" class="plain-input" placeholder="Historia de la ciencia y tecnología">
+                </div>
+
+                <input id="input-docx" type="file" accept=".docx" hidden>
+                <p id="import-info" class="field-hint hidden"></p>
+
+                <!-- Lienzo de bloques -->
+                <div id="lienzo" class="lienzo" aria-label="Bloques de la página"></div>
+
+                <!-- Paleta gráfica de componentes -->
+                <div class="paleta-componentes">
+                    <p class="paleta-titulo"><i class="ph ph-plus-circle"></i> Agregar <span class="paleta-nota">se inserta debajo del bloque seleccionado</span></p>
+                    <div id="paleta" class="paleta-grid"></div>
+                </div>
+            </section>
+
+            <!-- ============ Columna derecha: resultado ============ -->
+            <section class="panel-section glass-panel output-panel">
+                <div class="tabs">
+                    <button class="tab-btn active" data-target="preview"><i class="ph ph-eye"></i> Vista previa</button>
+                    <button class="tab-btn" data-target="code"><i class="ph ph-code"></i> HTML</button>
+                    <button class="tab-btn" data-target="check"><i class="ph ph-list-checks"></i> Antes de subir</button>
+                </div>
+
+                <div id="preview-content" class="tab-content active">
+                    <div class="preview-barra">
+                        <div class="anchos" role="group" aria-label="Ancho de la vista previa">
+                            <button class="ancho-btn active" data-ancho="escritorio" title="Escritorio"><i class="ph ph-desktop"></i></button>
+                            <button class="ancho-btn" data-ancho="tableta" title="Tableta"><i class="ph ph-device-tablet"></i></button>
+                            <button class="ancho-btn" data-ancho="celular" title="Celular (tablas en tarjetas)"><i class="ph ph-device-mobile"></i></button>
+                        </div>
+                        <span class="preview-nota">Así se ve en Moodle</span>
+                    </div>
+                    <div id="preview-empty" class="empty-state">
+                        <i class="ph ph-layout"></i>
+                        <p>Sube el Word o agrega un bloque para ver tu página</p>
+                    </div>
+                    <!-- El sandbox lleva allow-same-origin a propósito: sin él la previa no
+                         puede cargar las imágenes del Word (son blob: del documento padre) ni
+                         sincronizarse con el lienzo. Lo que corre adentro es nuestro (el CSS
+                         del tema y un guioncito propio); el texto del usuario va escapado y
+                         las ligas pasan por ligaSegura(). -->
+                    <div id="preview-caja" class="preview-caja hidden"><iframe id="preview-frame" sandbox="allow-scripts allow-same-origin" title="Vista previa de la página"></iframe></div>
+                </div>
+
+                <div id="code-content" class="tab-content">
+                    <div class="code-wrapper">
+                        <button id="btn-copy" class="btn-icon" title="Copiar HTML"><i class="ph ph-copy"></i></button>
+                        <textarea id="code" class="code-output" readonly placeholder="El HTML para el editor de Moodle aparecerá aquí..."></textarea>
+                    </div>
+                </div>
+
+                <div id="check-content" class="tab-content">
+                    <div id="check-lista" class="check-lista"></div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Galería de imágenes traídas del Word -->
+    <div id="modal-galeria" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-galeria-titulo">
+        <div class="modal-caja modal-caja--ancha glass-panel">
+            <h2 id="modal-galeria-titulo"><i class="ph ph-images"></i> Imágenes del guion</h2>
+            <p class="modal-intro">Son las que venían en el Word. Elige la que va en este bloque; el HTML la llamará por su nombre.</p>
+            <div id="galeria" class="galeria"></div>
+            <div class="modal-acciones">
+                <button id="galeria-quitar" class="btn-secondary" type="button"><i class="ph ph-x"></i> Dejar sin imagen</button>
+                <button id="galeria-cerrar" class="btn-secondary" type="button">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Asistente de importación: qué es cada tabla del Word -->
+    <div id="modal-import" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-import-titulo">
+        <div class="modal-caja modal-caja--ancha glass-panel">
+            <h2 id="modal-import-titulo"><i class="ph ph-wand"></i> ¿Qué es cada tabla del Word?</h2>
+            <p class="modal-intro">En el guion todo llega como tabla. Tú decides qué se vuelve cada una: la vista previa de la izquierda es su contenido real.</p>
+            <div id="import-tablas" class="import-tablas"></div>
+            <div class="modal-acciones">
+                <button id="import-cancelar" class="btn-secondary" type="button">Cancelar</button>
+                <button id="import-aceptar" class="btn-primary" type="button"><i class="ph ph-check"></i> Armar la página</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../assets/docx.js"></script>
+    <script src="../../assets/zip.js"></script>
+    <!-- La hoja del tema se reutiliza de Micrositio a Página a propósito: es la
+         misma hoja compilada de Moodle y duplicarla es como se quedó vivo meses
+         el hex #d8a7b6 en una copia ya corregida en la otra. -->
+    <script src="../micrositio-a-pagina/hoja-moodle-default.js"></script>
+    <script src="vista-previa.js"></script>
+    <script src="componentes.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
