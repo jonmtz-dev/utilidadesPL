@@ -137,7 +137,8 @@ de siempre.
 | El SVG traía | Dónde está | Salida |
 |---|---|---|
 | Nada en px | en un modal **o** ancho en `%` | `style="max-width: 100%"` |
-| Nada en px | trae `class="img-fluid"` | **nada** — el `<img>` se deja tal cual |
+| Nada en px | trae `img-fluid` **o** un `max-width` inline real | **nada** — el `<img>` se deja tal cual |
+| Nada en px | trae `max-width: none` inline | `width`/`height` (lo de siempre) |
 | Nada en px | en cualquier otro lado | `width`/`height` (lo de siempre) |
 | Medidas en px | donde sea | `width`/`height` (lo de siempre) |
 
@@ -147,10 +148,41 @@ si el `<img>` trae esa clase (o su propio `max-width`), se deja intacto y el
 `src` acaba siendo el único cambio respecto al micrositio. La fidelidad al
 original es el criterio; el inline es solo el sustituto para cuando no hay clase.
 
-⚠️ `img-fluid` **no cuenta si el autor anuló el tope inline**. El ícono de las
-cajas de instrucción viene como `<img class="img-fluid" style="max-width: none
-!important">`: ahí el autor ya decidió, y pisarle ese `style` sería decidir por
-él. Por eso la evidencia exige clase `img-fluid` **y** ningún `max-width` inline.
+⚠️ Un `max-width` inline del autor se lee **por su valor, nunca por su
+presencia** — confundir los dos casos costó un round-trip:
+
+| Inline | Qué dijo el autor | Trato |
+|---|---|---|
+| `max-width: 800px` (o `%`) | "esto crece, pero no más de ahí" | **evidencia de fluidez**, y se respeta su valor |
+| `max-width: none` | "quítale el tope" | **no** es fluidez: `width`/`height` de siempre |
+
+`none` es la única forma que sale por el camino de siempre, y a propósito: sin
+tope, un PNG rasterizado a 3× se dispararía. Es el ícono de las cajas de
+instrucción (`<img class="img-fluid" style="max-width: none !important">`).
+
+Con un tope real pasa lo contrario: la imagen **sí** es fluida hasta ese valor,
+así que no se escriben atributos… y tampoco se escribe `max-width: 100%`, que
+pisaría los 800px que el autor eligió.
+
+Pero **un tope en píxeles no basta para el PNG**, y esto es lo que se escapa a
+simple vista. `max-width: 800px` en el micrositio se lee como "hasta 800, y si el
+contenedor es menor, lo que quepa" — porque el SVG fluido **no tiene ancho
+propio**: el suyo es el del contenedor. El PNG sí tiene (1500px tras el
+rasterizado), así que se planta en 800 y **desborda** los contenedores más
+angostos. Y no lo salva `img-fluid`: el inline le gana a la clase.
+
+Por eso, si el tope es una longitud absoluta, se reescribe como
+`max-width: min(800px, 100%)` — se conserva el valor del autor y se repone el
+tope del contenedor que el SVG tenía gratis. Los topes en `%` se dejan como
+están, que ya se adaptan solos, y el `!important` del autor se respeta.
+
+Medido con la imagen del teclado (`viewBox="0 0 500 225.56"`, `max-width: 800px`):
+
+| Contenedor | Micrositio | Antes | Ahora |
+|---|---|---|---|
+| 1400px | 800×361 | 500×226 | **800×361** |
+| 700px | 661×298 | 500×226 | **661×298** |
+| 400px | 361×163 | 500×226 ← desbordaba | **361×163** |
 
 Ojo con el orden de las señales: `img-fluid` **solo se lee como evidencia**, no
 como garantía. `img-fluid` es `max-width: 100%`, así que **limita, nunca
@@ -465,5 +497,6 @@ un `<p>` hermano adyacente.
 | Texto del modal estirado | En el modal de "park", los `<mark>` de colores salían como **barras verticales altísimas** y las palabras separadas en fila. El micrositio envolvía la frase en una `<ul>` **sin `<li>`**; TinyMCE la borra por inválida y entonces cada `<strong>`/`<mark>`/`<i>` se volvió item flex del `.card-body.d-flex` (3 → 8 items, `<mark>` de 17px → 200px) | `sanearParaTinyMCE()`: envuelve el contenido suelto en un `<li style="list-style:none">` para que la lista sea válida y sobreviva. Ver §4-bis |
 | Botón gris más claro | `.btn-secondary` (el "Ubicación en tiempo real" de los modales) salía **gris claro** en Moodle y **gris fuerte** (`#6c757d`) en el micro. El tablero **no ofrecía el arreglo**: ni la hoja del micro ni la de Moodle declaran `.btn-secondary` — es un default del Bootstrap de cada lado. Y como es un botón, tampoco podía blindarse inline (mataría el hover) | Tercera categoría del complemento: tabla `DEFAULTS_BOOTSTRAP_CSS` con el default de Bootstrap 5.2.3 (reposo/hover/active), filtrada por `seUsaEnPagina()`. **Solo fondo y texto**: el `border-color` se omite a propósito para no pisar `border-secondary-10` (color del módulo). Ver §6, punto 2 |
 | Figuras de tarjeta clavadas a 400px | Las figuras del patrón estándar (`.card.img-contenedor > img.img-fluid`) salían chicas: el SVG solo traía `viewBox="0 0 400 180"`, así que era fluido y llenaba la tarjeta en el micro, pero el acotamiento anterior daba el trato fluido **solo dentro de modales**, y estas van en una `.card`. Quedaban a 400px en una tarjeta de ~760px. `img-fluid` no las salvaba: limita, nunca agranda, y el atributo `width="400"` es menor que su 100% | Tercera evidencia de fluidez: `class="img-fluid"` en el `<img>`, siempre que el autor no haya anulado el tope con un `max-width` inline (el ícono de `.instrucciones` trae `max-width: none !important`). Y en ese caso **no se escribe nada inline**: la clase ya es `max-width:100%`, así que el `<img>` sale igual que en el micrositio. Ver §4-ter |
+| Imagen con `max-width: 800px` clavada a 500px | Misma historia que las figuras de tarjeta, pero la guarda del arreglo anterior era demasiado burda: metía en el mismo saco **cualquier** `max-width` inline, sin mirar su valor. `max-width: 800px` (un tope a algo que crece) se trataba igual que `max-width: none` (el autor apagando el tope). Y al arreglarlo apareció la segunda mitad: un tope en px no basta, porque el PNG sí tiene ancho propio y desbordaba los contenedores angostos (500px en uno de 400px) | Se lee el **valor**, no la presencia: `none` sale por el camino de siempre, un tope real es evidencia de fluidez. Y el tope absoluto se reescribe como `min(800px, 100%)`, reponiendo el tope de contenedor que el SVG tenía gratis. Ver §4-ter |
 | Filas de colores que salen blancas y grises | La tabla de "Metas SMART": cada fila es una `.card.bg-resalte-10` (crema) y en Moodle salía blanca. **El color sí llegaba** —`bg-resalte-10` está idéntica en las dos hojas—: se lo tapaban las dos columnas de dentro, `.bg-light-subtle` y `.bg-body-tertiary`, que **no existen en el Bootstrap 5.2.3 del micrositio** (ahí computan `rgba(0,0,0,0)` y dejan ver la tarjeta) pero **sí en el 5.3 de Moodle**, donde despiertan y pintan encima | `RE_BG_BS53`: lista cerrada de clases 5.3-only que se apagan inline con `background-color: transparent !important`, y solo si su fondo propio es transparente en el render. Ver §4-quater |
 | Scroll horizontal en pantallas medianas | `.mainPlantilla23 .table td { min-width: 200px }` (está en el CSS del micro **y** en la hoja de Moodle): 5 columnas × 200px = **1000px de ancho mínimo**, así que la tabla no podía encogerse y sacaba barra de desplazamiento entre los 576px de las tarjetas y el escritorio | `max-width: 100%` inline en la tabla **+** una regla `@media` en el complemento del tema que pone `min-width: 0` en las celdas (ver §6-ter). Al encoger la tabla, el título cuadra solo |

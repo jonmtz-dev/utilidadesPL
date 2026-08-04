@@ -1244,7 +1244,7 @@ function initMicrositio() {
                         //   · está dentro de un modal (contenedor de ancho variable
                         //     donde se detectó el problema),
                         //   · su SVG declara el ancho en % (señal explícita del autor), o
-                        //   · el <img> trae la clase `img-fluid`.
+                        //   · el <img> trae `img-fluid` o un `max-width` inline real.
                         // Todo lo demás conserva el comportamiento de siempre.
                         //
                         // Acotarlo NO es cosmético: sin esto, una imagen decorativa sin
@@ -1258,13 +1258,24 @@ function initMicrositio() {
                         // figuras del micrositio (.card.img-contenedor > img.img-fluid),
                         // que ninguna regla de Moodle dimensiona: sin esto quedaban
                         // clavadas al viewBox (400px) dentro de una tarjeta de ~760px.
-                        // NO cuenta si el propio autor anuló el tope inline —el ícono
-                        // de las cajas de instrucción trae `max-width: none !important`,
-                        // y pisárselo sería decidir por él.
-                        const topePropio = /(^|;)\s*max-width\s*:/i.test(el.getAttribute('style') || '');
-                        const claseFluida = el.classList.contains('img-fluid') && !topePropio;
+                        //
+                        // Un `max-width` inline del autor hay que leerlo por su VALOR,
+                        // no por su presencia:
+                        //   · `max-width: 800px` (o %) es un TOPE: la imagen sigue siendo
+                        //     fluida, solo que hasta ahí. Es evidencia de fluidez tan
+                        //     buena como `img-fluid` —solo se pone un techo a algo que
+                        //     crece— y hay que respetar ese valor, no pisarlo con 100%.
+                        //   · `max-width: none` es lo CONTRARIO: el autor apaga el tope a
+                        //     propósito (el ícono de las cajas de instrucción trae
+                        //     `max-width: none !important`). Ahí no hay fluidez que
+                        //     reponer y, sin tope, un PNG rasterizado a 3x se dispararía:
+                        //     esa imagen se queda con sus `width`/`height` de siempre.
+                        const topeInline = (el.getAttribute('style') || '')
+                            .match(/(?:^|;)\s*max-width\s*:\s*([^;!]+)(!\s*important)?/i);
+                        const topeApagado = !!topeInline && /^\s*none\s*$/i.test(topeInline[1]);
+                        const claseFluida = el.classList.contains('img-fluid') || !!topeInline;
 
-                        if (fluido && (enModal || porcentaje || claseFluida)) {
+                        if (fluido && !topeApagado && (enModal || porcentaje || claseFluida)) {
                             // Inline porque TinyMCE borra los <style>.
                             //
                             // ⚠️ max-width, NUNCA width:100%. Un `width` inline le GANA a
@@ -1277,11 +1288,31 @@ function initMicrositio() {
                             // Tampoco va `height:auto`: pisaría el `height` que esas
                             // mismas reglas fijan.
                             //
-                            // Y solo si hace falta: si el <img> ya trae `img-fluid` (que
-                            // ES `max-width:100%`) o su propio tope inline, repetirlo no
-                            // agrega nada y ensucia la salida. En ese caso el <img> queda
-                            // igual que en el micrositio, con el `src` como único cambio.
-                            if (!el.classList.contains('img-fluid') && !topePropio) {
+                            if (topeInline) {
+                                // Tope propio en píxeles: hay que conservarlo, pero NO
+                                // basta. El SVG fluido no tiene tamaño intrínseco —su
+                                // ancho es el del contenedor y el `max-width: 800px`
+                                // solo le pone techo—, mientras que el PNG sí trae
+                                // píxeles (1500 tras el rasterizado). Como el inline le
+                                // gana al `max-width: 100%` de `img-fluid`, el PNG se
+                                // planta en 800 y DESBORDA los contenedores más
+                                // angostos: medido, en uno de 561px el micro daba 561 y
+                                // el PNG daba 800.
+                                //
+                                // Reponemos el tope del contenedor sin pisar el del
+                                // autor: `min(800px, 100%)`. Sigue siendo `max-width`,
+                                // así que tampoco compite con el CSS que dimensiona
+                                // iconos. Los topes en % ya se adaptan solos.
+                                const valor = topeInline[1].trim();
+                                if (!/[%(]/.test(valor)) {
+                                    el.style.setProperty('max-width', `min(${valor}, 100%)`,
+                                        topeInline[2] ? 'important' : '');
+                                }
+                            } else if (!el.classList.contains('img-fluid')) {
+                                // Si ya trae `img-fluid` (que ES `max-width:100%`),
+                                // repetirlo inline no agrega nada y ensucia la salida:
+                                // el <img> queda igual que en el micrositio, con el
+                                // `src` como único cambio.
                                 el.style.setProperty('max-width', '100%');
                             }
                         } else {
