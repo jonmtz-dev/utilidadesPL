@@ -192,6 +192,44 @@ dos casos y sin desbordar**.
 
 La proporción nunca cambió — el problema **no era** deformación, era tamaño.
 
+## 4-quater. Clases de Bootstrap 5.3 que en el micrositio son letra muerta
+
+Los micrositios cargan **Bootstrap 5.2.3**; el de Moodle es **5.3**. Eso abre una
+trampa que no es de color ni de layout, sino de **versión**: hay clases que el
+autor escribió y que en su Bootstrap **no existen** —no pintan nada— y que al
+llegar a Moodle **despiertan** y pintan encima.
+
+Verificado bajando las dos hojas del CDN:
+
+| Bootstrap | `.bg-body-tertiary` | `.bg-light-subtle` |
+|---|---|---|
+| 5.2.3 (micrositio) | no existe | no existe |
+| 5.3.3 (Moodle) | sí | sí |
+
+El caso que lo destapó: la tabla de "Metas SMART". Cada fila es una
+`.card.bg-resalte-10` (crema) con dos columnas dentro,
+`.bg-light-subtle` y `.bg-body-tertiary`. En el micrositio esas dos columnas
+computan `rgba(0, 0, 0, 0)` y **se ve el crema de la tarjeta a través**; en
+Moodle pintan blanco y gris, y entre las dos cubren el 100% de la tarjeta. El
+color no se perdía —`bg-resalte-10` está idéntica en las dos hojas y sí llega—:
+**se lo tapaban**.
+
+El arreglo (`RE_BG_BS53`) apaga esas clases inline con
+`background-color: transparent !important`, que es reproducir lo que el
+micrositio **hace**: nada. Va inline y no al complemento del tema porque es un
+fondo estático, sin estados, igual que `.card` y `thead`.
+
+⚠️ **La lista de clases es CERRADA a propósito** (`bg-body-secondary`,
+`bg-body-tertiary`, `bg-*-subtle`). La versión genérica —apagar cualquier `bg-*`
+que compute transparente en el render— rompería `bg-light`, `bg-white` y demás,
+que sí existen en 5.2.3 y sí pintan en el micro. **El blindaje no puede
+distinguirlas**: su iframe carga solo `estilos.css`, sin Bootstrap, así que ahí
+*todas* las clases de Bootstrap computan transparente por igual. Saber cuáles son
+5.3-only es información que solo puede venir de una lista escrita a mano.
+
+Y solo se apagan si su fondo propio es transparente: si el elemento además trae
+un `bg-*` del tema, ese color sí es real y lo congela el camino normal.
+
 ## 5. Complemento aditivo `.ms-convertido` — lo CON estado
 
 - La herramienta **marca** cada conversión: agrega la clase `ms-convertido` al
@@ -427,4 +465,5 @@ un `<p>` hermano adyacente.
 | Texto del modal estirado | En el modal de "park", los `<mark>` de colores salían como **barras verticales altísimas** y las palabras separadas en fila. El micrositio envolvía la frase en una `<ul>` **sin `<li>`**; TinyMCE la borra por inválida y entonces cada `<strong>`/`<mark>`/`<i>` se volvió item flex del `.card-body.d-flex` (3 → 8 items, `<mark>` de 17px → 200px) | `sanearParaTinyMCE()`: envuelve el contenido suelto en un `<li style="list-style:none">` para que la lista sea válida y sobreviva. Ver §4-bis |
 | Botón gris más claro | `.btn-secondary` (el "Ubicación en tiempo real" de los modales) salía **gris claro** en Moodle y **gris fuerte** (`#6c757d`) en el micro. El tablero **no ofrecía el arreglo**: ni la hoja del micro ni la de Moodle declaran `.btn-secondary` — es un default del Bootstrap de cada lado. Y como es un botón, tampoco podía blindarse inline (mataría el hover) | Tercera categoría del complemento: tabla `DEFAULTS_BOOTSTRAP_CSS` con el default de Bootstrap 5.2.3 (reposo/hover/active), filtrada por `seUsaEnPagina()`. **Solo fondo y texto**: el `border-color` se omite a propósito para no pisar `border-secondary-10` (color del módulo). Ver §6, punto 2 |
 | Figuras de tarjeta clavadas a 400px | Las figuras del patrón estándar (`.card.img-contenedor > img.img-fluid`) salían chicas: el SVG solo traía `viewBox="0 0 400 180"`, así que era fluido y llenaba la tarjeta en el micro, pero el acotamiento anterior daba el trato fluido **solo dentro de modales**, y estas van en una `.card`. Quedaban a 400px en una tarjeta de ~760px. `img-fluid` no las salvaba: limita, nunca agranda, y el atributo `width="400"` es menor que su 100% | Tercera evidencia de fluidez: `class="img-fluid"` en el `<img>`, siempre que el autor no haya anulado el tope con un `max-width` inline (el ícono de `.instrucciones` trae `max-width: none !important`). Y en ese caso **no se escribe nada inline**: la clase ya es `max-width:100%`, así que el `<img>` sale igual que en el micrositio. Ver §4-ter |
+| Filas de colores que salen blancas y grises | La tabla de "Metas SMART": cada fila es una `.card.bg-resalte-10` (crema) y en Moodle salía blanca. **El color sí llegaba** —`bg-resalte-10` está idéntica en las dos hojas—: se lo tapaban las dos columnas de dentro, `.bg-light-subtle` y `.bg-body-tertiary`, que **no existen en el Bootstrap 5.2.3 del micrositio** (ahí computan `rgba(0,0,0,0)` y dejan ver la tarjeta) pero **sí en el 5.3 de Moodle**, donde despiertan y pintan encima | `RE_BG_BS53`: lista cerrada de clases 5.3-only que se apagan inline con `background-color: transparent !important`, y solo si su fondo propio es transparente en el render. Ver §4-quater |
 | Scroll horizontal en pantallas medianas | `.mainPlantilla23 .table td { min-width: 200px }` (está en el CSS del micro **y** en la hoja de Moodle): 5 columnas × 200px = **1000px de ancho mínimo**, así que la tabla no podía encogerse y sacaba barra de desplazamiento entre los 576px de las tarjetas y el escritorio | `max-width: 100%` inline en la tabla **+** una regla `@media` en el complemento del tema que pone `min-width: 0` en las celdas (ver §6-ter). Al encoger la tabla, el título cuadra solo |

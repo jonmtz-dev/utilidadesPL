@@ -414,6 +414,12 @@ const RE_BG = /(^|\s)bg-(primary|secondary|neutral|resalte)/;
 const RE_TX = /(^|\s)text-(primary|secondary|neutral|resalte)/;
 const RE_BD = /(^|\s)border-(primary|secondary|neutral|resalte)/;
 
+// Clases de fondo que SOLO existen en Bootstrap 5.3. Los micrositios cargan
+// 5.2.3, donde son letra muerta: no pintan nada y se ve el fondo de abajo. El
+// Bootstrap de Moodle sí las trae, así que allá DESPIERTAN y pintan encima.
+// Ver REGLAS.md §4-quater.
+const RE_BG_BS53 = /(^|\s)bg-(body-(secondary|tertiary)|(primary|secondary|success|danger|warning|info|light|dark)-subtle)(\s|$)/;
+
 const SEL_TEMATICOS = [
     '[class*="bg-primary"]', '[class*="bg-secondary"]', '[class*="bg-neutral"]', '[class*="bg-resalte"]',
     '[class*="text-primary"]', '[class*="text-secondary"]', '[class*="text-neutral"]', '[class*="text-resalte"]',
@@ -423,7 +429,10 @@ const SEL_TEMATICOS = [
     // Bootstrap de Moodle pinta el fondo de CADA celda encima, tapándolo — pase
     // lo que pase con la etiqueta. Solo se congelaba el <th> y esas tablas
     // salían con el encabezado gris. Ver REGLAS.md §9.
-    '.accordion-button', '.btn', 'thead th', 'thead td', '.card'
+    '.accordion-button', '.btn', 'thead th', 'thead td', '.card',
+    // Clases de fondo de Bootstrap 5.3 (ver RE_BG_BS53): hay que VISITARLAS para
+    // poder apagarlas. El filtro fino lo hace la regex, no este selector.
+    '[class*="bg-body-"]', '[class*="-subtle"]'
 ].join(',');
 
 function esTransparente(c) {
@@ -479,6 +488,25 @@ function congelarElemento(src, dst) {
         if (sinBorde) dst.style.setProperty('border', '1px solid rgba(0, 0, 0, 0.176)', 'important');
         else if (!esTransparente(cs.borderTopColor)) dst.style.setProperty('border-color', cs.borderTopColor, 'important');
         return;
+    }
+
+    // --- Clases de fondo que solo existen en Bootstrap 5.3 (bg-body-tertiary,
+    // bg-light-subtle…). En el micrositio (5.2.3) no pintan nada y deja ver el
+    // color del padre —así se diseñó la tabla de filas de colores—; en Moodle
+    // pintan blanco/gris y lo tapan. Las apagamos inline reproduciendo lo que
+    // HACE el micrositio: nada.
+    //
+    // Solo si su fondo propio es transparente en el render. Si el elemento
+    // además trae un bg-* del tema (bg-resalte-10…), ese color sí es real y lo
+    // congela el bloque de abajo, que es lo correcto.
+    //
+    // ⚠️ Lista CERRADA a propósito. Lo genérico —apagar cualquier `bg-*` que
+    // compute transparente— rompería `bg-light`, `bg-white` y demás, que SÍ
+    // existen en 5.2.3 y SÍ pintan en el micro: el iframe del blindaje no carga
+    // Bootstrap, así que ahí todas computan transparente por igual y no se
+    // pueden distinguir. Ver REGLAS.md §4-quater.
+    if (RE_BG_BS53.test(cls) && esTransparente(cs.backgroundColor)) {
+        dst.style.setProperty('background-color', 'transparent', 'important');
     }
 
     // Fondo. El TH hereda el color visible del thead coloreado: fondo EFECTIVO.
