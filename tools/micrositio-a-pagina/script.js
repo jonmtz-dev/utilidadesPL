@@ -1214,8 +1214,9 @@ function initMicrositio() {
                         // El trato "fluido" es la EXCEPCIÓN, no la regla. Solo entra
                         // donde hay evidencia de que la imagen debía estirarse:
                         //   · está dentro de un modal (contenedor de ancho variable
-                        //     donde se detectó el problema), o
-                        //   · su SVG declara el ancho en % (señal explícita del autor).
+                        //     donde se detectó el problema),
+                        //   · su SVG declara el ancho en % (señal explícita del autor), o
+                        //   · el <img> trae la clase `img-fluid`.
                         // Todo lo demás conserva el comportamiento de siempre.
                         //
                         // Acotarlo NO es cosmético: sin esto, una imagen decorativa sin
@@ -1224,7 +1225,18 @@ function initMicrositio() {
                         // perfectas. Ver REGLAS.md §4-ter.
                         const enModal = !!el.closest('.modal, .modal-body');
 
-                        if (fluido && (enModal || porcentaje)) {
+                        // `img-fluid` es `max-width:100%` de Bootstrap: el autor dijo
+                        // que esa imagen se adapta a su contenedor. Es el patrón de las
+                        // figuras del micrositio (.card.img-contenedor > img.img-fluid),
+                        // que ninguna regla de Moodle dimensiona: sin esto quedaban
+                        // clavadas al viewBox (400px) dentro de una tarjeta de ~760px.
+                        // NO cuenta si el propio autor anuló el tope inline —el ícono
+                        // de las cajas de instrucción trae `max-width: none !important`,
+                        // y pisárselo sería decidir por él.
+                        const topePropio = /(^|;)\s*max-width\s*:/i.test(el.getAttribute('style') || '');
+                        const claseFluida = el.classList.contains('img-fluid') && !topePropio;
+
+                        if (fluido && (enModal || porcentaje || claseFluida)) {
                             // Inline porque TinyMCE borra los <style>.
                             //
                             // ⚠️ max-width, NUNCA width:100%. Un `width` inline le GANA a
@@ -1236,7 +1248,14 @@ function initMicrositio() {
                             // con el ancho del contenedor y lo llena igual que el SVG.
                             // Tampoco va `height:auto`: pisaría el `height` que esas
                             // mismas reglas fijan.
-                            el.style.setProperty('max-width', '100%');
+                            //
+                            // Y solo si hace falta: si el <img> ya trae `img-fluid` (que
+                            // ES `max-width:100%`) o su propio tope inline, repetirlo no
+                            // agrega nada y ensucia la salida. En ese caso el <img> queda
+                            // igual que en el micrositio, con el `src` como único cambio.
+                            if (!el.classList.contains('img-fluid') && !topePropio) {
+                                el.style.setProperty('max-width', '100%');
+                            }
                         } else {
                             // Comportamiento de siempre: le fijamos el tamaño real del
                             // SVG. Sin esto el PNG saldría a su resolución de rasterizado

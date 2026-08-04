@@ -129,15 +129,34 @@ cambia una propiedad que **no es de estilo, es del formato**:
 Por eso `medidasSVG()` devuelve `fluido` y la conversión se bifurca:
 
 **El trato fluido es la EXCEPCIÓN, no la regla.** Solo entra donde hay evidencia
-de que la imagen debía estirarse: la imagen está **dentro de un modal**, o su SVG
-**declara el ancho en `%`** (señal explícita del autor). Todo lo demás conserva
-el comportamiento de siempre.
+de que la imagen debía estirarse: la imagen está **dentro de un modal**, su SVG
+**declara el ancho en `%`**, o el `<img>` trae la clase **`img-fluid`** (las dos
+últimas, señales explícitas del autor). Todo lo demás conserva el comportamiento
+de siempre.
 
 | El SVG traía | Dónde está | Salida |
 |---|---|---|
-| Nada en px | en un modal, **o** ancho en `%` | `style="max-width: 100%"` |
+| Nada en px | en un modal **o** ancho en `%` | `style="max-width: 100%"` |
+| Nada en px | trae `class="img-fluid"` | **nada** — el `<img>` se deja tal cual |
 | Nada en px | en cualquier otro lado | `width`/`height` (lo de siempre) |
 | Medidas en px | donde sea | `width`/`height` (lo de siempre) |
+
+El `max-width` inline **solo se escribe si hace falta**. `img-fluid` ya *es*
+`max-width: 100%`, así que repetirlo inline no cambia nada y ensucia la salida:
+si el `<img>` trae esa clase (o su propio `max-width`), se deja intacto y el
+`src` acaba siendo el único cambio respecto al micrositio. La fidelidad al
+original es el criterio; el inline es solo el sustituto para cuando no hay clase.
+
+⚠️ `img-fluid` **no cuenta si el autor anuló el tope inline**. El ícono de las
+cajas de instrucción viene como `<img class="img-fluid" style="max-width: none
+!important">`: ahí el autor ya decidió, y pisarle ese `style` sería decidir por
+él. Por eso la evidencia exige clase `img-fluid` **y** ningún `max-width` inline.
+
+Ojo con el orden de las señales: `img-fluid` **solo se lee como evidencia**, no
+como garantía. `img-fluid` es `max-width: 100%`, así que **limita, nunca
+agranda**: por sí sola no rescata a un PNG que quedó chico, porque el atributo
+`width` es menor que el 100% y gana. Lo que arregla el caso es **no escribir el
+atributo**; la clase solo nos dice que podemos no escribirlo.
 
 Acotarlo no es cosmético: **sin el acotamiento, una imagen decorativa sin regla
 CSS que la dimensione pasaba de 300×300 a 900×900** (el PNG se rasteriza a 3×).
@@ -407,4 +426,5 @@ un `<p>` hermano adyacente.
 | SVG responsivo rasterizado cuadrado | `medidasSVG()` hacía `parseFloat` del atributo: un `width="100%"` daba **100** y se tomaba como 100px, así que un SVG responsivo salía como PNG **cuadrado de 100×100** con el dibujo deformado. Igual con unidades (`600pt`) | Solo se aceptan medidas en px (o sin unidad); cualquier otra cosa cae al `viewBox`, que además repone la medida que falte **conservando su proporción** |
 | Texto del modal estirado | En el modal de "park", los `<mark>` de colores salían como **barras verticales altísimas** y las palabras separadas en fila. El micrositio envolvía la frase en una `<ul>` **sin `<li>`**; TinyMCE la borra por inválida y entonces cada `<strong>`/`<mark>`/`<i>` se volvió item flex del `.card-body.d-flex` (3 → 8 items, `<mark>` de 17px → 200px) | `sanearParaTinyMCE()`: envuelve el contenido suelto en un `<li style="list-style:none">` para que la lista sea válida y sobreviva. Ver §4-bis |
 | Botón gris más claro | `.btn-secondary` (el "Ubicación en tiempo real" de los modales) salía **gris claro** en Moodle y **gris fuerte** (`#6c757d`) en el micro. El tablero **no ofrecía el arreglo**: ni la hoja del micro ni la de Moodle declaran `.btn-secondary` — es un default del Bootstrap de cada lado. Y como es un botón, tampoco podía blindarse inline (mataría el hover) | Tercera categoría del complemento: tabla `DEFAULTS_BOOTSTRAP_CSS` con el default de Bootstrap 5.2.3 (reposo/hover/active), filtrada por `seUsaEnPagina()`. **Solo fondo y texto**: el `border-color` se omite a propósito para no pisar `border-secondary-10` (color del módulo). Ver §6, punto 2 |
+| Figuras de tarjeta clavadas a 400px | Las figuras del patrón estándar (`.card.img-contenedor > img.img-fluid`) salían chicas: el SVG solo traía `viewBox="0 0 400 180"`, así que era fluido y llenaba la tarjeta en el micro, pero el acotamiento anterior daba el trato fluido **solo dentro de modales**, y estas van en una `.card`. Quedaban a 400px en una tarjeta de ~760px. `img-fluid` no las salvaba: limita, nunca agranda, y el atributo `width="400"` es menor que su 100% | Tercera evidencia de fluidez: `class="img-fluid"` en el `<img>`, siempre que el autor no haya anulado el tope con un `max-width` inline (el ícono de `.instrucciones` trae `max-width: none !important`). Y en ese caso **no se escribe nada inline**: la clase ya es `max-width:100%`, así que el `<img>` sale igual que en el micrositio. Ver §4-ter |
 | Scroll horizontal en pantallas medianas | `.mainPlantilla23 .table td { min-width: 200px }` (está en el CSS del micro **y** en la hoja de Moodle): 5 columnas × 200px = **1000px de ancho mínimo**, así que la tabla no podía encogerse y sacaba barra de desplazamiento entre los 576px de las tarjetas y el escritorio | `max-width: 100%` inline en la tabla **+** una regla `@media` en el complemento del tema que pone `min-width: 0` en las celdas (ver §6-ter). Al encoger la tabla, el título cuadra solo |
