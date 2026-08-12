@@ -241,10 +241,11 @@ celular es el que enseña si la tabla se volvió tarjetas de verdad. Está
 **sincronizada con el lienzo**: al hacer clic en un bloque lo enmarca allá, y al
 hacer clic en la previa se abre ese bloque acá.
 
-Es la única herramienta que se sale del tope de 1400px del contenedor (usa 1760)
-y la única con el **reparto de pantalla ajustable**: el editor arranca angosto
-para que la previa tenga ancho de escritorio de verdad, el divisor se arrastra
-(y se recuerda), y hay un botón para darle a la previa el área completa. El
+Se sale del tope de 1400px del contenedor (usa 1760) y tiene el **reparto de
+pantalla ajustable** —lo mismo que el Integrador HTML, con el que comparte
+`assets/reparto.js`—: el editor arranca angosto para que la previa tenga ancho
+de escritorio de verdad, el divisor se arrastra (y se recuerda), y hay un botón
+⤢ para darle el área completa a la previa **y otro para dárselo al editor**. El
 ancho real en px va escrito junto a la barra, porque "escritorio" en una ventana
 chica no es escritorio y conviene saberlo.
 

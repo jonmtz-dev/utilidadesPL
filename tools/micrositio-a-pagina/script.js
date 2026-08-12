@@ -919,7 +919,6 @@ function initMicrositio() {
     const zipInfo = document.getElementById('zip-info');
     const filaHtml = document.getElementById('fila-html');
     const selectHtml = document.getElementById('select-html');
-    const btnConvertir = document.getElementById('btn-convertir');
     const btnPasos = document.getElementById('btn-pasos');
     const btnCopy = document.getElementById('btn-copy');
     const btnCopyCss = document.getElementById('btn-copy-css');
@@ -976,7 +975,6 @@ function initMicrositio() {
         const htmls = [...ARCHIVOS.keys()].filter(r => /\.html?$/i.test(r));
         if (htmls.length === 0) {
             avisoCarga('error', 'x-circle', 'No se encontró ningún archivo .html');
-            btnConvertir.disabled = true;
             return;
         }
 
@@ -1002,7 +1000,6 @@ function initMicrositio() {
             `<strong>${escapar(etiqueta)}</strong> — ${ARCHIVOS.size} archivos, ` +
             `${imgs} imágenes, ${htmls.length} HTML`);
 
-        btnConvertir.disabled = false;
         convertir();
     }
 
@@ -1013,7 +1010,6 @@ function initMicrositio() {
             await procesarArchivos(await leerZip(await file.arrayBuffer()), file.name);
         } catch (e) {
             avisoCarga('error', 'x-circle', escapar(e.message));
-            btnConvertir.disabled = true;
         }
     }
 
@@ -1026,7 +1022,6 @@ function initMicrositio() {
             await procesarArchivos(mapa, raiz || `${fileList.length} archivos`);
         } catch (e) {
             avisoCarga('error', 'x-circle', escapar(e.message));
-            btnConvertir.disabled = true;
         }
     }
 
@@ -1056,7 +1051,6 @@ function initMicrositio() {
             await procesarArchivos(mapa, etiqueta);
         } catch (e) {
             avisoCarga('error', 'x-circle', escapar(e.message));
-            btnConvertir.disabled = true;
         }
     }
 
@@ -2074,7 +2068,6 @@ function initMicrositio() {
 
     /* ----------------------------------------------------------- Varios */
 
-    btnConvertir.addEventListener('click', convertir);
     Object.values(opt).forEach(o => o.addEventListener('change', () => {
         if (ARCHIVOS.size) convertir();
     }));

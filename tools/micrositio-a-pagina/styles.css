@@ -153,16 +153,17 @@
     box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.12);
 }
 
+/* Párrafo, NO flex. Con display:flex cada trozo de texto y cada <code> se
+   volvían un elemento flexible aparte, todos en una sola línea sin envolver: la
+   nota salía en columnitas y el word-break partía "src" letra por letra. El <i>
+   inicial es un icono en línea y se acomoda solo. */
 .campo-nota {
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
     font-size: 12.5px;
     color: var(--text-muted);
     line-height: 1.5;
 }
 
-.campo-nota i { font-size: 14px; margin-top: 2px; flex-shrink: 0; }
+.campo-nota i { font-size: 14px; margin-right: 4px; vertical-align: -1px; }
 .campo-nota code {
     font-family: 'Courier New', Courier, monospace;
     background: var(--control-bg);
