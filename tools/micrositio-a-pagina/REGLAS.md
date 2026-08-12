@@ -352,7 +352,18 @@ un `bg-*` del tema, ese color sí es real y lo congela el camino normal.
     (punto 2 de la lista de arriba).
 
   Las dos listas van creciendo conforme aparecen casos: así entraron `.card`, el
-  `<th>` y `.btn-secondary`.
+  `<th>`, `.btn-secondary` y los **botones que son enlaces**.
+
+  > **El caso de `a.btn-primary`.** Tu hoja trae
+  > `.mainPlantilla23 a { color: blue; text-decoration: underline }` y
+  > `.mainPlantilla23 a:visited { color: blue !important }`. Eso le gana al
+  > `color: #fff` del botón —`.mainPlantilla23 a` es (0,1,1) contra el (0,1,0) de
+  > `.btn-primary`—, así que un botón guinda sale con el texto azul de liga: se ve
+  > bien en el micrositio y mal en Moodle. Por eso las entradas de la tabla llevan
+  > el `a` al frente: `.ms-convertido a.btn-primary` queda en (0,2,1), y la
+  > variante `:visited` en (0,3,1), que es lo único que puede contra un
+  > `!important` de (0,2,1). **El subrayado no se toca**: el micrositio también lo
+  > tiene, porque es el default del navegador para un `<a>`.
 
 ## 6-0. La lógica de tablas es COMPARTIDA (`assets/tablas.js`)
 

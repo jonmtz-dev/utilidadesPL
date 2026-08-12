@@ -335,6 +335,22 @@ function selectorComplemento(sel) {
  *
  * Solo entran las que ESTA página usa (seUsaEnPagina), igual que las perdidas.
  *
+ * El caso de los BOTONES QUE SON ENLACES (`a.btn-primary`) no es de Bootstrap
+ * sino del tema, pero se resuelve aquí por lo mismo. La hoja de Moodle trae:
+ *
+ *     .mainPlantilla23 a { color: blue; text-decoration: underline; }
+ *     .mainPlantilla23 a:visited { color: blue !important; }
+ *
+ * y eso le gana al `color: #fff` de Bootstrap: `.mainPlantilla23 a` es (0,1,1)
+ * contra el (0,1,0) de `.btn-primary`, y encima el :visited lleva !important. El
+ * resultado es un botón guinda con el texto azul de liga, que es justo lo que se
+ * ve en el micrositio bien montado y en Moodle no.
+ *
+ * Por eso las entradas van con el `a` al frente: `.ms-convertido a.btn-primary`
+ * queda en (0,2,1) —le gana al azul— y la variante `:visited` en (0,3,1), que es
+ * lo único que puede con un `!important` de (0,2,1). El subrayado NO se toca: el
+ * micrositio también lo tiene (es el default del navegador para un <a>).
+ *
  * ⚠️ NADA de `border-color` aquí, aunque Bootstrap sí lo declare: los botones del
  * micrositio traen `border border-4 border-secondary-10`, y esa utilidad pinta el
  * borde con el token del MÓDULO. Un `border-color` nuestro con !important se lo
@@ -345,6 +361,10 @@ const DEFAULTS_BOOTSTRAP_CSS = `
 .btn-secondary { color: #fff; background-color: #6c757d; }
 .btn-secondary:hover { color: #fff; background-color: #5c636a; }
 .btn-secondary:active { color: #fff; background-color: #565e64; }
+a.btn-primary { color: #fff; }
+a.btn-primary:visited { color: #fff; }
+a.btn-secondary { color: #fff; }
+a.btn-secondary:visited { color: #fff; }
 `;
 
 function compararCSS(cssMicrositio, cssMoodle, doc) {
@@ -1912,11 +1932,12 @@ function initMicrositio() {
                         ${chipsColor(d.micrositio)}<span class="ruta">${escapar(d.micrositio)}</span></div>
                 </li>`).join('');
             bloques.push(`<div class="aviso aviso-warn"><i class="ph ph-paint-brush"></i>
-                <span><strong>${r.defaults.length} estilo(s) que vienen del Bootstrap del micrositio</strong>
-                y tu Moodle pinta distinto (el gris de los botones <code>.btn-secondary</code>). No aparecen
-                al comparar porque <strong>ninguna de las dos hojas los escribe</strong>: viven dentro del
-                Bootstrap de cada lado. Tampoco se pueden fijar en el HTML sin matarles el
-                <em>hover</em>, así que van en el arreglo de abajo.</span></div>
+                <span><strong>${r.defaults.length} estilo(s) de botón que tu Moodle pinta distinto</strong>
+                —el gris de <code>.btn-secondary</code>, o el texto azul de liga en los botones que son
+                enlaces—. No aparecen al comparar porque <strong>ninguna de las dos hojas los escribe</strong>:
+                unos viven dentro del Bootstrap de cada lado y otros salen de la regla
+                <code>.mainPlantilla23 a</code> de tu tema, que le gana al blanco del botón. Tampoco se pueden
+                fijar en el HTML sin matarles el <em>hover</em>, así que van en el arreglo de abajo.</span></div>
                 <ul class="lista-cmp">${filas}</ul>`);
         }
 

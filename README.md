@@ -102,6 +102,9 @@ tools/
   guion-a-pagina/           Guion en Word → página 5.1 armada visualmente
     README.md                Componentes, asistente de importación y previa
     index.html · script.js · componentes.js · vista-previa.js · styles.css
+  qa-51/                    Revisa que lo montado en 5.1 sea el guion y la rúbrica
+    README.md                Qué se coteja, qué se perdona y por qué
+    index.html · script.js · verificador.js · styles.css
 .claude/launch.json         Config del servidor local para previsualizar
 ```
 
@@ -406,6 +409,27 @@ Así no hay que subir imagen por imagen ni copiar URLs largas.
 > páginas y sus imágenes dentro, y restaurarlo de un jalón. Es el camino
 > realmente masivo, pero el formato de backup es quisquilloso; solo vale la pena
 > si el flujo manual demuestra ser el cuello de botella.
+
+---
+
+### QA de Actividad y Rúbrica (`tools/qa-51/`)
+
+Cierra el circuito de 5.1: **revisa que lo montado sea lo que mandó producción.**
+Se suben el guion y la rúbrica en Word, y la herramienta genera un verificador
+—marcador o pegote de consola— que se ejecuta **sobre la página ya montada** en
+Moodle. Compara texto, negritas y cursivas, tablas, el enlace de la rúbrica, los
+criterios con sus puntos y que la suma dé el total del Word. Solo lee: enmarca lo
+que no coincide y dibuja su panel.
+
+Es el mismo lector de Word (`assets/docx.js`) y el mismo catálogo de marcas que
+usa Guion Instruccional a Página, a propósito: el HTML que genera esa herramienta
+es idéntico al que monta el equipo, así que las dos entienden el mismo documento.
+
+> 📐 **Qué se coteja, qué se perdona y por qué, en
+> [`tools/qa-51/README.md`](tools/qa-51/README.md).** Ahí está la tabla de
+> diferencias legítimas (el renumerado de las tablas, las comas que se corrigen
+> al montar…) que separan un aviso de un error, y las tres trampas de comparación
+> que costaron trabajo.
 
 ---
 

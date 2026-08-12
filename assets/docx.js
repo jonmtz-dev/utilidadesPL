@@ -253,7 +253,8 @@ async function leerTablasDeDocx(file) {
 }
 
 /**
- * Texto de un párrafo conservando las negritas como marcas `**texto**`.
+ * Texto de un párrafo conservando las negritas como marcas `**texto**` y, si se
+ * piden, las cursivas como `*texto*` (una sola estrella, como en markdown).
  * Word parte un mismo texto en varios runs (por el corrector, por ediciones);
  * aquí se fusionan los runs contiguos con el mismo formato para no generar
  * `**guárdalo** **en tu equipo**`. Los espacios de orilla quedan FUERA de las
@@ -267,6 +268,15 @@ function textoDeParrafoConNegritas(p, opciones) {
        una ventana emergente, "Periodo: …" y "Descubrimientos:" son dos renglones
        del mismo párrafo y sin esto salían pegados en una sola frase. */
     const saltos = Boolean(opciones && opciones.saltos);
+    /* Las cursivas van APAGADAS por omisión, como los saltos: quien ya usa esta
+       función espera solo `**` y una marca inesperada se publicaría tal cual en
+       el HTML del Integrador. Lo pide quien lo necesita —el QA 5.1, que coteja
+       el formato contra lo montado en Moodle—.
+
+       La marca es `*texto*` y NO `_texto_` a propósito: los guiones piden
+       guardar el archivo como "Apellidos_Nombre_SM02S1AA1", y con guiones bajos
+       ese nombre se leería como una cursiva que nadie escribió. */
+    const cursivas = Boolean(opciones && opciones.cursivas);
     const segmentos = [];
     for (const r of [...p.getElementsByTagNameNS(W_NS, 'r')]) {
         const texto = saltos
@@ -277,17 +287,26 @@ function textoDeParrafoConNegritas(p, opciones) {
             : [...r.getElementsByTagNameNS(W_NS, 't')].map(t => t.textContent || '').join('');
         if (!texto) continue;
         const rPr = r.getElementsByTagNameNS(W_NS, 'rPr')[0];
-        const b = rPr && rPr.getElementsByTagNameNS(W_NS, 'b')[0];
-        const val = b && (b.getAttributeNS(W_NS, 'val') || 'true');
-        const negrita = Boolean(b) && val !== 'false' && val !== '0' && val !== 'none';
+        const encendido = (nodo) => {
+            if (!nodo) return false;
+            const val = nodo.getAttributeNS(W_NS, 'val') || 'true';
+            return val !== 'false' && val !== '0' && val !== 'none';
+        };
+        const negrita = encendido(rPr && rPr.getElementsByTagNameNS(W_NS, 'b')[0]);
+        const cursiva = cursivas && encendido(rPr && rPr.getElementsByTagNameNS(W_NS, 'i')[0]);
         const previo = segmentos[segmentos.length - 1];
-        if (previo && previo.negrita === negrita) previo.texto += texto;
-        else segmentos.push({ texto, negrita });
+        if (previo && previo.negrita === negrita && previo.cursiva === cursiva) previo.texto += texto;
+        else segmentos.push({ texto, negrita, cursiva });
     }
     return segmentos.map(s => {
-        if (!s.negrita || !s.texto.trim()) return s.texto;
+        if (!s.texto.trim() || (!s.negrita && !s.cursiva)) return s.texto;
+        // Los espacios de orilla quedan FUERA de las marcas: un `** texto**` no
+        // se reconocería al convertirlo a <strong>.
         const m = s.texto.match(/^(\s*)([\s\S]*?)(\s*)$/);
-        return `${m[1]}**${m[2]}**${m[3]}`;
+        let dentro = m[2];
+        if (s.cursiva) dentro = `*${dentro}*`;
+        if (s.negrita) dentro = `**${dentro}**`;
+        return `${m[1]}${dentro}${m[3]}`;
     }).join('');
 }
 
@@ -297,14 +316,14 @@ function textoDeParrafoConNegritas(p, opciones) {
  * sigue pertenece a esa sección. No intenta reproducir el diseño de Word;
  * entrega una estructura neutral para que cada herramienta decida qué hacer.
  */
-async function leerBloquesDeDocx(file) {
+async function leerBloquesDeDocx(file, opciones) {
     const doc = await abrirDocumentoDocx(file);
     const body = doc.getElementsByTagNameNS(W_NS, 'body')[0] || doc.documentElement;
     const formatosLista = await leerFormatosListaDocx(file);
 
     const bloqueDesdeNodo = n => {
         if (n.localName === 'p') {
-            const texto = textoDeParrafoConNegritas(n)
+            const texto = textoDeParrafoConNegritas(n, opciones)
                 .replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').trim();
             const numPr = n.getElementsByTagNameNS(W_NS, 'numPr')[0];
             const ilvl = numPr && numPr.getElementsByTagNameNS(W_NS, 'ilvl')[0];

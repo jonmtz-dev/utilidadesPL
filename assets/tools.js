@@ -85,6 +85,17 @@ const TOOLS = [
         status: 'ready'
     },
     {
+        slug: 'qa-51',
+        moodle: '5.1',
+        title: 'QA de Actividad y Rúbrica',
+        description: 'Coteja lo montado en Moodle contra el guion y la rúbrica en Word: textos, negritas, tablas, criterios y puntajes.',
+        icon: 'shield-check',
+        accent: ['#0f9d58', '#1f6f4a'],
+        tags: ['QA', 'Revisión', 'Rúbricas', 'Word'],
+        url: 'tools/qa-51/index.html',
+        status: 'ready'
+    },
+    {
         slug: 'bibliografias-margarita',
         moodle: '5.1',
         title: 'Bibliografías Margarita Maza',

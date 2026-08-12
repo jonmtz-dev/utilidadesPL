@@ -13,7 +13,7 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.16.0';
+const VERSION = '1.17.0';
 const CACHE = `panel-herramientas-v${VERSION}`;
 
 // Rutas relativas a propósito: en GitHub Pages la app vive en un subdirectorio
@@ -70,7 +70,11 @@ const APP_SHELL = [
     'tools/guion-a-pagina/script.js',
     'tools/guion-a-pagina/componentes.js',
     'tools/guion-a-pagina/vista-previa.js',
-    'tools/guion-a-pagina/styles.css'
+    'tools/guion-a-pagina/styles.css',
+    'tools/qa-51/index.html',
+    'tools/qa-51/script.js',
+    'tools/qa-51/verificador.js',
+    'tools/qa-51/styles.css'
 ];
 
 self.addEventListener('install', (event) => {
