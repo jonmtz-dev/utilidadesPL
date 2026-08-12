@@ -79,6 +79,16 @@ hr { border: 0; border-top: 1px solid #d5dce3; margin: 1.5rem 0; }
 .table-responsive { overflow-x: auto; }
 table.table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
 table.table th, table.table td { padding: .6rem .75rem; vertical-align: middle; }
+/* Bootstrap pinta el fondo en CADA CELDA, no en la fila ni en el <thead>. Esta
+   regla faltaba aquí y era la que hacía que la previa mintiera: enseñaba el
+   encabezado del color de la paleta cuando en Moodle sale blanco, porque allá
+   las celdas lo tapan. La marca del montaje real pone bg-primary-20 en el
+   <thead>, y ahí Bootstrap no lo deja ver.
+
+   Un color puesto en la CELDA sí se ve, aquí y en Moodle: la hoja del tema
+   declara .bg-primary-10 y compañía con !important, y por eso la opción
+   "colorear la primera columna" sigue pintando. */
+table.table > :not(caption) > * > * { background-color: #fff; }
 table.table-bordered, table.table-bordered th, table.table-bordered td { border: 1px solid #A2A9B5; }
 caption { caption-side: top; padding: .5rem; }
 

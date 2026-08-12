@@ -524,7 +524,7 @@ const COMPONENTES = {
         nuevo: () => ({
             encabezados: ['Columna 1', 'Columna 2'],
             filas: [['', ''], ['', '']],
-            colorear: false, tarjetas: true, titulo: ''
+            colorear: false, tarjetas: true, titulo: '', encabezadoColor: false
         }),
         resumen: b => `${(b.filas || []).length} filas × ${(b.encabezados || []).length} columnas`,
         campos: [
@@ -534,7 +534,12 @@ const COMPONENTES = {
                 k: 'tarjetas', tipo: 'check',
                 etiqueta: 'En celular, cada fila como tarjeta (recomendado)'
             },
-            { k: 'colorear', tipo: 'check', etiqueta: 'Colorear la primera columna (alternado)' }
+            { k: 'colorear', tipo: 'check', etiqueta: 'Colorear la primera columna (alternado)' },
+            {
+                k: 'encabezadoColor', tipo: 'check',
+                etiqueta: 'Encabezado con el color del aula',
+                ayuda: 'Apagado, el encabezado sale blanco: es lo que hacen las páginas ya publicadas. El montaje pone el color en el <thead> y Bootstrap lo tapa con el fondo de cada celda, así que ahí nunca se vio. Encendido, la clase va también en las celdas y sí se pinta —con el color de la paleta elegida arriba, sea reg, MM o la del módulo—.'
+            }
         ],
         html: (b, n) => {
             const enc = (b.encabezados || []);
@@ -563,7 +568,14 @@ const COMPONENTES = {
                 `${ind(n + 3)}<table class="${clases.join(' ')}">`,
                 `${ind(n + 4)}<thead class="thead bg-primary-20">`,
                 `${ind(n + 5)}<tr>`);
-            enc.forEach(t => partes.push(`${ind(n + 6)}<th scope="col" class="text-center align-middle">${marcas(t)}</th>`));
+            /* El bg-primary-20 del <thead> viene del montaje real y se queda, pero
+               ahí NO se ve: Bootstrap pinta el fondo en cada celda y la tapa. Para
+               que el encabezado salga de color hay que repetir la clase en los
+               <th>. Va como opción y apagada por omisión, para no separar las
+               tablas nuevas de las páginas ya publicadas. El color lo resuelve
+               --primary-20, así que sigue a la paleta del aula sin tocar nada. */
+            const claseTh = 'text-center align-middle' + (b.encabezadoColor ? ' bg-primary-20' : '');
+            enc.forEach(t => partes.push(`${ind(n + 6)}<th scope="col" class="${claseTh}">${marcas(t)}</th>`));
             partes.push(`${ind(n + 5)}</tr>`, `${ind(n + 4)}</thead>`, `${ind(n + 4)}<tbody>`);
 
             filas.forEach((fila, i) => {

@@ -387,6 +387,33 @@ Va en un `<iframe sandbox>` con dos hojas:
    Micrositio a Página**. No se duplica a propósito: así fue como el hex
    `#d8a7b6` sobrevivió meses en una copia ya corregida en la otra.
 
+### El encabezado de la tabla no se pinta (y la previa tampoco debe pintarlo)
+
+El montaje real pone el color en el `<thead class="thead bg-primary-20">`, pero
+**en Moodle ese color no se ve**: Bootstrap pinta el fondo en *cada celda*
+(`.table > :not(caption) > * > *`), y las celdas tapan lo que traiga el `<thead>`
+o el `<tr>`. Cotejado contra una actividad ya publicada: ahí el encabezado sale
+blanco.
+
+Esa regla faltaba en el subconjunto de `vista-previa.js`, así que la previa
+enseñaba el encabezado del color de la paleta y **mentía**. Ya está puesta.
+
+> Un color puesto en la **celda** sí se ve en los dos lados: la hoja del tema
+> declara `.bg-primary-10` y compañía con `!important`, y por eso la opción
+> *colorear la primera columna* (que va en los `<td>`) sigue pintando.
+
+Para que el encabezado **sí** salga de color hay que repetir la clase en los
+`<th>`. Eso va como opción del bloque Tabla, **apagada por omisión**
+(`encabezadoColor`): así una tabla nueva sale igual que las ya publicadas y
+quien la quiera de color la enciende, tabla por tabla.
+
+El `bg-primary-20` del `<thead>` se queda de todas formas: viene del montaje real
+y quitarlo separaría el HTML de la referencia sin ganar nada.
+
+> El color **no se escribe**: sale de `--primary-20`, así que sigue a la paleta
+> del aula sola. Con `reg` da `#a6beb9` y con `MM` da `#d8a7b6` —el mismo hex que
+> ya nos costó meses cuando estaba duplicado a mano en dos herramientas—.
+
 El iframe va en sandbox **con** `allow-same-origin` —lo necesitan las imágenes
 del Word (son `blob:` del documento padre) y la sincronía con el lienzo—, y con
 un script propio mínimo que abre acordeones y pestañas (en Moodle eso lo mueve
