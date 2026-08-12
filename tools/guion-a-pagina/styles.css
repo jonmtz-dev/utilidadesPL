@@ -6,21 +6,62 @@
 
 .logo--guion { background: linear-gradient(135deg, #9d2248, #d1607f); box-shadow: 0 4px 12px rgba(157, 34, 72, .34); }
 
-.guion-workspace { grid-template-columns: minmax(460px, 1.05fr) minmax(420px, .95fr); }
+/* Esta herramienta se sale del tope de 1400px del resto: el 50/50 dejaba la
+   previa en ~600px y ahí la página de Moodle nunca se veía como se va a ver
+   (la rejilla de escritorio necesita ancho de escritorio). */
+.guion-app { max-width: 1760px; }
+
+/* Tres columnas: editor · divisor · salida. El ancho del editor es una variable
+   porque el divisor se arrastra (script.js la fija y la recuerda); el clamp es
+   el reparto por omisión, generoso con la previa. El divisor hace de gutter, así
+   que aquí el gap va en cero. */
+.guion-workspace {
+    grid-template-columns: var(--col-editor, clamp(400px, 30%, 540px)) 20px minmax(0, 1fr);
+    gap: 0;
+}
 .editor-panel, .output-panel { min-height: 0; }
+
+/* Vista previa a pantalla completa del área de trabajo: un clic cuando toca
+   revisar de verdad, y Esc para volver. */
+.guion-workspace.previa-max { grid-template-columns: minmax(0, 1fr); }
+.guion-workspace.previa-max .editor-panel,
+.guion-workspace.previa-max .divisor { display: none; }
+
+.divisor {
+    position: relative; cursor: col-resize; touch-action: none;
+    display: flex; align-items: center; justify-content: center;
+}
+.divisor::before {
+    content: ""; width: 4px; height: 44px; border-radius: 999px;
+    background: var(--control-border);
+    transition: background .18s ease, height .18s ease;
+}
+.divisor:hover::before,
+.divisor.arrastrando::before { background: var(--accent); height: 96px; }
+.divisor:focus-visible { outline: none; }
+.divisor:focus-visible::before {
+    background: var(--accent); height: 96px;
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, .25);
+}
 
 .section-header--acciones { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .section-header--acciones h2 { margin-bottom: 16px; }
 .header-botones { display: flex; gap: 6px; margin-bottom: 16px; }
-.btn-chico { padding: 7px 10px; font-size: 12px; }
+.btn-chico { padding: 8px 11px; font-size: 12.5px; }
 
 /* --------------------------------------------------------------------------
    Ficha de la página: paleta del aula y título
    -------------------------------------------------------------------------- */
-.ficha-pagina { margin-bottom: 12px; }
+/* Las dos etiquetas van en línea con su control: apiladas se llevaban ~50px del
+   alto del panel, que es justo el espacio que le faltaba al lienzo. */
+.ficha-pagina { display: flex; flex-direction: column; gap: 9px; margin-bottom: 12px; }
 .campo-etiqueta { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .campo-ayuda { font-size: 11.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
-.campo-modulo { margin-bottom: 12px; }
+.campo-modulo { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+.campo-modulo > .campo-etiqueta { margin-bottom: 0; }
+.campo-titulo { display: flex; align-items: center; gap: 10px; }
+.campo-titulo > .campo-etiqueta { margin-bottom: 0; white-space: nowrap; }
+.campo-titulo .plain-input { flex: 1; min-width: 0; }
 
 .modulos { display: flex; flex-wrap: wrap; gap: 6px; }
 .modulo {
@@ -48,13 +89,21 @@
    -------------------------------------------------------------------------- */
 .field-hint { font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; }
 
-.inicio { display: flex; flex-direction: column; gap: 12px; padding: 6px 2px; }
-.inicio-titulo { font-size: 14px; font-weight: 700; text-align: center; }
-.inicio-caminos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* La pantalla de inicio manda mientras la página está vacía: se queda con el
+   panel entero y centrada. Antes vivía dentro del lienzo (240px con scroll
+   propio) mientras la paleta de abajo ocupaba 190px que no hacían falta todavía:
+   la primera pantalla de la herramienta era la más apretada de todas. */
+/* Centrada cuando sobra alto. Centrar dentro de algo que scrollea suele dejar la
+   parte de arriba fuera del alcance, pero aquí no puede pasar: como ítem flex
+   conserva `min-height: auto`, así que nunca baja de su min-content y el
+   centrado solo actúa cuando de verdad cabe. */
+.inicio { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px; padding: 8px 2px; }
+.inicio-titulo { font-size: 15px; font-weight: 700; text-align: center; }
+.inicio-caminos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 .camino {
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
-    padding: 18px 14px; border-radius: 14px; cursor: pointer; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    padding: 22px 16px; border-radius: 14px; cursor: pointer; text-align: center;
     border: 2px dashed var(--input-border); background: var(--input-bg);
     color: var(--text-main); font: inherit; transition: all .18s ease;
 }
@@ -66,8 +115,11 @@
 .camino-nombre { font-size: 13.5px; font-weight: 700; }
 .camino-detalle { font-size: 11.5px; color: var(--text-muted); line-height: 1.45; }
 
+/* Dos por renglón, igual que los caminos de arriba: con `auto-fit` y el editor
+   más angosto salían tres y una huérfana abajo, y el texto de cada plantilla se
+   partía en cuatro renglones. */
 .inicio-plantillas {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
 }
 .pieza--plantilla { padding: 12px 8px; gap: 5px; }
 .pieza--plantilla small { font-size: 10.5px; font-weight: 400; color: var(--text-muted); line-height: 1.35; }
@@ -78,9 +130,13 @@
 /* --------------------------------------------------------------------------
    Lienzo de bloques
    -------------------------------------------------------------------------- */
+/* La ventana existe para anclar la píldora "hay más bloques" al pie del lienzo
+   (position:absolute necesita el ancla) sin que se vaya con el scroll. */
+.lienzo-viewport { position: relative; display: flex; flex: 1 1 240px; min-height: 200px; }
+
 .lienzo {
-    flex: 1 1 240px; min-height: 200px;
-    overflow-y: auto; padding-right: 6px;
+    flex: 1; min-height: 0;
+    overflow-y: auto; padding-right: 3px;
     display: flex; flex-direction: column; gap: 9px;
 }
 
@@ -126,8 +182,10 @@
 
 .mini-btn {
     border: 0; background: transparent; color: var(--text-muted);
-    font: inherit; font-size: 14px; cursor: pointer;
-    padding: 4px 5px; border-radius: 6px; display: inline-flex; align-items: center;
+    font: inherit; font-size: 15px; cursor: pointer;
+    /* ~28px de blanco al que apuntar: con 4px de relleno y 14px de icono el
+       objetivo quedaba en 22px, por debajo de lo que se acierta sin fijarse. */
+    padding: 6px 7px; border-radius: 7px; display: inline-flex; align-items: center;
 }
 .mini-btn:hover { color: var(--accent); background: var(--input-bg); }
 .mini-btn--rojo:hover { color: var(--danger); }
@@ -275,21 +333,38 @@
     flex-shrink: 0; margin-top: 12px; padding-top: 12px;
     border-top: 1px solid var(--control-border);
 }
-.paleta-titulo { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+/* Con la página vacía no hay bloque debajo del cual insertar, y la paleta le
+   robaba 190px a la pantalla de inicio. Vuelve con el primer bloque. */
+.editor-panel.sin-bloques .paleta-componentes { display: none; }
+.paleta-titulo {
+    display: flex; align-items: center; gap: 6px; width: 100%;
+    border: 0; background: transparent; color: var(--text-main);
+    font: inherit; font-size: 13px; font-weight: 700; text-align: left;
+    padding: 0; margin-bottom: 8px; cursor: pointer;
+}
 .paleta-nota { font-size: 11px; font-weight: 400; color: var(--text-muted); }
+.paleta-flecha { margin-left: auto; color: var(--text-muted); transition: transform .18s ease; }
+.paleta-componentes.plegada .paleta-flecha { transform: rotate(-90deg); }
+.paleta-componentes.plegada .paleta-grid { display: none; }
+.paleta-componentes.plegada .paleta-titulo { margin-bottom: 0; }
 /* La paleta vive fija al pie del panel para que siempre esté a la mano; se le
    acota el alto (y scrollea) porque en una laptop de 700px, dejarla crecer le
    comía al lienzo el espacio de trabajo. */
 .paleta-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 6px;
-    max-height: 148px; overflow-y: auto; padding-right: 4px;
+    /* Piezas más angostas que antes: con el editor en ~430px, 86px daban 4
+       columnas y las 14 piezas ocupaban 4 renglones. Con 72 caben 5 por renglón. */
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px;
+    /* Proporcional al alto de la ventana, con topes: en un monitor grande caben
+       todas las piezas y en una laptop no se come el lienzo. */
+    max-height: clamp(132px, 18vh, 260px); overflow-y: auto; padding-right: 2px;
 }
 
 .pieza {
     display: flex; flex-direction: column; align-items: center; gap: 4px;
-    padding: 8px 4px; border-radius: 11px; cursor: pointer;
+    padding: 7px 3px; border-radius: 11px; cursor: pointer;
     background: var(--input-bg); border: 1px solid var(--control-border);
-    color: var(--text-main); font: inherit; font-size: 11.5px; font-weight: 600;
+    color: var(--text-main); font: inherit; font-size: 11px; font-weight: 600;
+    line-height: 1.25; text-align: center;
     transition: all .16s ease;
 }
 .pieza:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--hover-shadow); }
@@ -302,25 +377,58 @@
    Panel derecho: vista previa
    -------------------------------------------------------------------------- */
 .preview-barra { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-shrink: 0; }
-.anchos { display: flex; gap: 2px; background: var(--control-bg); border-radius: 9px; padding: 3px; }
+.anchos { display: flex; gap: 3px; background: var(--control-bg); border-radius: 11px; padding: 4px; }
 .ancho-btn {
+    display: inline-flex; align-items: center; gap: 7px;
     border: 0; background: transparent; color: var(--text-muted);
-    font: inherit; font-size: 15px; cursor: pointer; padding: 4px 9px; border-radius: 7px;
+    font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    padding: 7px 12px; border-radius: 8px; transition: all .18s ease;
 }
-.ancho-btn.active { background: var(--surface-raised); color: var(--text-main); }
+.ancho-btn i { font-size: 17px; }
+.ancho-btn:hover { color: var(--text-main); }
+.ancho-btn.active { background: var(--surface-raised); color: var(--text-main); box-shadow: 0 2px 8px rgba(0, 0, 0, .06); }
 .preview-nota { font-size: 11.5px; color: var(--text-muted); }
+.preview-medida {
+    margin-left: auto; flex-shrink: 0;
+    font-size: 11.5px; font-weight: 600; color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.btn-icono-barra {
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--control-border); background: var(--input-bg);
+    color: var(--text-muted); font: inherit; font-size: 17px; cursor: pointer;
+    transition: all .18s ease;
+}
+.btn-icono-barra:hover { color: var(--accent); border-color: var(--accent); }
+.btn-icono-barra[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* Con la previa angosta el nombre del dispositivo estorba; el icono ya se
+   entiende y el título lo dice. */
+@media (max-width: 1400px) {
+    .ancho-btn span { display: none; }
+    .ancho-btn { padding: 7px 10px; }
+}
 
 /* La previa es una isla clara a propósito: imita la página real de Moodle, que
    siempre es clara. No la ates a los tokens del tema. */
 .preview-caja {
     flex: 1; min-height: 0; display: flex; justify-content: center;
     background: #f3f4f6; border: 1px solid var(--control-border); border-radius: 12px;
-    padding: 8px; overflow: auto;
+    padding: 10px; overflow: auto;
 }
 .preview-caja iframe {
     width: 100%; height: 100%; min-height: 320px;
     border: 0; border-radius: 8px; background: #fff;
     transition: width .2s ease;
+}
+/* En tableta y celular el marco flota centrado sobre el fondo gris: la sombra es
+   la que hace leer el hueco de los lados como "así de ancho es el aparato" y no
+   como una previa que no llenó. */
+.preview-caja[data-ancho="tableta"] iframe,
+.preview-caja[data-ancho="celular"] iframe {
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .16);
 }
 .preview-caja[data-ancho="tableta"] iframe { width: 768px; max-width: 100%; }
 .preview-caja[data-ancho="celular"] iframe { width: 380px; max-width: 100%; }
@@ -367,23 +475,59 @@
 .modal-acciones .btn-primary { width: auto; }
 
 /* --------------------------------------------------------------------------
+   Laptop bajita (1366×700 y parecidas) pero todavía en dos columnas: el panel
+   del editor no alcanza para ficha + lienzo + paleta a tamaño completo, y lo que
+   pasaba es que el PANEL entero se ponía a scrollear. Antes de eso, cede cada
+   pieza un poco: es mejor tener las tres a la vista que dos completas y una
+   detrás de una barra de scroll.
+   -------------------------------------------------------------------------- */
+@media (min-width: 1025px) and (max-height: 820px) {
+    .lienzo-viewport { min-height: 150px; }
+    .paleta-grid { max-height: clamp(88px, 13vh, 150px); }
+    .modulo { padding: 5px 9px; font-size: 11.5px; }
+    .modulo-color { width: 11px; height: 11px; }
+    .ficha-pagina { gap: 7px; margin-bottom: 9px; }
+    .section-header--acciones h2 { margin-bottom: 12px; }
+    .header-botones { margin-bottom: 12px; }
+    .paleta-componentes { margin-top: 9px; padding-top: 9px; }
+}
+
+/* --------------------------------------------------------------------------
    Pantallas chicas / laptops bajitas: se devuelve el scroll de página y las
    columnas se apilan (misma regla que shared.css, aquí solo lo propio).
    -------------------------------------------------------------------------- */
 @media (max-width: 1024px), (max-height: 620px) {
-    .guion-workspace { grid-template-columns: 1fr; }
+    /* Apilado no hay dos columnas que repartir: el divisor sobra y el gutter
+       vuelve a ser el gap de la rejilla. */
+    .guion-workspace { grid-template-columns: 1fr; gap: 24px; }
+    .divisor { display: none; }
     .editor-panel { overflow: visible; }
 
     /* Con las columnas apiladas manda el scroll de la página, así que el lienzo
        toma su alto natural. Con `flex: 1 1 240px` se quedaba clavado en 240px y,
        como aquí el overflow es visible, su contenido se PINTABA ENCIMA de la
        paleta de abajo: en celular se veían las plantillas y las piezas
-       superpuestas, ilegibles. */
+       superpuestas, ilegibles. Ojo: el basis vive ahora en .lienzo-viewport, así
+       que hay que soltarlo en los dos.
+
+       Y la ventana vuelve a ser un bloque: como contenedor flex con el lienzo en
+       `flex: none`, el lienzo se medía por su contenido (max-content) y se salía
+       495px de un panel de 271px. De bloque, llena el ancho y ya. */
+    .lienzo-viewport { display: block; flex: none; }
     .lienzo { flex: none; height: auto; max-height: none; overflow: visible; }
+    /* Sin recorte no hay nada que difuminar, y la máscara apagaría el borde del
+       último bloque por gusto. */
+    .lienzo.scroll-difuso { mask-image: none; -webkit-mask-image: none; }
 
     /* Por lo mismo, la paleta ya no necesita su tope de alto: aquí no le está
        robando espacio a nadie. */
     .paleta-grid { max-height: none; overflow: visible; }
+    .paleta-grid.scroll-difuso { mask-image: none; -webkit-mask-image: none; }
+
+    /* Apilada, la pantalla de inicio ya no compite con nada: deja de centrarse
+       (no hay alto sobrante) y la paleta vuelve a la vista. */
+    .inicio { flex: none; }
+    .editor-panel.sin-bloques .paleta-componentes { display: block; }
 
     .preview-caja iframe { min-height: 460px; }
     .import-ficha { grid-template-columns: 1fr; }
@@ -392,6 +536,10 @@
 
 @media (max-width: 640px) {
     .panel-section { padding: 18px; }
+    /* Aquí no caben etiqueta y campo en el mismo renglón: el input quedaba en
+       ~120px. Vuelven a apilarse. */
+    .campo-titulo { flex-direction: column; align-items: stretch; gap: 5px; }
+    .campo-titulo > .campo-etiqueta { margin-bottom: 0; }
     .paleta-grid { grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); }
     .modal-caja { padding: 18px 16px; }
     .modal-acciones { flex-wrap: wrap; }

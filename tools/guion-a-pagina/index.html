@@ -19,14 +19,17 @@
 </head>
 <body>
     <div class="background-mesh"><div class="shape shape-1"></div><div class="shape shape-2"></div><div class="shape shape-3"></div></div>
-    <main class="app-container glass-panel">
+    <!-- guion-app ensancha el contenedor: es un constructor con vista previa, y
+         con los 1400px del resto la previa quedaba en ~600px, que no es un
+         escritorio de verdad (la tabla nunca se veía como se va a ver). -->
+    <main class="app-container glass-panel guion-app">
         <header class="app-header">
             <div class="logo logo--guion"><i class="ph ph-magic-wand"></i></div>
             <div><h1>Guion Instruccional a Página</h1><p>Arma la página visualmente: acordeones, tablas, tooltips y tarjetas, sin escribir HTML</p></div>
             <a class="btn-back" href="../../index.html"><i class="ph ph-arrow-left"></i> Panel</a>
         </header>
 
-        <div class="workspace guion-workspace">
+        <div class="workspace guion-workspace" id="workspace">
             <!-- ============ Columna izquierda: el guion ============ -->
             <section class="panel-section glass-panel editor-panel">
                 <div class="section-header section-header--acciones">
@@ -38,28 +41,52 @@
                     </div>
                 </div>
 
-                <!-- Portada del recurso: módulo (colores) y título -->
+                <!-- Portada del recurso: módulo (colores) y título. Las dos
+                     etiquetas van EN LÍNEA con su control: apiladas se comían
+                     ~50px del alto del panel, que es justo lo que le falta al
+                     lienzo en una laptop. -->
                 <div class="ficha-pagina">
                     <div class="campo-modulo">
                         <span class="campo-etiqueta"><i class="ph ph-palette"></i> Paleta del aula</span>
                         <div id="modulos" class="modulos" role="radiogroup" aria-label="Paleta del aula"></div>
                     </div>
-                    <label class="campo-etiqueta" for="titulo-pagina"><i class="ph ph-text-h-one"></i> Título de la página</label>
-                    <input id="titulo-pagina" class="plain-input" placeholder="Historia de la ciencia y tecnología">
+                    <div class="campo-titulo">
+                        <label class="campo-etiqueta" for="titulo-pagina"><i class="ph ph-text-h-one"></i> Título</label>
+                        <input id="titulo-pagina" class="plain-input" placeholder="Historia de la ciencia y tecnología">
+                    </div>
                 </div>
 
                 <input id="input-docx" type="file" accept=".docx" hidden>
                 <p id="import-info" class="field-hint hidden"></p>
 
                 <!-- Lienzo de bloques -->
-                <div id="lienzo" class="lienzo" aria-label="Bloques de la página"></div>
+                <div class="lienzo-viewport">
+                    <div id="lienzo" class="lienzo scroll-sin-barra scroll-difuso" data-pista-scroll data-pista="#pista-lienzo" aria-label="Bloques de la página"></div>
+                    <button class="pista-mas hidden" id="pista-lienzo" type="button">
+                        <i class="ph ph-arrow-down"></i> Hay más bloques
+                    </button>
+                </div>
 
-                <!-- Paleta gráfica de componentes -->
+                <!-- Paleta gráfica de componentes. El encabezado la pliega (y se
+                     recuerda): en una laptop son 150px que a veces se prefieren
+                     para el lienzo, y con la franja "+" entre bloques la paleta
+                     no es el único camino para insertar. -->
                 <div class="paleta-componentes">
-                    <p class="paleta-titulo"><i class="ph ph-plus-circle"></i> Agregar <span class="paleta-nota">se inserta debajo del bloque seleccionado</span></p>
-                    <div id="paleta" class="paleta-grid"></div>
+                    <button class="paleta-titulo" id="btn-paleta" type="button" aria-expanded="true" aria-controls="paleta" title="Mostrar u ocultar las piezas">
+                        <i class="ph ph-plus-circle"></i> Agregar
+                        <span class="paleta-nota">se inserta debajo del bloque seleccionado</span>
+                        <i class="ph ph-caret-down paleta-flecha"></i>
+                    </button>
+                    <div id="paleta" class="paleta-grid scroll-sin-barra scroll-difuso" data-pista-scroll></div>
                 </div>
             </section>
+
+            <!-- Reparto ajustable: nadie trabaja igual (unos editan, otros
+                 revisan), así que el ancho lo decide quien usa y se recuerda.
+                 Hace también de gutter entre las dos columnas. -->
+            <div class="divisor" id="divisor" role="separator" aria-orientation="vertical"
+                 aria-label="Ancho del editor" tabindex="0"
+                 title="Arrástralo para repartir el espacio · doble clic para restablecer"></div>
 
             <!-- ============ Columna derecha: resultado ============ -->
             <section class="panel-section glass-panel output-panel">
@@ -72,11 +99,15 @@
                 <div id="preview-content" class="tab-content active">
                     <div class="preview-barra">
                         <div class="anchos" role="group" aria-label="Ancho de la vista previa">
-                            <button class="ancho-btn active" data-ancho="escritorio" title="Escritorio"><i class="ph ph-desktop"></i></button>
-                            <button class="ancho-btn" data-ancho="tableta" title="Tableta"><i class="ph ph-device-tablet"></i></button>
-                            <button class="ancho-btn" data-ancho="celular" title="Celular (tablas en tarjetas)"><i class="ph ph-device-mobile"></i></button>
+                            <button class="ancho-btn active" data-ancho="escritorio" title="Escritorio"><i class="ph ph-desktop"></i> <span>Escritorio</span></button>
+                            <button class="ancho-btn" data-ancho="tableta" title="Tableta"><i class="ph ph-device-tablet"></i> <span>Tableta</span></button>
+                            <button class="ancho-btn" data-ancho="celular" title="Celular (tablas en tarjetas)"><i class="ph ph-device-mobile"></i> <span>Celular</span></button>
                         </div>
                         <span class="preview-nota">Así se ve en Moodle</span>
+                        <!-- El ancho real, como en una herramienta de diseño: es la
+                             diferencia entre creer que se ve en escritorio y verlo. -->
+                        <span class="preview-medida" id="preview-medida"></span>
+                        <button class="btn-icono-barra" id="btn-previa-max" type="button" aria-pressed="false" title="Ampliar la vista previa"><i class="ph ph-corners-out"></i></button>
                     </div>
                     <div id="preview-empty" class="empty-state">
                         <i class="ph ph-layout"></i>
@@ -98,7 +129,7 @@
                 </div>
 
                 <div id="check-content" class="tab-content">
-                    <div id="check-lista" class="check-lista"></div>
+                    <div id="check-lista" class="check-lista scroll-sin-barra scroll-difuso" data-pista-scroll></div>
                 </div>
             </section>
         </div>
@@ -109,7 +140,7 @@
         <div class="modal-caja modal-caja--ancha glass-panel">
             <h2 id="modal-galeria-titulo"><i class="ph ph-images"></i> Imágenes del guion</h2>
             <p class="modal-intro">Son las que venían en el Word. Elige la que va en este bloque; el HTML la llamará por su nombre.</p>
-            <div id="galeria" class="galeria"></div>
+            <div id="galeria" class="galeria scroll-sin-barra scroll-difuso" data-pista-scroll></div>
             <div class="modal-acciones">
                 <button id="galeria-quitar" class="btn-secondary" type="button"><i class="ph ph-x"></i> Dejar sin imagen</button>
                 <button id="galeria-cerrar" class="btn-secondary" type="button">Cerrar</button>
@@ -122,7 +153,7 @@
         <div class="modal-caja modal-caja--ancha glass-panel">
             <h2 id="modal-import-titulo"><i class="ph ph-wand"></i> ¿Qué es cada tabla del Word?</h2>
             <p class="modal-intro">En el guion todo llega como tabla. Tú decides qué se vuelve cada una: la vista previa de la izquierda es su contenido real.</p>
-            <div id="import-tablas" class="import-tablas"></div>
+            <div id="import-tablas" class="import-tablas scroll-sin-barra scroll-difuso" data-pista-scroll></div>
             <div class="modal-acciones">
                 <button id="import-cancelar" class="btn-secondary" type="button">Cancelar</button>
                 <button id="import-aceptar" class="btn-primary" type="button"><i class="ph ph-check"></i> Armar la página</button>
@@ -132,6 +163,7 @@
 
     <script src="../../assets/docx.js"></script>
     <script src="../../assets/zip.js"></script>
+    <script src="../../assets/scroll-pista.js"></script>
     <!-- La hoja del tema se reutiliza de Micrositio a Página a propósito: es la
          misma hoja compilada de Moodle y duplicarla es como se quedó vivo meses
          el hex #d8a7b6 en una copia ya corregida en la otra. -->

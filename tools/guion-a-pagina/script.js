@@ -37,6 +37,13 @@
     let imagenesDocx = [];
     const historial = [];
     let refrescoPendiente = null;
+    /* Tablas del Word que ya se montaron DENTRO de otra (el grupo de tarjetas de
+       un apartado del acordeón). docx.js entrega el mismo objeto en las dos
+       partes, así que un Set basta para que el recorrido de primer nivel no las
+       vuelva a poner como bloques hermanos. Y las decisiones del asistente, por
+       bloque, para poder consultarlas también desde dentro de una celda. */
+    let tablasConsumidas = new Set();
+    let decisionesTabla = new Map();
 
     const $ = s => document.querySelector(s);
     const nuevoIdBloque = () => ++contadorId;
@@ -104,6 +111,9 @@
         const cuerpo = [];
         if ((pagina.titulo || '').trim()) {
             cuerpo.push(COMPONENTES.titulo.html({ nivel: 'h1', texto: pagina.titulo }, 1));
+            // La regla del montaje: bajo la barra del título va una línea. Es un
+            // <hr> pelado, no el .espacio-fino del separador manual.
+            cuerpo.push(`${'    '}<hr>`);
         }
         const bloques = htmlDeBloques(pagina.bloques, 1);
         marcarBloques(false);
@@ -219,7 +229,12 @@ document.addEventListener('click', function (e) {
             if (!destino) return;
             destino.bloque.abierto = true;
             seleccion = id;
-            dibujarTodo();
+            /* Solo el lienzo, NUNCA dibujarTodo(): regenerar la previa aquí la
+               reconstruye desde cero, así que el acordeón (o la pestaña, o la
+               ventana) se cerraba en el mismo clic con que se abría y parecía
+               que la previa no era interactiva. Abrir o seleccionar un bloque no
+               cambia el HTML, así que no hay nada que refrescar allá. */
+            dibujarLienzo();
             const card = document.querySelector(`.bloque-card[data-id="${id}"]`);
             if (card) card.scrollIntoView({ block: 'center', behavior: 'smooth' });
         });
@@ -341,7 +356,7 @@ document.addEventListener('click', function (e) {
         // del montaje, no un adorno.
         const pedidos = [];
         const juntarNotas = lista => (lista || []).forEach(b => {
-            if (b.nota) pedidos.push({ tipo: COMPONENTES[b.tipo].nombre, nota: b.nota });
+            if (b.indicacion) pedidos.push({ tipo: COMPONENTES[b.tipo].nombre, nota: b.indicacion });
             juntarNotas(b.hijos);
             (b.items || []).forEach(i => juntarNotas(i.hijos));
         });
@@ -390,6 +405,11 @@ document.addEventListener('click', function (e) {
         dibujarPaletaAula();
         const lienzo = $('#lienzo');
         lienzo.innerHTML = '';
+        // Con la página vacía manda la pantalla de inicio y la paleta del pie se
+        // esconde (no hay bloque debajo del cual insertar). Lo hace el CSS con
+        // esta clase; el estado vive aquí porque es el mismo que decide qué se
+        // dibuja en el lienzo.
+        $('.editor-panel').classList.toggle('sin-bloques', !pagina.bloques.length);
         if (!pagina.bloques.length) {
             lienzo.appendChild(pantallaDeInicio());
         } else {
@@ -408,6 +428,26 @@ document.addEventListener('click', function (e) {
        --------------------------------------------------------------------- */
 
     const PLANTILLAS = [
+        {
+            // La forma de casi toda actividad de aprendizaje: el párrafo que
+            // presenta y la lista numerada dentro de su caja de color.
+            nombre: 'Actividad con pasos',
+            detalle: 'Lista numerada en su caja',
+            mini: MINI.pasos,
+            armar: () => [
+                Object.assign(crearBloque('texto', false), {
+                    texto: 'Para afrontar la situación presentada, realiza la siguiente **actividad.**'
+                }),
+                Object.assign(crearBloque('pasos', false), {
+                    caja: true,
+                    items: [
+                        { texto: '**Identifica** lo que se te pide en este paso.', hijos: [] },
+                        { texto: '**Elabora** lo que corresponda; aquí puedes colgar una tabla o una sublista.', hijos: [] },
+                        { texto: '**Guarda** el archivo en tu equipo de la siguiente manera:', hijos: [] }
+                    ]
+                })
+            ]
+        },
         {
             nombre: 'Página con acordeón',
             detalle: 'Instrucción + apartados plegables',
@@ -617,10 +657,13 @@ document.addEventListener('click', function (e) {
         // La indicación que traía el guion para este bloque ("<Crear un grupo
         // de 5 botones…>"). No sale al HTML: es lo que producción pidió y hay
         // que atender a mano, así que se muestra aquí y no se pierde.
-        if (bloque.nota) {
+        /* `indicacion`, no `nota`: la nota del bloque de imagen es su pie de
+           figura ("Nota. Elaboración propia") y se publica. Cuando compartían
+           campo, un `<Figura>` del guion acababa impreso como pie de la imagen. */
+        if (bloque.indicacion) {
             const nota = document.createElement('p');
             nota.className = 'bloque-nota';
-            nota.innerHTML = `<i class="ph ph-note-pencil"></i> <span>El guion pide: ${escapar(bloque.nota)}</span>`;
+            nota.innerHTML = `<i class="ph ph-note-pencil"></i> <span>El guion pide: ${escapar(bloque.indicacion)}</span>`;
             card.appendChild(nota);
         }
 
@@ -944,7 +987,10 @@ document.addEventListener('click', function (e) {
             ficha.className = 'ficha';
             const cabeza = document.createElement('div');
             cabeza.className = 'ficha-cabeza';
-            cabeza.innerHTML = `<span class="ficha-num">${i + 1}</span><span class="ficha-nombre">${escapar(item.titulo || item.etiqueta || campo.nombreItem)}</span>`;
+            // `texto` es para los pasos de la actividad, que no tienen título:
+            // sin esto todas las fichas se leerían "Paso" y no se distinguirían.
+            const nombreDe = it => (it.titulo || it.etiqueta || (it.texto || '').replace(/\*\*/g, '').slice(0, 48) || campo.nombreItem);
+            cabeza.innerHTML = `<span class="ficha-num">${i + 1}</span><span class="ficha-nombre">${escapar(nombreDe(item))}</span>`;
 
             const tools = document.createElement('span');
             tools.className = 'bloque-tools';
@@ -970,8 +1016,7 @@ document.addEventListener('click', function (e) {
                 const c = dibujarCampo(sub, item, null);
                 c.querySelectorAll('input, textarea').forEach(inp => {
                     inp.addEventListener('input', () => {
-                        const n = cabeza.querySelector('.ficha-nombre');
-                        n.textContent = item.titulo || item.etiqueta || campo.nombreItem;
+                        cabeza.querySelector('.ficha-nombre').textContent = nombreDe(item);
                     });
                 });
                 ficha.appendChild(c);
@@ -1370,7 +1415,13 @@ document.addEventListener('click', function (e) {
         // explicación": eso en la página se monta como acordeón. El umbral de
         // 120 caracteres salió de medir guiones reales.
         const largo = filas.reduce((m, f) => Math.max(m, ...f.map(c => (c.texto || '').length)), 0);
-        if (cols === 2 && largo > 120) return 'acordeon';
+        /* Pero un acordeón necesita títulos: si la 1ª columna son solo marcas de
+           montaje (`<Figura>`), al quitarlas no queda nada que titular y lo que
+           hay en realidad es una tabla de imagen + explicación —así se publica
+           la de "los alquimistas"—. Sin este filtro salía un acordeón de
+           apartados sin nombre. */
+        const conTitulo = filas.slice(1).filter(f => sinMarcas((f[0] || {}).texto)).length;
+        if (cols === 2 && largo > 120 && conTitulo === filas.length - 1) return 'acordeon';
         return 'tabla';
     }
 
@@ -1394,12 +1445,18 @@ document.addEventListener('click', function (e) {
         const salida = [];
         let acumulado = [];
         let enInstruccion = false;
+        let enCentrado = false;
         let primero = permitirDestacado !== false;
 
         const cerrar = () => {
             const texto = acumulado.join('\n\n').trim();
             acumulado = [];
             if (!texto) return;
+            if (enCentrado) {
+                salida.push(Object.assign(crearBloque('texto', false), { texto, centrado: true }));
+                primero = false;
+                return;
+            }
             if (enInstruccion) {
                 // La caja ya destaca sola; si el guion trae TODA la frase en
                 // negritas, sobra el <strong> encima (así se publica en las
@@ -1422,6 +1479,20 @@ document.addEventListener('click', function (e) {
             // quitar los asteriscos primero; el texto normal sí las conserva.
             const m = linea.replace(/\*\*/g, '').trim().match(MARCA);
             if (!m) {
+                /* "Figura 1. …" y "Nota. Elaboración propia (2026)." no son
+                   párrafos de la página: son el encabezado y el pie de la figura
+                   de arriba, y así se publican (.card-header.notas-tabla y
+                   .text-muted). Sueltos salían como dos párrafos más debajo de la
+                   imagen. Solo cuenta si vienen pegados a la figura, sin ningún
+                   párrafo en medio. */
+                if (!acumulado.length && !enInstruccion && !enCentrado) {
+                    const ultimo = salida[salida.length - 1];
+                    const limpio = linea.replace(/\*\*/g, '').trim();
+                    if (ultimo && ultimo.tipo === 'imagen') {
+                        if (!ultimo.pie && /^(figura|imagen|gr[áa]fic\w*)\s*\d*\s*[.:]/i.test(limpio)) { ultimo.pie = limpio; return; }
+                        if (!ultimo.nota && /^nota\s*[.:]/i.test(limpio)) { ultimo.nota = limpio; return; }
+                    }
+                }
                 // Los números sueltos que deja Word al anclar una imagen
                 // (5715019050 y parecidos) no son texto del guion.
                 if (!/^\d{6,}$/.test(linea)) acumulado.push(linea);
@@ -1431,7 +1502,7 @@ document.addEventListener('click', function (e) {
             const marca = m[1];
             const clave = marca.toLowerCase();
 
-            if (/^termina/.test(clave)) { cerrar(); enInstruccion = false; return; }
+            if (/^termina/.test(clave)) { cerrar(); enInstruccion = false; enCentrado = false; return; }
 
             cerrar();
 
@@ -1439,10 +1510,16 @@ document.addEventListener('click', function (e) {
                 enInstruccion = true;
                 return;
             }
+            // Nomenclaturas y ejemplos: van centrados, sin forzar negritas (las
+            // que traiga el Word se respetan).
+            if (/texto regular centrado/.test(clave)) {
+                enCentrado = true;
+                return;
+            }
             if (/^h[1-4]$/.test(clave)) return;                    // ya es el título
             if (/^figura/.test(clave)) {
                 salida.push(Object.assign(crearBloque('imagen', false),
-                    { nota: marca, lado: 'sola' }));
+                    { indicacion: marca, lado: 'sola' }));
                 return;
             }
             if (/grupo de\s+(\d+)\s+bot/.test(clave)) {
@@ -1450,19 +1527,19 @@ document.addEventListener('click', function (e) {
                 const items = Array.from({ length: cuantos }, (_, i) => ({
                     img: '', alt: '', etiqueta: `Botón ${i + 1}`, titulo: `Botón ${i + 1}`, hijos: []
                 }));
-                salida.push(Object.assign(crearBloque('tarjetas', false), { items, nota: marca }));
+                salida.push(Object.assign(crearBloque('tarjetas', false), { items, indicacion: marca }));
                 return;
             }
             if (/^tabla/.test(clave)) {
-                salida.push(Object.assign(crearBloque('tabla', false), { nota: marca }));
+                salida.push(Object.assign(crearBloque('tabla', false), { indicacion: marca }));
                 return;
             }
             if (/pop-?up|ventana/.test(clave)) {
-                salida.push(Object.assign(crearBloque('modal', false), { nota: marca }));
+                salida.push(Object.assign(crearBloque('modal', false), { indicacion: marca }));
                 return;
             }
             if (/v[ií]deo/.test(clave)) {
-                salida.push(Object.assign(crearBloque('video', false), { nota: marca }));
+                salida.push(Object.assign(crearBloque('video', false), { indicacion: marca }));
                 return;
             }
             // Marca que no se sabe traducir: se anota aparte para que alguien
@@ -1488,54 +1565,184 @@ document.addEventListener('click', function (e) {
             .replace(/\s+/g, ' ').trim();
     }
 
+    /**
+     * Arma la página con lo que se leyó del Word.
+     *
+     * Lo que hace que esto no sea un recorrido plano son las REGIONES que el
+     * guion abre y cierra con sus marcas, sobre todo `<Lista numerada; son las
+     * instrucciones>`: mientras está abierta, la página no es una sucesión de
+     * bloques hermanos sino una caja con pasos, y lo que viene indentado cuelga
+     * DEL PASO EN CURSO (la tabla del paso 5, la sublista a, b, c del 6, la
+     * nomenclatura centrada del 7). Aplanarlo era el error visible: la tabla
+     * salía después de la lista, el guion perdía el orden y encima aparecía una
+     * tabla vacía extra por la marca `<Tabla>`.
+     *
+     * Quién decide si un párrafo cuelga del paso o ya salió de la caja: la
+     * SANGRÍA de Word (`w:ind`). Los pasos y su contenido vienen a 720 twips; el
+     * "Nota: al nombrar tu archivo…" viene a 0 y en el montaje real va fuera de
+     * la caja. No es una corazonada: es el dato con el que Word lo dibuja.
+     */
     function aplicarImportacion() {
         guardarHistorial();
         const decisiones = new Map((propuesta.tablas || []).map(t => [t.i, t.decision]));
+        tablasConsumidas = new Set();
+        decisionesTabla = new Map((propuesta.tablas || []).map(t => [t.b, t.decision]));
         const nuevos = [];
         const sueltas = [];
         let sueltos = [];         // líneas de párrafos seguidos, aún sin cerrar
         let listaActual = null;
+
+        let pasos = null;         // bloque `pasos` abierto por la marca del guion
+        let paso = null;          // último punto de la lista, para colgarle cosas
+        let idPasos = null;       // el numId de Word que numera los pasos
+        let subLista = null;      // sublista a, b, c del paso en curso
+        let centrado = false;     // dentro de <Texto regular centrado>
+        let tablaPendiente = null; // marca <Tabla> esperando la tabla de verdad
+        let tituloTabla = '';     // el encabezado que venía junto a esa tabla
+
+        // Dentro de un paso todo cuelga de él; fuera, va al cuerpo de la página.
+        const empujarDestino = b => {
+            [].concat(b).filter(Boolean).forEach(x => {
+                asignarIds([x]);
+                if (paso) paso.hijos.push(x); else nuevos.push(x);
+            });
+            listaActual = null;
+        };
 
         // Los párrafos de primer nivel también traen marcas de montaje (la caja
         // "Haz clic en las pestañas…" del recurso de referencia vive ahí, no
         // dentro de la tabla), así que pasan por el mismo intérprete.
         const vaciarSueltos = () => {
             if (!sueltos.length) return;
-            bloquesDesdeLineas(sueltos, sueltas, false)
-                .forEach(x => { asignarIds([x]); nuevos.push(x); });
+            const bloques = bloquesDesdeLineas(sueltos, sueltas, false);
             sueltos = [];
+            if (centrado) bloques.forEach(b => { if (b.tipo === 'texto') b.centrado = true; });
+            empujarDestino(bloques);
         };
 
-        const empujar = b => {
+        const empujar = b => { vaciarSueltos(); empujarDestino(b); };
+
+        const cerrarSubLista = () => { subLista = null; };
+
+        // Una marca <Tabla> que nunca recibió su tabla sigue siendo un pendiente
+        // del montaje: se queda como tabla vacía con la nota, como antes.
+        const resolverTablaPendiente = () => {
+            if (!tablaPendiente) return;
+            const indicacion = tablaPendiente, titulo = tituloTabla;
+            tablaPendiente = null; tituloTabla = '';
+            empujar(Object.assign(crearBloque('tabla', false), { indicacion, titulo }));
+        };
+
+        const abrirPasos = () => {
             vaciarSueltos();
-            [].concat(b).filter(Boolean).forEach(x => { asignarIds([x]); nuevos.push(x); });
+            cerrarSubLista();
+            paso = null; idPasos = null;
+            pasos = Object.assign(crearBloque('pasos', false), { caja: true, items: [] });
+            asignarIds([pasos]);
+            nuevos.push(pasos);
             listaActual = null;
+        };
+
+        const cerrarPasos = () => {
+            vaciarSueltos();          // lo que quede es del último paso
+            cerrarSubLista();
+            pasos = null; paso = null; idPasos = null;
         };
 
         propuesta.bloques.forEach((crudo, i) => {
             // Los párrafos que salieron de las celdas de otra tabla ya viajaron
             // dentro de ella (`filas`): repetirlos duplicaba toda la página.
             if (crudo.dentroDeTabla && crudo.tipo !== 'tabla') return;
+            // Ya se montó dentro de su apartado, en su lugar exacto.
+            if (crudo.tipo === 'tabla' && tablasConsumidas.has(crudo)) return;
 
             if (crudo.tipo === 'tabla') {
                 const decision = decisiones.get(i);
-                if (decision === 'omitir') return;
-                // Tabla de una sola celda = barra de título del guion.
+                if (decision === 'omitir') { tablaPendiente = null; tituloTabla = ''; return; }
+                // Tabla de una sola celda = barra de título del guion. Un título
+                // nuevo cierra la caja de pasos: ya empezó otra sección.
                 if (crudo.celdas === 1 || (crudo.filas || []).length < 2) {
                     const texto = sinMarcas(crudo.texto);
                     if (!texto) return;
+                    cerrarPasos();
                     if (!pagina.titulo) { pagina.titulo = texto; return; }
                     empujar(Object.assign(crearBloque('titulo', false), { nivel: 'h2', texto }));
                     return;
                 }
-                empujar(tablaWordA(decision || 'tabla', crudo, sueltas));
+                vaciarSueltos();
+                // La marca <Tabla> queda satisfecha por esta tabla: ya no hay que
+                // dejar una vacía con la nota "el guion pide una tabla".
+                const conTitulo = tituloTabla;
+                tablaPendiente = null; tituloTabla = '';
+                empujarDestino(tablaWordA(decision || 'tabla', crudo, sueltas, conTitulo));
                 return;
             }
 
             const texto = (crudo.texto || '').trim();
             if (!texto) return;
 
+            // ¿El párrafo es solo una marca de montaje? Las que abren y cierran
+            // región se atienden aquí; las demás siguen su camino de siempre
+            // (bloquesDesdeLineas las convierte en el bloque que toca).
+            const m = texto.replace(/\*\*/g, '').trim().match(MARCA);
+            if (m) {
+                const clave = m[1].toLowerCase();
+                const termina = /^termina/.test(clave);
+                if (/lista numerada|son las instrucciones/.test(clave)) {
+                    if (termina) cerrarPasos(); else abrirPasos();
+                    return;
+                }
+                if (/texto regular centrado/.test(clave)) {
+                    vaciarSueltos();      // se cierra lo anterior con su estado
+                    centrado = !termina;
+                    return;
+                }
+                if (/^tabla\b/.test(clave)) {   // <Tabla>: la de verdad viene abajo
+                    vaciarSueltos();
+                    tablaPendiente = m[1];
+                    return;
+                }
+                if (termina && /tabla/.test(clave)) { resolverTablaPendiente(); return; }
+                sueltos.push(texto);
+                return;
+            }
+
+            // Con una marca <Tabla> abierta, el párrafo que empieza con "Tabla"
+            // es su encabezado ("Tabla de afirmaciones sobre…"), no un párrafo
+            // de la página: en el montaje va en la banda gris de la tabla.
+            if (tablaPendiente && !crudo.lista && /^tabla\b/i.test(texto.replace(/\*\*/g, ''))) {
+                // Sin negritas: en el Word el pie viene en negritas, pero la
+                // banda gris del montaje lo publica en texto normal.
+                tituloTabla = sinMarcas(texto).replace(/\*\*/g, '');
+                return;
+            }
+
             if (crudo.lista) {
+                // Dentro de la caja: el primer numId que aparece es el que
+                // numera los pasos; cualquier otro (o un nivel más adentro) es
+                // la sublista a, b, c de ese paso.
+                if (pasos) {
+                    if (!idPasos) idPasos = crudo.idLista;
+                    if (crudo.idLista === idPasos && !crudo.nivelLista) {
+                        vaciarSueltos();
+                        cerrarSubLista();
+                        paso = { texto: sinMarcas(texto), hijos: [] };
+                        pasos.items.push(paso);
+                        return;
+                    }
+                    vaciarSueltos();
+                    if (!subLista) {
+                        subLista = Object.assign(crearBloque('lista', false), {
+                            estilo: crudo.tipoLista === 'vinetas' ? 'vinetas'
+                                : crudo.tipoLista === 'letras' ? 'letras' : 'numerada',
+                            items: []
+                        });
+                        empujarDestino(subLista);
+                    }
+                    subLista.items.push(sinMarcas(texto));
+                    return;
+                }
+
                 if (!listaActual) {
                     vaciarSueltos();
                     listaActual = Object.assign(crearBloque('lista', false), {
@@ -1549,8 +1756,16 @@ document.addEventListener('click', function (e) {
             }
 
             listaActual = null;
+            cerrarSubLista();
+            /* Párrafo sin numerar dentro de la caja: si Word lo dejó sin sangría
+               ya no pertenece al paso (es el "Nota: al nombrar tu archivo…", que
+               en la página publicada va después de la caja). Lo centrado es la
+               excepción: esa marca dice explícitamente que sí es del paso. */
+            if (pasos && !centrado && !crudo.sangria) cerrarPasos();
             sueltos.push(texto);
         });
+        cerrarPasos();
+        resolverTablaPendiente();
         vaciarSueltos();
 
         pagina.bloques = pagina.bloques.concat(nuevos);
@@ -1559,8 +1774,65 @@ document.addEventListener('click', function (e) {
         dibujarTodo();
     }
 
+    /**
+     * Contenido de una celda del guion, en el orden del Word.
+     *
+     * El caso que obliga a esto: en la tabla "Pestaña | Contenido", la celda del
+     * apartado 2 trae texto, la caja de instrucción, la marca `<Crear un grupo de
+     * 5 botones…>`, **una tabla anidada** con esos 5 botones y un párrafo de
+     * cierre. Leyendo solo el texto aplanado, la tabla anidada se colaba como
+     * renglones sueltos y además reaparecía al final de la página como un bloque
+     * "Tarjetas" hermano del acordeón: el apartado quedaba vacío (de ahí la
+     * impresión de que "el acordeón no abre") y el montaje, desordenado.
+     */
+    function bloquesDeCelda(celda, sueltas) {
+        const piezas = celda.contenido || [];
+        if (!piezas.length) {
+            return bloquesDesdeLineas(celda.lineas && celda.lineas.length ? celda.lineas : [celda.texto], sueltas);
+        }
+
+        const salida = [];
+        let lineas = [];
+        /* Marca que anuncia la tabla que viene: `<Tabla>` o `<Crear un grupo de N
+           botones…>`. Espera en vez de convertirse ya en un bloque vacío, porque
+           si abajo viene la tabla de verdad salían las DOS cosas: el grupo (o la
+           tabla) en blanco y el real. */
+        let pendiente = null;
+
+        const vaciar = () => {
+            if (!lineas.length) return;
+            salida.push(...bloquesDesdeLineas(lineas, sueltas));
+            lineas = [];
+        };
+
+        piezas.forEach(pieza => {
+            if (pieza.tipo !== 'tabla') {
+                const m = (pieza.texto || '').replace(/\*\*/g, '').trim().match(MARCA);
+                const clave = m ? m[1].toLowerCase() : '';
+                if (m && /grupo de\s+\d+\s+bot/.test(clave)) { vaciar(); pendiente = { tipo: 'tarjetas', marca: m[1] }; return; }
+                if (m && /^tabla\b/.test(clave)) { vaciar(); pendiente = { tipo: 'tabla', marca: m[1] }; return; }
+                if (pieza.texto) lineas.push(pieza.texto);
+                return;
+            }
+            vaciar();
+            const t = pieza.bloque;
+            tablasConsumidas.add(t);      // ya se montó aquí; no repetirla afuera
+            // Manda lo que el usuario eligió en el asistente; si esa tabla no se
+            // preguntó, lo que dice la marca; y si no hay marca, la sugerencia.
+            const decision = decisionesTabla.get(t) || (pendiente ? pendiente.tipo : sugerir(t));
+            pendiente = null;
+            if (decision === 'omitir') return;
+            salida.push(...[].concat(tablaWordA(decision, t, sueltas)));
+        });
+        vaciar();
+        // Marca sin tabla que la respalde: sigue siendo un pendiente del montaje,
+        // así que se queda el bloque vacío con su nota, como siempre.
+        if (pendiente) salida.push(...bloquesDesdeLineas([`<${pendiente.marca}>`], sueltas));
+        return salida;
+    }
+
     /** Convierte una tabla del Word al bloque que el usuario eligió. */
-    function tablaWordA(decision, crudo, sueltas) {
+    function tablaWordA(decision, crudo, sueltas, titulo) {
         const filas = crudo.filas || [];
         const encabezados = (filas[0] || []).map(c => sinMarcas(c.texto));
         const cuerpo = filas.slice(1);
@@ -1569,7 +1841,13 @@ document.addEventListener('click', function (e) {
             return Object.assign(crearBloque('tabla', false), {
                 encabezados,
                 filas: cuerpo.map(f => f.map(c => sinMarcas(c.texto))),
-                tarjetas: true, colorear: false, titulo: ''
+                tarjetas: true,
+                /* Encendido al importar: el Word llega sin sombreado (todas las
+                   celdas en "auto") pero el montaje publicado SIEMPRE alterna la
+                   primera columna en rosa/verde. Se apaga con el toggle si esta
+                   tabla no lo lleva. */
+                colorear: true,
+                titulo: titulo || ''
             });
         }
 
@@ -1591,8 +1869,7 @@ document.addEventListener('click', function (e) {
         // contenido, que se parte en bloques según las marcas del guion.
         const items = cuerpo.map(fila => {
             const titulo = sinMarcas((fila[0] || {}).texto);
-            const hijos = fila.slice(1).flatMap(celda =>
-                bloquesDesdeLineas(celda.lineas && celda.lineas.length ? celda.lineas : [celda.texto], sueltas));
+            const hijos = fila.slice(1).flatMap(celda => bloquesDeCelda(celda, sueltas));
             asignarIds(hijos);
             return { titulo, etiqueta: titulo, img: '', alt: '', hijos };
         }).filter(it => it.titulo || it.hijos.length);
@@ -1604,12 +1881,122 @@ document.addEventListener('click', function (e) {
     }
 
     /* ---------------------------------------------------------------------
+       Reparto de la pantalla: divisor y previa ampliada
+
+       Editar y revisar piden anchos distintos (armar una tabla necesita el
+       editor; ver si la página quedó bien necesita la previa), así que el reparto
+       no puede ser una decisión fija de CSS: se arrastra, se recuerda, y hay un
+       clic para dejarle la pantalla entera a la previa.
+       --------------------------------------------------------------------- */
+
+    const CLAVE_COL = 'guion-col-editor';
+    const COL_MIN = 360;
+    // Lo que se le reserva a la previa aunque se arrastre a lo bestia: por debajo
+    // de esto la rejilla de escritorio de Moodle ya no se parece a un escritorio.
+    const PREVIA_MIN = 520;
+
+    function anchoWorkspace() {
+        return $('#workspace').getBoundingClientRect().width;
+    }
+
+    function fijarCol(px, recordar = true) {
+        const tope = Math.max(COL_MIN, Math.min(760, anchoWorkspace() - PREVIA_MIN));
+        const ancho = Math.round(Math.min(tope, Math.max(COL_MIN, px)));
+        $('#workspace').style.setProperty('--col-editor', `${ancho}px`);
+        if (recordar) localStorage.setItem(CLAVE_COL, String(ancho));
+    }
+
+    function alternarPreviaMax(forzar) {
+        const ws = $('#workspace');
+        const max = forzar === undefined ? !ws.classList.contains('previa-max') : forzar;
+        ws.classList.toggle('previa-max', max);
+        const btn = $('#btn-previa-max');
+        btn.querySelector('i').className = `ph ph-corners-${max ? 'in' : 'out'}`;
+        btn.title = max ? 'Volver al editor (Esc)' : 'Ampliar la vista previa';
+        btn.setAttribute('aria-pressed', String(max));
+    }
+
+    function prepararDivisor() {
+        const ws = $('#workspace');
+        const divisor = $('#divisor');
+        const guardado = Number(localStorage.getItem(CLAVE_COL));
+        // Sin recordar: el valor ya venía de una sesión anterior y volver a
+        // guardarlo recortado por una ventana chica lo perdería para siempre.
+        if (guardado) fijarCol(guardado, false);
+
+        let arrastrando = false;
+        divisor.addEventListener('pointerdown', e => {
+            e.preventDefault();
+            arrastrando = true;
+            divisor.classList.add('arrastrando');
+            /* La captura es lo que permite arrastrar POR ENCIMA de la vista
+               previa: es un iframe y, sin captura, se queda con los eventos del
+               ratón y el divisor se congela a media pantalla. */
+            try { divisor.setPointerCapture(e.pointerId); } catch (err) { /* sin captura, los movimientos igual llegan a window */ }
+        });
+        // En window y no en el divisor: son 20px de ancho y el cursor se sale.
+        window.addEventListener('pointermove', e => {
+            if (arrastrando) fijarCol(e.clientX - ws.getBoundingClientRect().left);
+        });
+        const soltar = () => {
+            arrastrando = false;
+            divisor.classList.remove('arrastrando');
+        };
+        window.addEventListener('pointerup', soltar);
+        window.addEventListener('pointercancel', soltar);
+
+        // Doble clic: de vuelta al reparto por omisión (el clamp del CSS).
+        divisor.addEventListener('dblclick', () => {
+            ws.style.removeProperty('--col-editor');
+            localStorage.removeItem(CLAVE_COL);
+        });
+
+        // Con el teclado: el divisor es enfocable, así que también se mueve.
+        divisor.addEventListener('keydown', e => {
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            e.preventDefault();
+            const paso = (e.shiftKey ? 80 : 24) * (e.key === 'ArrowLeft' ? -1 : 1);
+            fijarCol($('.editor-panel').getBoundingClientRect().width + paso);
+        });
+
+        $('#btn-previa-max').addEventListener('click', () => alternarPreviaMax());
+
+        /* El ancho real de la previa en px. Es la única forma de saber si lo que
+           se está mirando de verdad es un escritorio o una tableta disfrazada. */
+        const medida = $('#preview-medida');
+        new ResizeObserver(([entrada]) => {
+            const px = Math.round(entrada.contentRect.width);
+            medida.textContent = px ? `${px} px` : '';
+        }).observe($('#preview-frame'));
+    }
+
+    /* La paleta del pie se pliega: en una laptop son ~150px que a veces se
+       prefieren para el lienzo. Se recuerda, porque quien la pliega la quiere
+       plegada siempre. */
+    function prepararPaleta() {
+        const CLAVE = 'guion-paleta-plegada';
+        const caja = document.querySelector('.paleta-componentes');
+        const btn = $('#btn-paleta');
+
+        const fijar = plegada => {
+            caja.classList.toggle('plegada', plegada);
+            btn.setAttribute('aria-expanded', String(!plegada));
+            localStorage.setItem(CLAVE, plegada ? '1' : '0');
+        };
+
+        if (localStorage.getItem(CLAVE) === '1') fijar(true);
+        btn.addEventListener('click', () => fijar(!caja.classList.contains('plegada')));
+    }
+
+    /* ---------------------------------------------------------------------
        Arranque
        --------------------------------------------------------------------- */
 
     function init() {
         dibujarPaletaComponentes();
         dibujarTodo();
+        prepararDivisor();
+        prepararPaleta();
 
         $('#titulo-pagina').addEventListener('input', e => {
             pagina.titulo = e.target.value;
@@ -1673,6 +2060,9 @@ document.addEventListener('click', function (e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) {
                 e.preventDefault();
                 deshacer();
+            }
+            if (e.key === 'Escape' && $('#workspace').classList.contains('previa-max')) {
+                alternarPreviaMax(false);
             }
         });
     }

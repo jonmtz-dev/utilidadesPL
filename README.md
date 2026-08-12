@@ -78,7 +78,12 @@ assets/
   pwa.js                    Registra el SW, aviso de versión y botón Instalar
   launcher.css              Estilos del launcher
   launcher.js               Dibuja las tarjetas y la búsqueda
+  scroll-pista.js           Difuminado y píldora "hay más abajo" (ver §4)
   tools.js                  ← Registro de herramientas (la fuente de la verdad)
+  docx.js                   Lector de Word: bloques, tablas e imágenes (3 herramientas)
+  modulos-311.js            Módulos y paletas 3.11 (Integrador y Bibliografías)
+  tablas.js                 Conversión de tablas a tarjetas responsivas
+  version-moodle.js         Inyecta la insignia de versión en cada herramienta
   zip.js                    Escritor de .zip (Micrositio y Guion a Página)
   icons/                    Iconos PWA (generados, ver §7)
 tools/
@@ -189,11 +194,17 @@ Word.
 Importando el `.docx` (se salta las fichas de control editorial y arranca en el
 título), abre un **asistente** donde cada tabla del guion se muestra con su
 contenido para elegir en qué se convierte —*Tabla, Acordeón, Tarjetas, Texto,
-No va*— y deja todo en un lienzo de bloques que se arrastran. Hay 14 piezas
-(título, texto, lista, imagen con texto a un lado, caja de instrucción, tabla,
-acordeón, ventana emergente, tarjetas, pestañas, video, botón, aviso,
-separador) y **se anidan**: dentro de un apartado del acordeón caben una tabla,
-una imagen y otro tooltip.
+No va*— y deja todo en un lienzo de bloques que se arrastran. Hay 15 piezas
+(título, texto, lista, **pasos**, imagen con texto a un lado, caja de
+instrucción, tabla, acordeón, ventana emergente, tarjetas, pestañas, video,
+botón, aviso, separador) y **se anidan**: dentro de un apartado del acordeón
+caben una tabla, una imagen y otro tooltip.
+
+**Pasos** es la pieza de las actividades de aprendizaje: la lista numerada de la
+*Ruta de aprendizaje* dentro de su caja de color, con la tabla, la sublista
+*a, b, c* o la nomenclatura centrada **colgando del paso** que las menciona. Al
+importar, la marca `<Lista numerada; son las instrucciones>` la arma sola y la
+sangría del Word decide qué párrafo pertenece al paso y cuál ya salió de la caja.
 
 Las **imágenes del Word se extraen solas**: cada bloque de imagen ofrece la
 galería del guion para elegirla con un clic, la vista previa las enseña de
@@ -205,6 +216,13 @@ La vista previa es un iframe con la hoja real del tema y tres anchos; el de
 celular es el que enseña si la tabla se volvió tarjetas de verdad. Está
 **sincronizada con el lienzo**: al hacer clic en un bloque lo enmarca allá, y al
 hacer clic en la previa se abre ese bloque acá.
+
+Es la única herramienta que se sale del tope de 1400px del contenedor (usa 1760)
+y la única con el **reparto de pantalla ajustable**: el editor arranca angosto
+para que la previa tenga ancho de escritorio de verdad, el divisor se arrastra
+(y se recuerda), y hay un botón para darle a la previa el área completa. El
+ancho real en px va escrito junto a la barra, porque "escritorio" en una ventana
+chica no es escritorio y conviene saberlo.
 
 Las marcas de montaje del guion (`<Figura>`, `<Crear un grupo de 5 botones…>`,
 las que abren y cierran las cajas de instrucción) **no se publican**: cada una
@@ -424,6 +442,34 @@ cosas frágiles, no las rompas:
 Por debajo de 1024px de ancho (columnas apiladas) o 620px de alto, se devuelve
 el scroll normal de página y cada bloque toma su alto natural.
 
+### Scroll: nunca una barra a media pantalla
+
+Consecuencia directa del layout de arriba: si la página no scrollea, scrollea
+algo de adentro, y la barra nativa aparece flotando en medio de un panel de
+cristal —se lee como una cicatriz y encima no dice *qué* se mueve—. El acuerdo,
+con las clases de `shared.css`:
+
+| Caso | Clases | Qué hace |
+| --- | --- | --- |
+| Zona chica dentro de un panel (lienzo, paleta, galería, checklist) | `.scroll-sin-barra .scroll-difuso` + `data-pista-scroll` | Sin barra; el borde se difumina **solo** cuando queda contenido de ese lado |
+| Zona que además conviene anunciar (rejilla del launcher) | + `data-pista="#id"` y un `<button class="pista-mas">` | Píldora "hay más abajo" que late suave y baja al pulsarla |
+| Un panel entero (`.panel-section`) | ya lo trae | Barra **fina** y translúcida: esconderla del todo dejaría el panel sin ninguna pista |
+
+Las clases de estado (`mas-arriba` / `mas-abajo`) las pone `scroll-pista.js`, que
+mira el scroll, el tamaño de la zona (`ResizeObserver`) y su contenido
+(`MutationObserver`, porque el launcher filtra tarjetas y el lienzo se redibuja
+entero). Sin el script, las clases son inofensivas: la máscara queda opaca.
+
+El difuminado son dos custom properties registradas con `@property` (`--fade-arriba`
+/ `--fade-abajo`) para que puedan transicionar; sin registrarlas, una custom
+property no es animable y el difuminado aparecería de golpe.
+
+> ⚠️ **`.scroll-difuso` no va en un contenedor de `.glass-panel`.** Una máscara
+> convierte al elemento en *backdrop root*: sus descendientes con
+> `backdrop-filter` dejan de ver el fondo de la página y el efecto cristal se
+> apaga. Por eso la rejilla del launcher (tarjetas de cristal) usa solo la
+> píldora, sin difuminado.
+
 ---
 
 ## 5. Agregar una herramienta
@@ -465,6 +511,33 @@ el scroll normal de página y cada bloque toma su alto natural.
 5. En tu `script.js` arranca comprobando el estado del DOM, no solo con el
    listener (ver "Trampas conocidas").
 
+### Tocar código compartido: agrega, no cambies
+
+`assets/` lo usan varias herramientas a la vez, y cada una ya está cotejada
+contra páginas publicadas. La regla, cuando una herramienta necesita algo nuevo
+del código común:
+
+> **Lo que ya sirve se queda como está. Lo nuevo entra como campo adicional o
+> como opción apagada por omisión.**
+
+No es prudencia decorativa: `assets/docx.js` alimenta al Integrador HTML, al
+Adaptador de Rúbricas y a Guion a Página, y cada uno interpreta el mismo texto
+de forma distinta. Las dos formas de hacerlo, con los casos que las motivaron:
+
+| Necesidad | Cómo NO | Cómo sí |
+| --- | --- | --- |
+| Guion a Página necesitaba las tablas anidadas de una celda, en orden | Cambiar `lineas`/`texto` para que dejaran de aplanar | **Campo nuevo** `contenido`, con los párrafos y las tablas en el orden real. `lineas` y `texto` intactos |
+| Necesitaba los saltos de línea manuales (`w:br`) como `\n` | Devolverlos siempre | **Opción** `textoDeParrafoConNegritas(p, { saltos: true })`, apagada por omisión |
+
+El segundo caso enseña por qué: el Integrador HTML parte sus listas por renglón,
+así que un salto dentro de un elemento se habría convertido en **dos** elementos.
+El cambio era correcto para una herramienta y equivocado para la otra; como
+opción, las dos quedan bien.
+
+Y al terminar, **prueba la otra herramienta**, no solo la tuya: tras tocar
+`docx.js`, importar el mismo Word en el Integrador HTML y comparar el número de
+bloques y de `<li>` es una prueba de 30 segundos que detecta esto.
+
 ---
 
 ## 6. Trampas conocidas
@@ -500,6 +573,31 @@ Cosas que ya costaron un rato; no las vuelvas a pisar.
   las tarjetas se estiraran al alto completo; va en `start`. Y su contrario:
   con alto definido, las filas `auto` se **aprietan** para caber y el contenido
   se corta; por eso el launcher usa `grid-auto-rows: max-content`.
+
+- **Dos campos con el mismo nombre y distinto dueño.** En Guion a Página, la
+  indicación del guion ("El guion pide: Figura") y el pie de figura del bloque de
+  imagen compartían el campo `nota`: una marca `<Figura>` del Word acababa
+  **publicada** como pie de la imagen. Antes de reutilizar un nombre de campo,
+  revisa que ningún componente ya lo tenga como campo propio (ahora se llama
+  `indicacion`).
+
+- **Redibujar la vista previa por un clic la deja muerta.** En Guion a Página, el
+  clic en la previa (para sincronizar con el lienzo) llamaba a `dibujarTodo()`,
+  que regenera el iframe: el acordeón se cerraba en el mismo clic con que se
+  abría, y lo mismo las pestañas y las ventanas. Abrir o seleccionar un bloque no
+  cambia el HTML, así que ahí va `dibujarLienzo()` y nada más.
+
+- **El texto aplanado de una celda pierde sus tablas anidadas.** En los guiones,
+  la celda de un apartado trae tablas dentro (el grupo de botones). Con solo el
+  texto, esa tabla desaparecía del apartado y reaparecía como bloque hermano al
+  final de la página. Por eso `docx.js` entrega también `contenido`: los párrafos
+  y las tablas de la celda **en el orden real**.
+
+- **Un ítem flex con `flex: none` se mide por su contenido.** Al envolver una
+  zona con scroll en una "ventana" `display: flex` (para colgarle la píldora),
+  el hijo con `flex: none` —lo que hace la media query al apilar— pasa a medir
+  `max-content`: el lienzo de Guion a Página se salió a 495px dentro de un panel
+  de 271px. En vertical la ventana vuelve a `display: block`.
 
 - **`overflow: visible` + un flex-basis fijo = contenido encimado.** Al apilar
   las columnas en celular, un contenedor con `flex: 1 1 240px` se queda en
@@ -600,6 +698,20 @@ y abre <http://localhost:5510>.
 > transparente) o estilos que no aplican. Antes de dar por roto un cambio de
 > CSS, recarga sin caché (Ctrl+F5). El preview embebido de algunos entornos es
 > especialmente agresivo cacheando `file://`.
+>
+> **Y ojo con el Service Worker, que también cachea el JS.** Probando en
+> `localhost` con el SW registrado, un `assets/*.js` recién editado puede seguir
+> sirviéndose viejo: el síntoma es de los que hacen perder media hora —un campo
+> nuevo que llega `undefined`, una función que "no existe", una corrección que no
+> aparece— aunque el archivo en disco esté bien. Para descartarlo, en la consola:
+>
+> ```js
+> (await navigator.serviceWorker.getRegistrations()).forEach(r => r.unregister());
+> (await caches.keys()).forEach(k => caches.delete(k));
+> ```
+>
+> y recarga. Un `?v=algo` en la URL solo refresca el HTML, no los scripts que
+> cuelgan de él.
 
 ### Cómo verificar un cambio
 

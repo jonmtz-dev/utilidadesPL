@@ -141,12 +141,20 @@ function botonModal(id, etiqueta) {
 let MARCAR_BLOQUES = false;
 function marcarBloques(activo) { MARCAR_BLOQUES = activo; }
 
-/** HTML de una lista de bloques (recursivo: acordeones, modales, pestañas). */
-function htmlDeBloques(bloques, n) {
+/**
+ * HTML de una lista de bloques (recursivo: acordeones, modales, pestañas).
+ *
+ * `desnudo` es para el contenido que va DENTRO de un `<li>`: ahí un
+ * `.row.bloque > .col-12` alrededor de un párrafo o de una sublista rompe la
+ * lista (la página real mete el `<ol type="a">` y los `<p class="text-center">`
+ * pelados dentro del `<li>`). Solo lo respetan los componentes donde importa;
+ * una tabla dentro de un `<li>` sí conserva su rejilla, como en el montaje real.
+ */
+function htmlDeBloques(bloques, n, desnudo) {
     return (bloques || []).map(b => {
         const comp = COMPONENTES[b.tipo];
         if (!comp) return '';
-        let cuerpo = comp.html(b, n);
+        let cuerpo = comp.html(b, n, desnudo);
         // Se inyecta en la primera etiqueta, no envolviendo: un <div> extra
         // cambiaría la rejilla y la previa dejaría de ser fiel.
         if (MARCAR_BLOQUES && cuerpo) cuerpo = cuerpo.replace(/^(\s*<[a-z0-9]+)/i, `$1 data-bq="${b.id}"`);
@@ -172,7 +180,10 @@ const MINI = {
     video: '<rect x="1" y="5" width="38" height="22" rx="4" opacity=".8"/><path d="M17 11l9 5-9 5z" fill="#fff"/>',
     boton: '<rect x="7" y="10" width="26" height="12" rx="6" opacity=".9"/><rect x="12" y="14.5" width="16" height="3" rx="1.5" fill="#fff" opacity=".9"/>',
     alerta: '<rect x="1" y="7" width="38" height="18" rx="4" opacity=".28"/><rect x="1" y="7" width="4" height="18" rx="2" opacity=".9"/><circle cx="12" cy="16" r="3.4" opacity=".8"/><rect x="19" y="14.5" width="18" height="3" rx="1.5" opacity=".5"/>',
-    separador: '<rect x="1" y="14" width="38" height="3" rx="1.5" opacity=".5"/>'
+    separador: '<rect x="1" y="14" width="38" height="3" rx="1.5" opacity=".5"/>',
+    /* Sin <text>: el glifo de un SVG cuenta como texto del botón y el nombre de
+       la pieza salía "1 2 Pasos" en la paleta y en las plantillas. */
+    pasos: '<rect x="1" y="3" width="38" height="26" rx="4" opacity=".22"/><rect x="5" y="8" width="5" height="5" rx="1.5" opacity=".9"/><rect x="5" y="19" width="5" height="5" rx="1.5" opacity=".9"/><rect x="13" y="8.5" width="22" height="4" rx="2" opacity=".6"/><rect x="13" y="19.5" width="18" height="4" rx="2" opacity=".6"/>'
 };
 
 /* -------------------------------------------------------------------------
@@ -199,13 +210,24 @@ const COMPONENTES = {
             }
         ],
         html: (b, n) => {
-            const et = b.nivel === 'h1' ? 'h1' : 'h2';
+            // Los dos niveles NO llevan el mismo envoltorio en las páginas del
+            // equipo: el h1 va dentro de un .col-12 y el h2 de sección cuelga
+            // directo del .row con .mt-4 (es lo que le da el aire de arriba).
+            if (b.nivel === 'h1') {
+                return [
+                    `${ind(n)}<div class="row bloque">`,
+                    `${ind(n + 1)}<div class="col-12">`,
+                    `${ind(n + 2)}<div class="tituloUnidad">`,
+                    `${ind(n + 3)}<h1 class="text-primary">${marcas(b.texto || '')}</h1>`,
+                    `${ind(n + 2)}</div>`,
+                    `${ind(n + 1)}</div>`,
+                    `${ind(n)}</div>`
+                ].join('\n');
+            }
             return [
                 `${ind(n)}<div class="row bloque">`,
-                `${ind(n + 1)}<div class="col-12">`,
-                `${ind(n + 2)}<div class="tituloUnidad">`,
-                `${ind(n + 3)}<${et} class="text-primary">${marcas(b.texto || '')}</${et}>`,
-                `${ind(n + 2)}</div>`,
+                `${ind(n + 1)}<div class="tituloUnidad mt-4">`,
+                `${ind(n + 2)}<h2 class="text-primary">${marcas(b.texto || '')}</h2>`,
                 `${ind(n + 1)}</div>`,
                 `${ind(n)}</div>`
             ].join('\n');
@@ -218,31 +240,44 @@ const COMPONENTES = {
         ayuda: 'Párrafos con negritas, enlaces y ventanas emergentes',
         icono: 'text-align-left',
         mini: MINI.texto,
-        nuevo: () => ({ texto: '', destacado: false }),
+        nuevo: () => ({ texto: '', destacado: false, centrado: false }),
         resumen: b => (b.texto || '').replace(/\s+/g, ' '),
         campos: [
             { k: 'texto', tipo: 'rico', etiqueta: 'Texto', filas: 4, marcador: 'Escribe aquí. Una línea en blanco separa párrafos.' },
-            { k: 'destacado', tipo: 'check', etiqueta: 'Centrado y en negritas (la pregunta que abre el apartado)' }
+            { k: 'destacado', tipo: 'check', etiqueta: 'Centrado y en negritas (la pregunta que abre el apartado)' },
+            { k: 'centrado', tipo: 'check', etiqueta: 'Centrado, sin forzar negritas (nomenclaturas, ejemplos)', siOculta: b => b.destacado }
         ],
-        html: (b, n) => {
+        html: (b, n, desnudo) => {
             if (!(b.texto || '').trim()) return '';
+            const trozos = String(b.texto).split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+
+            /* Dentro de un <li> los párrafos van pelados: así los publica la
+               página real ("Apellidos_Nombre_SM02S1AA1" centrado dentro del paso
+               "Guarda el archivo…"). Un .row.bloque ahí rompería la lista. */
+            if (desnudo) {
+                const clase = (b.centrado || b.destacado) ? ' class="text-center"' : '';
+                return trozos.map(p => `${ind(n)}<p${clase}>${b.destacado
+                    ? `<strong>${marcas(p)}</strong>` : marcas(p).replace(/\n/g, '<br>')}</p>`).join('\n');
+            }
+
             // El "destacado" es el patrón de la página real: la pregunta que
             // abre cada apartado va centrada y en negritas dentro de .my-2.
             if (b.destacado) {
-                const ps = String(b.texto).split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
-                    .map(p => `${ind(n + 2)}<p><strong>${marcas(p)}</strong></p>`);
                 return [
                     `${ind(n)}<div class="row bloque">`,
                     `${ind(n + 1)}<div class="my-2 text-center">`,
-                    ...ps,
+                    ...trozos.map(p => `${ind(n + 2)}<p><strong>${marcas(p)}</strong></p>`),
                     `${ind(n + 1)}</div>`,
                     `${ind(n)}</div>`
                 ].join('\n');
             }
+            const cuerpo = b.centrado
+                ? trozos.map(p => `${ind(n + 2)}<p class="text-center">${marcas(p).replace(/\n/g, '<br>')}</p>`)
+                : parrafos(b.texto, n + 2);
             return [
                 `${ind(n)}<div class="row bloque">`,
                 `${ind(n + 1)}<div class="col-12">`,
-                ...parrafos(b.texto, n + 2),
+                ...cuerpo,
                 `${ind(n + 1)}</div>`,
                 `${ind(n)}</div>`
             ].join('\n');
@@ -267,11 +302,21 @@ const COMPONENTES = {
             },
             { k: 'items', tipo: 'renglones', etiqueta: 'Elementos', marcador: 'Un elemento por renglón' }
         ],
-        html: (b, n) => {
+        html: (b, n, desnudo) => {
             const items = (b.items || []).map(t => String(t).trim()).filter(Boolean);
             if (!items.length) return '';
             const et = b.estilo === 'vinetas' ? 'ul' : 'ol';
             const tipo = b.estilo === 'letras' ? ' type="a"' : '';
+            /* Dentro de un <li> la sublista va pelada y SIN .estiloLista: así es
+               el `<ol type="a">` de la página real, y la clase del padre ya le da
+               el estilo. Envolverla en .row.bloque la sacaría de su punto. */
+            if (desnudo) {
+                return [
+                    `${ind(n)}<${et}${tipo}>`,
+                    ...items.map(t => `${ind(n + 1)}<li>${marcas(t)}</li>`),
+                    `${ind(n)}</${et}>`
+                ].join('\n');
+            }
             return [
                 `${ind(n)}<div class="row bloque">`,
                 `${ind(n + 1)}<div class="col-12">`,
@@ -281,6 +326,62 @@ const COMPONENTES = {
                 `${ind(n + 1)}</div>`,
                 `${ind(n)}</div>`
             ].join('\n');
+        }
+    },
+
+    /* ---- Pasos de la actividad (la lista numerada en su caja de color) ----
+
+       Es LA pieza de las actividades de aprendizaje: la "Ruta de aprendizaje"
+       va en una caja rosa con una lista numerada, y cada paso puede llevar
+       colgada una tabla, una sublista a, b, c o una nomenclatura centrada. Con
+       el bloque `lista` no se podía: sus elementos son texto plano, así que la
+       tabla del paso 5 salía como bloque hermano y el guion perdía el orden. */
+    pasos: {
+        nombre: 'Pasos',
+        ayuda: 'La lista numerada de la actividad, en su caja de color; cada paso admite tabla, sublista o texto centrado',
+        icono: 'list-numbers',
+        mini: MINI.pasos,
+        nuevo: () => ({ caja: true, items: [{ texto: '', hijos: [] }] }),
+        resumen: b => `${(b.items || []).length} pasos`,
+        campos: [
+            { k: 'caja', tipo: 'check', etiqueta: 'Dentro de la caja de color (como la Ruta de aprendizaje)' },
+            {
+                k: 'items', tipo: 'repetible', etiqueta: 'Pasos', nombreItem: 'Paso',
+                nuevo: () => ({ texto: '', hijos: [] }),
+                campos: [{ k: 'texto', tipo: 'rico', etiqueta: 'Texto del paso', filas: 2, marcador: 'Identifica qué ocurre con…' }],
+                hijos: true
+            }
+        ],
+        html: (b, n) => {
+            const items = (b.items || []).filter(it => (it.texto || '').trim() || (it.hijos || []).length);
+            if (!items.length) return '';
+
+            const nLista = b.caja ? n + 4 : n + 2;
+            const partes = [
+                `${ind(n)}<div class="row bloque">`,
+                `${ind(n + 1)}<div class="col-12">`
+            ];
+            if (b.caja) {
+                partes.push(
+                    `${ind(n + 2)}<div class="card-body col-sm-12 p-4 bg-primary-10 rounded-2">`,
+                    `${ind(n + 3)}<div class="card-text">`);
+            }
+            partes.push(`${ind(nLista)}<ol class="estiloLista">`);
+            items.forEach(it => {
+                // El contenido del paso va DENTRO del <li> y en modo desnudo: la
+                // sublista y los párrafos centrados van pelados, la tabla sí
+                // conserva su rejilla (así está en la página de referencia).
+                const dentro = htmlDeBloques(it.hijos, nLista + 2, true);
+                if (dentro) {
+                    partes.push(`${ind(nLista + 1)}<li>${marcas(it.texto || '')}`, dentro, `${ind(nLista + 1)}</li>`);
+                } else {
+                    partes.push(`${ind(nLista + 1)}<li>${marcas(it.texto || '')}</li>`);
+                }
+            });
+            partes.push(`${ind(nLista)}</ol>`);
+            if (b.caja) partes.push(`${ind(n + 3)}</div>`, `${ind(n + 2)}</div>`);
+            partes.push(`${ind(n + 1)}</div>`, `${ind(n)}</div>`);
+            return partes.join('\n');
         }
     },
 
@@ -417,16 +518,24 @@ const COMPONENTES = {
             const enc = (b.encabezados || []);
             const filas = b.filas || [];
             if (!enc.length) return '';
-            const clases = ['table', 'table-bordered', 'border-neutral'];
+            const clases = ['table', 'table-bordered'];
             if (b.tarjetas) clases.push('tabla-responsive-cards');
 
+            // Envoltorio cotejado con la página publicada: .mt-3 y .col-10
+            // (con .col-md-8 la tabla de 4 columnas salía estrecha y las celdas
+            // partían cada palabra en un renglón).
             const partes = [
-                `${ind(n)}<div class="row bloque mt-4">`,
-                `${ind(n + 1)}<div class="col-md-8 mx-auto">`,
+                `${ind(n)}<div class="row bloque mt-3">`,
+                `${ind(n + 1)}<div class="col-10 mx-auto">`,
                 `${ind(n + 2)}<div class="table-responsive">`
             ];
+            // El encabezado de la tabla es una banda gris con el texto centrado,
+            // no un .card-header: eso es lo que hace el montaje del equipo.
             if ((b.titulo || '').trim()) {
-                partes.push(`${ind(n + 3)}<div class="card-header notas-tabla text-muted">${marcas(b.titulo)}</div>`);
+                partes.push(
+                    `${ind(n + 3)}<div class="container-fluid bg-neutral-claro-50 border border-neutral-claro-50 rounded-1 rounded-top">`,
+                    `${ind(n + 4)}<p class="text-muted my-2 text-center">${marcas(b.titulo)}</p>`,
+                    `${ind(n + 3)}</div>`);
             }
             partes.push(
                 `${ind(n + 3)}<table class="${clases.join(' ')}">`,
@@ -445,15 +554,15 @@ const COMPONENTES = {
             });
 
             partes.push(`${ind(n + 4)}</tbody>`, `${ind(n + 3)}</table>`);
-            // Aviso de scroll de la página real: solo aparece en pantallas
-            // chicas donde la tabla sí se desborda.
-            if (!b.tarjetas) {
-                partes.push(
-                    `${ind(n + 3)}<div class="indicador-scroll d-none d-sm-block d-md-none">`,
-                    `${ind(n + 4)}<i class="texto-scroll">Scroll a la derecha para ver más</i>`,
-                    `${ind(n + 4)}<div class="flecha-scroll">...</div>`,
-                    `${ind(n + 3)}</div>`);
-            }
+            /* Aviso de scroll: va SIEMPRE, como en la página publicada. No pelea
+               con el modo tarjetas —solo se muestra entre 576px y 768px, y las
+               tarjetas empiezan por debajo de 576—: es justo la franja donde la
+               tabla se desborda sin haberse vuelto tarjetas todavía. */
+            partes.push(
+                `${ind(n + 3)}<div class="indicador-scroll d-none d-sm-block d-md-none">`,
+                `${ind(n + 4)}<i class="texto-scroll">Scroll a la derecha para ver más</i>`,
+                `${ind(n + 4)}<div class="flecha-scroll">...</div>`,
+                `${ind(n + 3)}</div>`);
             partes.push(`${ind(n + 2)}</div>`, `${ind(n + 1)}</div>`, `${ind(n)}</div>`);
             return partes.join('\n');
         }
@@ -737,7 +846,7 @@ function idDeYoutube(url) {
 }
 
 /* Orden de la paleta: primero lo de toda página, luego lo compuesto. */
-const ORDEN_PALETA = ['titulo', 'texto', 'lista', 'imagen', 'instruccion', 'tabla',
+const ORDEN_PALETA = ['titulo', 'texto', 'lista', 'pasos', 'imagen', 'instruccion', 'tabla',
     'acordeon', 'modal', 'tarjetas', 'pestanas', 'video', 'boton', 'alerta', 'separador'];
 
 /* Paletas del aula. Las clases son las del tema (mainPlantilla23.M01 …); los

@@ -34,6 +34,17 @@ Idioma: **todo en español** (UI, comentarios, commits).
 - Los componentes de UI compartidos ya existen en `assets/shared.css`
   (`.glass-panel`, `.toggle-switch`, `.btn-primary`, `.tabs`, `.code-output`…).
   Reutilízalos; no los reescribas por herramienta.
+- **En `assets/` compartido: agrega, no cambies.** Lo que ya sirve se queda; lo
+  nuevo entra como **campo adicional** o como **opción apagada por omisión**.
+  `docx.js` lo usan tres herramientas y cada una lee el mismo Word distinto: por
+  eso las tablas anidadas de una celda llegaron como campo nuevo (`contenido`,
+  sin tocar `lineas`/`texto`) y los saltos de línea del Word como opción
+  (`textoDeParrafoConNegritas(p, { saltos: true })`) — devolverlos siempre habría
+  partido en dos los `<li>` del Integrador HTML. Al terminar, **prueba la otra
+  herramienta**, no solo la tuya. Detalle y tabla de casos en el README §5.
+- **Antes de reusar el nombre de un campo, revisa que ningún componente ya lo
+  tenga.** La indicación del guion y el pie de figura compartían `nota`, y un
+  `<Figura>` del Word acabó publicándose como pie de la imagen.
 - Colores: si cambia entre claro y oscuro, va como token en `:root` /
   `:root[data-theme="dark"]` de `shared.css`. Nunca hardcodeado.
 - **Las vistas previas (`.preview-container`) son islas claras a propósito** —
@@ -41,6 +52,12 @@ Idioma: **todo en español** (UI, comentarios, commits).
   oscuro, y no uses tokens temáticos en nada que se inyecte dentro de ellas.
 - Layout: el gutter va como `padding` del `body` (no margen del contenedor) y la
   cadena de flex necesita `min-height: 0`. El README explica por qué.
+- **Ninguna barra de scroll a media pantalla.** Si una zona de un panel
+  scrollea, va con `.scroll-sin-barra .scroll-difuso` + `data-pista-scroll`
+  (`assets/scroll-pista.js` difumina el borde solo cuando queda contenido) y, si
+  conviene anunciarlo, una píldora `.pista-mas`. Los paneles enteros ya llevan
+  barra fina. Ojo: `.scroll-difuso` **no** va en un contenedor de `.glass-panel`
+  —la máscara apaga el `backdrop-filter` de los hijos—. Detalle en el README §4.
 - En JS, arrancar siempre con el patrón `document.readyState === 'loading'`,
   no solo con `DOMContentLoaded`.
 - **Micrositio a Página tiene su propio doc de reglas:**

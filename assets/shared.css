@@ -418,6 +418,124 @@ body {
 }
 
 /* ==========================================================================
+   Scroll sin barra a media pantalla
+
+   Una barra de scroll nativa dentro de un panel de cristal se ve como una
+   cicatriz flotando en medio de la app, y encima no dice QUÉ scrollea. El
+   acuerdo: se oculta la barra y el borde se difumina —solo cuando de verdad
+   queda contenido de ese lado—, con una píldora opcional que lo anuncia y baja
+   al pulsarla.
+
+   Las clases de estado (`mas-arriba` / `mas-abajo`) las pone
+   assets/scroll-pista.js; sin ese script las dos clases de aquí son inofensivas
+   (la máscara queda opaca de punta a punta).
+   ========================================================================== */
+
+/* Registradas para que la máscara pueda transicionar: una custom property sin
+   @property no es animable y el difuminado aparecería de golpe. */
+@property --fade-arriba {
+    syntax: '<length>';
+    inherits: false;
+    initial-value: 0px;
+}
+@property --fade-abajo {
+    syntax: '<length>';
+    inherits: false;
+    initial-value: 0px;
+}
+
+.scroll-sin-barra {
+    scrollbar-width: none;        /* Firefox */
+    -ms-overflow-style: none;
+}
+.scroll-sin-barra::-webkit-scrollbar { width: 0; height: 0; }
+
+/* Barra fina, para lo que sí conviene que se vea: un panel entero sin barra y
+   sin difuminado no daría ninguna pista. Los 17px de la barra nativa dentro de
+   un panel de cristal se leen como una cicatriz; una fina y translúcida se lee
+   como parte del panel. Va en .panel-section para todas las herramientas.
+   Las dos declaraciones son a propósito: Chrome moderno y Firefox hacen caso a
+   las estándar, los motores viejos a las -webkit-. */
+.panel-section,
+.scroll-fino {
+    scrollbar-width: thin;
+    scrollbar-color: var(--control-border) transparent;
+}
+.panel-section::-webkit-scrollbar,
+.scroll-fino::-webkit-scrollbar { width: 8px; height: 8px; }
+.panel-section::-webkit-scrollbar-track,
+.scroll-fino::-webkit-scrollbar-track { background: transparent; }
+.panel-section::-webkit-scrollbar-thumb,
+.scroll-fino::-webkit-scrollbar-thumb {
+    background: var(--control-border);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: 999px;
+}
+.panel-section:hover::-webkit-scrollbar-thumb,
+.scroll-fino:hover::-webkit-scrollbar-thumb { background: var(--text-muted); background-clip: padding-box; }
+
+/* Ojo: una máscara convierte al elemento en "raíz de fondo", así que los
+   descendientes con backdrop-filter dejan de ver el fondo de la página. No la
+   pongas en un contenedor de .glass-panel (por eso las tarjetas del launcher
+   se quedan sin difuminado y usan la píldora). */
+.scroll-difuso {
+    -webkit-mask-image: linear-gradient(to bottom,
+        transparent 0, #000 var(--fade-arriba),
+        #000 calc(100% - var(--fade-abajo)), transparent 100%);
+    mask-image: linear-gradient(to bottom,
+        transparent 0, #000 var(--fade-arriba),
+        #000 calc(100% - var(--fade-abajo)), transparent 100%);
+    transition: --fade-arriba 0.2s ease, --fade-abajo 0.2s ease;
+}
+.scroll-difuso.mas-arriba { --fade-arriba: 20px; }
+.scroll-difuso.mas-abajo { --fade-abajo: 28px; }
+
+/* Píldora "hay más abajo". Va dentro de un contenedor position:relative y la
+   enciende/apaga scroll-pista.js. */
+.pista-mas {
+    position: absolute;
+    left: 50%;
+    bottom: 6px;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 15px;
+    border-radius: 999px;
+    background: var(--modal-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 6px 18px rgba(31, 38, 135, 0.16);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    animation: pistaLatido 2s ease-in-out infinite;
+}
+
+.pista-mas:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.pista-mas i { font-size: 15px; }
+
+/* El transform vive dentro del keyframe porque también centra la píldora: si se
+   declarara aparte, la animación lo pisaría y se iría al borde izquierdo. */
+@keyframes pistaLatido {
+    0%, 100% { transform: translate(-50%, 0); }
+    50% { transform: translate(-50%, 5px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pista-mas { animation: none; transform: translateX(-50%); }
+    .scroll-difuso { transition: none; }
+}
+
+/* ==========================================================================
    Componentes compartidos por las herramientas
    ========================================================================== */
 

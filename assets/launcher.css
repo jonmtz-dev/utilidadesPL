@@ -54,6 +54,15 @@
     padding: 2px 8px;
 }
 
+/* Ventana de la rejilla: existe solo para colgarle la píldora "hay más abajo"
+   sobre el borde inferior (position:absolute necesita un ancla). */
+.tools-viewport {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
 /* Rejilla de tarjetas */
 .tools-grid {
     display: grid;
@@ -68,6 +77,9 @@
     grid-auto-rows: max-content;
     flex: 1;
     min-height: 0;
+    /* Scrollea aquí dentro, pero con la barra oculta (.scroll-sin-barra): quien
+       avisa que hay más es la píldora #pista-abajo. Nada de .scroll-difuso aquí:
+       una máscara dejaría a las tarjetas .glass-panel sin fondo que difuminar. */
     overflow-y: auto;
     /* El padding evita que el scroll recorte la sombra y el -6px del hover */
     padding: 8px;

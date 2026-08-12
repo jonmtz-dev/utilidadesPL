@@ -259,10 +259,22 @@ async function leerTablasDeDocx(file) {
  * `**guárdalo** **en tu equipo**`. Los espacios de orilla quedan FUERA de las
  * marcas: un `** texto**` no se reconocería al convertirlo a <strong>.
  */
-function textoDeParrafoConNegritas(p) {
+function textoDeParrafoConNegritas(p, opciones) {
+    /* `saltos` conserva los saltos de línea manuales (Shift+Enter, que en el XML
+       son `w:br`) como `\n`. Va apagado por omisión a propósito: quien parte
+       listas por renglón —el Integrador HTML— convertiría un salto dentro de un
+       elemento en dos elementos. Lo pide quien sí los necesita: en la celda de
+       una ventana emergente, "Periodo: …" y "Descubrimientos:" son dos renglones
+       del mismo párrafo y sin esto salían pegados en una sola frase. */
+    const saltos = Boolean(opciones && opciones.saltos);
     const segmentos = [];
     for (const r of [...p.getElementsByTagNameNS(W_NS, 'r')]) {
-        const texto = [...r.getElementsByTagNameNS(W_NS, 't')].map(t => t.textContent || '').join('');
+        const texto = saltos
+            ? [...r.childNodes]
+                .filter(n => n.nodeType === 1 && (n.localName === 't' || n.localName === 'br'))
+                .map(n => n.localName === 'br' ? '\n' : (n.textContent || ''))
+                .join('')
+            : [...r.getElementsByTagNameNS(W_NS, 't')].map(t => t.textContent || '').join('');
         if (!texto) continue;
         const rPr = r.getElementsByTagNameNS(W_NS, 'rPr')[0];
         const b = rPr && rPr.getElementsByTagNameNS(W_NS, 'b')[0];
@@ -358,8 +370,31 @@ async function leerBloquesDeDocx(file) {
                     // Quien solo quiera el texto corrido sigue usando `texto`.
                     const lineasCelda = textoDeCelda(tc).split('\n')
                         .map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+                    /* `contenido` conserva el ORDEN real de la celda: sus
+                       párrafos propios y las tablas que tenga ANIDADAS,
+                       intercalados como en el Word. Es lo que permite montar el
+                       apartado de un acordeón con su grupo de tarjetas en su
+                       lugar exacto: con solo el texto aplanado (`lineas`) esa
+                       tabla anidada se perdía aquí —y reaparecía como un bloque
+                       suelto al final de la página—. `lineas` y `texto` no
+                       cambian: hay herramientas que solo quieren el texto. */
+                    const contenido = [];
+                    [...tc.childNodes].filter(x => x.nodeType === 1).forEach(hijo => {
+                        if (hijo.localName === 'p') {
+                            // Con los saltos de línea del párrafo (irán a <br>);
+                            // solo se normalizan espacios y tabuladores.
+                            const t = textoDeParrafoConNegritas(hijo, { saltos: true })
+                                .replace(/[ \t]+/g, ' ').trim();
+                            const imgs = [...hijo.getElementsByTagNameNS(A_NS, 'blip')]
+                                .map(b => b.getAttributeNS(REL_NS, 'embed')).filter(Boolean);
+                            if (t || imgs.length) contenido.push({ tipo: 'parrafo', texto: t, imagenes: imgs });
+                            return;
+                        }
+                        if (hijo.localName === 'tbl') contenido.push({ tipo: 'tabla', bloque: bloqueDe(hijo) });
+                    });
                     return {
                         lineas: lineasCelda,
+                        contenido,
                         texto: textoDeCelda(tc).replace(/ /g, ' ').replace(/\s+/g, ' ').trim(),
                         span: Number((span && span.getAttributeNS(W_NS, 'val')) || 1),
                         fondo: fill && fill !== 'auto' && fill !== 'ffffff' ? '#' + fill : ''
@@ -371,6 +406,18 @@ async function leerBloquesDeDocx(file) {
     };
 
     const salida = [];
+    /* Un nodo, UN bloque. Una tabla anidada se lee dos veces —al armar las
+       `filas` de la tabla que la contiene y al recorrer sus celdas—, y si cada
+       lectura devolviera un objeto distinto, quien la coloque dentro de su
+       apartado no podría reconocerla después en la lista plana para no montarla
+       otra vez. Con el caché las dos referencias son el MISMO objeto y basta un
+       `Set` para saber qué tabla ya se usó. */
+    const cache = new Map();
+    const bloqueDe = nodo => {
+        if (!cache.has(nodo)) cache.set(nodo, bloqueDesdeNodo(nodo));
+        return cache.get(nodo);
+    };
+
     // `dentro` marca los bloques que salieron de las celdas de otra tabla. El
     // texto de esas celdas YA viene en `filas` de la tabla contenedora, así que
     // quien reconstruya la tabla debe saltárselos o duplica el contenido; quien
@@ -390,7 +437,7 @@ async function leerBloquesDeDocx(file) {
                 recorrer(n, dentro);
                 return;
             }
-            const bloque = bloqueDesdeNodo(n);
+            const bloque = bloqueDe(n);
             bloque.dentroDeTabla = Boolean(dentro);
             if (bloque.texto || (bloque.imagenes && bloque.imagenes.length)) salida.push(bloque);
 
