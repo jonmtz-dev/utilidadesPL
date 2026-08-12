@@ -35,7 +35,8 @@
         $('#btn-copy').addEventListener('click', copiarHTML);
         document.querySelectorAll('.tab-btn').forEach(t => t.addEventListener('click', () => activarTab(t.dataset.target)));
         configurarImportador();
-        $('#btn-ampliar-editor').addEventListener('click', alternarEditorAmpliado);
+        prepararReparto();
+        montarBarraPrevia();
         // Deja una sección inicial para que el flujo sea evidente sin imponer contenido.
         agregar('text');
     }
@@ -81,11 +82,142 @@
         selectedBlockId = bloque.id;
         renderEditor(); actualizar();
     }
+    /* La comparten los botones de la tarjeta del editor y la barra flotante de
+       la previa: separadas, subir desde un lado y desde el otro acabarían
+       haciendo cosas distintas. */
+    function mover(id, delta) {
+        const i = blocks.findIndex(b => b.id === id), j = i + delta;
+        if (i < 0 || j < 0 || j >= blocks.length) return false;
+        [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
+        selectedBlockId = id;
+        renderEditor(); actualizar();
+        return true;
+    }
     function borrar(id) { blocks = blocks.filter(b => b.id !== id); if (selectedBlockId === id) selectedBlockId = null; renderEditor(); actualizar(); }
     function seleccionarBloque(id) { selectedBlockId = id; renderEditor(); }
-    function alternarEditorAmpliado() {
-        const activo = document.querySelector('.integrador-workspace').classList.toggle('editor-ampliado');
-        $('#btn-ampliar-editor').innerHTML = activo ? '<i class="ph ph-arrows-in"></i> Reducir edición' : '<i class="ph ph-arrows-out"></i> Ampliar edición';
+    /* ---------------------------------------------------------------------
+       Reparto de la pantalla
+
+       Sustituye al botón "Ampliar edición", que no movía nada: su regla
+       (.editor-ampliado) y la de .integrador-workspace tenían la misma
+       especificidad y la segunda, por ir después, siempre le ganaba.
+
+       La conducta (arrastrar, recordar, doble clic, teclado, ampliar) vive en
+       assets/reparto.js, compartida con Guion Instruccional a Página.
+       --------------------------------------------------------------------- */
+    let reparto = null;
+
+    function prepararReparto() {
+        reparto = Reparto.iniciar({
+            workspace: '#workspace',
+            divisor: '#divisor',
+            clave: 'integrador-col-editor',
+            colMin: 380,
+            // Lo que se le reserva a la previa aunque se arrastre a lo bestia.
+            restoMin: 420,
+            colMax: 900,
+            botonMax: '#btn-previa-max'
+        });
+        document.addEventListener('keydown', e => {
+            // El modal tiene su propio Escape y va primero: si está abierto,
+            // esa tecla es suya.
+            if (e.key !== 'Escape' || !reparto || !reparto.maximizada()) return;
+            if (!$('#modal-enlaces').classList.contains('hidden')) return;
+            reparto.maximizar(false);
+        });
+    }
+
+    /* ---------------------------------------------------------------------
+       Barra flotante de la vista previa
+
+       Al pasar el cursor por un bloque aparecen subir/bajar/quitar en su
+       esquina: reordenar sin bajar la vista al editor. La barra vive dentro de
+       #preview y se vuelve a colgar tras cada repintado (aquí eso pasa en cada
+       tecla), porque actualizar() reescribe el innerHTML entero.
+
+       No es arrastre a propósito: en la previa no hay dónde poner un asa sin
+       ensuciar lo que se copia a Moodle. Las marcas data-bq son solo de la
+       previa; buildHTML() —lo que se pega en Moodle— nunca las lleva.
+       --------------------------------------------------------------------- */
+
+    const BOTONES_PREVIA = [
+        ['subir', 'Subir', 'ph-arrow-up'],
+        ['bajar', 'Bajar', 'ph-arrow-down'],
+        ['borrar', 'Quitar', 'ph-trash']
+    ];
+    let barraPrevia = null;
+    let bqBarra = null;      // id del bloque sobre el que quedó la barra
+
+    function montarBarraPrevia() {
+        const previa = $('#preview');
+        barraPrevia = document.createElement('div');
+        barraPrevia.className = 'previa-barra';
+        barraPrevia.innerHTML = BOTONES_PREVIA.map(([accion, titulo, icono]) =>
+            `<button type="button" data-accion="${accion}" title="${titulo}" aria-label="${titulo}"><i class="ph ${icono}"></i></button>`).join('');
+        previa.appendChild(barraPrevia);
+
+        // Las escuchas van en #preview, que sobrevive al repintado; la barra no.
+        previa.addEventListener('mouseover', e => {
+            if (barraPrevia.contains(e.target)) return;   // pasar por la barra no la mueve
+            colocarBarra(e.target.closest('.bloque-previa'));
+        });
+        previa.addEventListener('mouseleave', ocultarBarra);
+        barraPrevia.addEventListener('click', e => {
+            const btn = e.target.closest('[data-accion]');
+            if (!btn || btn.disabled || bqBarra == null) return;
+            const id = bqBarra;
+            if (btn.dataset.accion === 'borrar') { borrar(id); return; }
+            mover(id, btn.dataset.accion === 'subir' ? -1 : 1);
+            señalarEnPrevia(id);
+        });
+    }
+
+    function ocultarBarra() {
+        if (!barraPrevia) return;
+        barraPrevia.classList.remove('visible');
+        bqBarra = null;
+    }
+
+    function colocarBarra(destino) {
+        if (!destino) return ocultarBarra();
+        const id = Number(destino.dataset.bq);
+        const i = blocks.findIndex(b => b.id === id);
+        if (i < 0) return ocultarBarra();
+        bqBarra = id;
+        // Los topes se ven: subir el primero no hace nada.
+        barraPrevia.querySelector('[data-accion="subir"]').disabled = i === 0;
+        barraPrevia.querySelector('[data-accion="bajar"]').disabled = i === blocks.length - 1;
+        const previa = $('#preview');
+        const rp = previa.getBoundingClientRect(), rb = destino.getBoundingClientRect();
+        barraPrevia.style.left = `${rb.right - rp.left + previa.scrollLeft}px`;
+        /* La barra se centra en el borde de arriba del bloque (translate en el
+           CSS): sin el tope, la del primer bloque saldría medio cortada. */
+        barraPrevia.style.top = `${Math.max(rb.top - rp.top + previa.scrollTop, previa.scrollTop + 16)}px`;
+        barraPrevia.classList.add('visible');
+    }
+
+    /* Tras cada repintado la barra se quedó fuera del #preview y hay que
+       colgarla otra vez. Como el cursor no se movió, tampoco habrá ningún
+       mouseover que la devuelva sola sobre el bloque que se acaba de tocar. */
+    function refrescarBarraPrevia() {
+        if (!barraPrevia) return;
+        const previa = $('#preview');
+        previa.appendChild(barraPrevia);
+        const destino = bqBarra == null ? null : previa.querySelector(`[data-bq="${bqBarra}"]`);
+        if (destino) colocarBarra(destino); else ocultarBarra();
+    }
+
+    /* El bloque movido se enmarca un momento: la previa se repinta entera y sin
+       esto uno pierde de vista qué acaba de moverse. */
+    function señalarEnPrevia(id) {
+        const previa = $('#preview');
+        const el = previa.querySelector(`[data-bq="${id}"]`);
+        if (!el) return;
+        el.classList.add('bloque-previa--senalado');
+        setTimeout(() => el.classList.remove('bloque-previa--senalado'), 1200);
+        const rp = previa.getBoundingClientRect(), rb = el.getBoundingClientRect();
+        // Solo si se salió de la vista: mover el scroll sin falta marea.
+        if (rb.bottom < rp.top + 30 || rb.top > rp.bottom - 30) el.scrollIntoView({ block: 'center' });
     }
 
     function renderEditor() {
@@ -105,11 +237,7 @@
         holder.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => borrar(Number(b.dataset.remove))));
         holder.querySelectorAll('[data-move]').forEach(btn => btn.addEventListener('click', () => {
             const [id, delta] = btn.dataset.move.split(':').map(Number);
-            const i = blocks.findIndex(b => b.id === id), j = i + delta;
-            if (i < 0 || j < 0 || j >= blocks.length) return;
-            [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
-            selectedBlockId = id;
-            renderEditor(); actualizar();
+            mover(id, delta);
         }));
         holder.querySelectorAll('[data-color-modulo]').forEach(btn => btn.addEventListener('click', () => {
             const block = blocks.find(b => b.id === Number(btn.dataset.colorModulo));
@@ -216,7 +344,10 @@
         const cuerpo = blocks.map(b => {
             const content = contenidoBloque(b, p, true); if (!content && !(b.tipo === 'section' && clean(b.titulo))) return '';
             const head = b.tipo === 'section' && clean(b.titulo) ? `<h2 class="subtema" style="background:${p[1]}">${esc(clean(b.titulo))}</h2>` : '';
-            return `${head}<div class="content" style="background:${p[2]}">${content}</div>`;
+            /* La envoltura marcada es SOLO de la previa (buildHTML no la lleva):
+               una sección son dos hermanos —el <h2> y su .content— y la barra
+               flotante necesita un único elemento del que colgarse. */
+            return `<div class="bloque-previa" data-bq="${b.id}">${head}<div class="content" style="background:${p[2]}">${content}</div></div>`;
         }).join('');
         return `<div class="moodle-preview" style="background:${p[0]}"><h1 class="tema" style="background:${p[1]}">${title}</h1>${cuerpo}</div>`;
     }
@@ -225,6 +356,7 @@
         $('#code').value = buildHTML();
         $('#preview').innerHTML = previewHTML();
         $('#preview').classList.toggle('hidden', !hay); $('#preview-empty').classList.toggle('hidden', hay);
+        refrescarBarraPrevia();
     }
     function copiarHTML() { const c = $('#code'); if (!c.value.trim()) return; navigator.clipboard.writeText(c.value).then(() => { const i=$('#btn-copy i'); i.className='ph ph-check'; setTimeout(()=>i.className='ph ph-copy',1200); }).catch(()=>{c.focus();c.select();}); }
 

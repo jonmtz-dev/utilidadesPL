@@ -28,6 +28,9 @@ function initLauncher() {
 
         if (isReady) {
             card.href = tool.url;
+            // El destino sin marca, para poder rearmar la liga cuando se sepa
+            // de qué plataforma se entró (ver marcarLigas).
+            card.dataset.url = tool.url;
         } else {
             card.setAttribute('aria-disabled', 'true');
         }
@@ -114,28 +117,87 @@ function initLauncher() {
        solo enciende el filtro.
        --------------------------------------------------------------------- */
 
+    /* ---------------------------------------------------------------------
+       De qué plataforma se entró
+
+       Se guarda en el hash de la dirección y se le pega a la liga de cada
+       tarjeta. Así el botón de volver de la herramienta —y el atrás del
+       navegador— regresan a la lista donde estabas y no a la portada, que
+       obligaba a volver a elegir Prepa en Línea o Margarita Maza cada vez.
+
+       En el hash y NO en la query (?plataforma=…) a propósito: el hash no viaja
+       en la petición. Con una query, el Service Worker busca en caché por
+       dirección completa y sin conexión no encontraría ni index.html ni la
+       herramienta; te dejaría en el panel en vez de abrir lo que pediste.
+       --------------------------------------------------------------------- */
+
+    const MARCA = 'plataforma=';
+
+    // 'todas' es un valor de verdad: distingue "entré por Ver todas" de "vengo
+    // sin marca", que es lo que abre la portada.
+    function marcaActual() {
+        return '#' + MARCA + (plataforma || 'todas');
+    }
+
+    function marcarLigas() {
+        const marca = marcaActual();
+        grid.querySelectorAll('a.tool-card').forEach(card => {
+            card.href = card.dataset.url + marca;
+        });
+    }
+
+    function recordarPlataforma() {
+        // replaceState y no pushState: elegir plataforma no es una página nueva,
+        // y con pushState el atrás del navegador se volvía un laberinto.
+        history.replaceState(null, '', marcaActual());
+    }
+
+    function olvidarPlataforma() {
+        history.replaceState(null, '', location.pathname + location.search);
+    }
+
+    /* Se llega con marca cuando se vuelve de una herramienta. Se entra directo a
+       esa lista y sin la animación de la portada, que ahí sería un parpadeo. */
+    function restaurarPlataforma() {
+        const hash = decodeURIComponent(location.hash.slice(1));
+        if (!hash.startsWith(MARCA)) return;
+        const valor = hash.slice(MARCA.length);
+        const elegida = PLATAFORMAS.find(p => p.moodle === valor);
+        if (!elegida && valor !== 'todas') return;
+        mostrarHerramientas(elegida || null, true);
+    }
+
     function cuantasDe(version) {
         const n = TOOLS.filter(t => t.moodle === version).length;
         return `${n} herramienta${n === 1 ? '' : 's'}`;
     }
 
-    function mostrarHerramientas(elegida) {
+    function mostrarHerramientas(elegida, alInstante) {
         plataforma = elegida ? elegida.moodle : null;
         const acento = elegida ? elegida.acento : '';
         chip.style.setProperty('--acento', acento || 'var(--accent)');
         chipTexto.textContent = elegida ? `Moodle ${elegida.moodle} · ${elegida.nombre}` : 'Todas las herramientas';
 
-        // La portada se va animada y la rejilla entra: sin esto el cambio era un
-        // corte seco. Las tarjetas ya traen su propia entrada escalonada.
-        portada.classList.add('saliendo');
-        setTimeout(() => {
+        marcarLigas();
+        recordarPlataforma();
+
+        const entrar = () => {
             portada.classList.add('hidden');
             portada.classList.remove('saliendo');
             barra.classList.remove('hidden');
             rejilla.classList.remove('hidden');
             applyFilter();
             reanimarTarjetas();
-        }, 300);
+        };
+
+        // Al volver de una herramienta se entra sin transición: la portada ni
+        // llegó a verse y animar su salida sería un parpadeo.
+        if (alInstante) return entrar();
+
+        // La portada se va animada y la rejilla entra: sin esto el cambio era un
+        // corte seco. Las tarjetas ya traen su propia entrada escalonada.
+        portada.classList.add('saliendo');
+        setTimeout(entrar, 300);
     }
 
     function volverAlaPortada() {
@@ -144,6 +206,7 @@ function initLauncher() {
         portada.classList.remove('hidden');
         searchInput.value = '';
         plataforma = null;
+        olvidarPlataforma();
         applyFilter();      // que la rejilla no quede con el filtro anterior puesto
         reanimarPortada();
     }
@@ -187,6 +250,9 @@ function initLauncher() {
 
     document.getElementById('ver-todas').addEventListener('click', () => mostrarHerramientas(null));
     chip.addEventListener('click', volverAlaPortada);
+
+    // Va al final: necesita las tarjetas ya dibujadas para poder marcar sus ligas.
+    restaurarPlataforma();
 
     document.addEventListener('keydown', (e) => {
         // En la portada no hay buscador todavía: el atajo no debe hacer nada.

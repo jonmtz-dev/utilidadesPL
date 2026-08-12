@@ -100,12 +100,59 @@ bloque tiene botones ▲ ▼ para subirlo o bajarlo un lugar (p. ej. para sustit
 una tabla-imagen: selecciona el bloque Imagen, inserta la Tabla, acomódala y
 borra la imagen).
 
-### Ampliar edición
+### El reparto de la pantalla
 
-El botón **Ampliar edición** no oculta la referencia: cambia la proporción a
-una vista dividida amplia, con más espacio para bloques a la izquierda y la
-vista previa todavía visible a la derecha. **Reducir edición** restaura la
-proporción normal.
+Esta herramienta **se sale del tope de 1400px del resto** (`.integrador-app`
+llega a 1760px), igual que Guion a Página: es un constructor con vista previa y
+ahí el ancho es materia prima. Con 1400 la previa se quedaba en ~530px y una
+tabla de cuatro columnas no cabía sin scrollear, que es justo lo que hay que
+revisar antes de publicar.
+
+El reparto por omisión (`clamp(440px, 46%, 720px)`) tiene el tope en 720px a
+propósito: así el ancho extra de una pantalla grande se lo lleva **la previa** y
+no el editor. En 1400px el reparto queda casi como estaba; en 1920px la previa
+pasa de ~530px a ~970px.
+
+Y como editar y revisar piden anchos distintos, tampoco es una decisión fija:
+
+- **El divisor entre las dos columnas se arrastra.** Doble clic lo devuelve al
+  reparto por omisión y las flechas del teclado lo mueven (Shift, a zancadas).
+  El ancho se guarda en `localStorage` (`integrador-col-editor`) y nunca deja a
+  la previa con menos de 420px.
+- **El botón ⤢ de la barra de la previa le da el área completa**, y Esc vuelve.
+
+La conducta vive en `assets/reparto.js`, **compartida con Guion Instruccional a
+Página**; lo único propio es el ancho de las columnas, que va en el CSS de la
+herramienta con la variable `--col-editor`.
+
+> Esto sustituyó al botón **Ampliar edición**, que en realidad no movía nada:
+> su regla (`.editor-ampliado`) y la de `.integrador-workspace` tenían la misma
+> especificidad y la segunda, por ir después en la hoja, siempre le ganaba. Lo
+> único que hacía era subir el `min-height` de la lista de bloques.
+
+### Mover bloques desde la vista previa
+
+Al pasar el cursor por un bloque de la previa aparecen **subir · bajar ·
+quitar** en su esquina de arriba a la derecha. Es la misma función `mover()` que
+usan los botones de la tarjeta del editor: separadas, subir desde un lado y
+desde el otro acabarían haciendo cosas distintas.
+
+Tres cosas que conviene no deshacer:
+
+- **`previewHTML()` envuelve cada bloque en `<div class="bloque-previa"
+  data-bq="<id>">`, y `buildHTML()` no.** Lo que se pega en Moodle nunca lleva
+  la marca. La envoltura hace falta porque una sección son **dos hermanos** (el
+  `<h2 class="subtema">` y su `.content`) y la barra necesita un solo elemento
+  del que colgarse.
+- **La barra se vuelve a colgar en cada repintado.** `actualizar()` reescribe el
+  `innerHTML` de `#preview` en cada tecla y se lleva la barra por delante; las
+  escuchas van en `#preview`, que sí sobrevive.
+- **Colores fijos, nunca tokens del tema.** La previa es una isla clara a
+  propósito (imita la página real de Moodle) y un botón que siguiera el tema
+  oscuro cantaría dentro de ella. Misma regla que en el README de la raíz (§4).
+
+No es arrastre a propósito: en la previa no hay dónde poner un asa sin ensuciar
+lo que se copia a Moodle.
 
 ## HTML generado
 

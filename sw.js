@@ -13,7 +13,7 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.14.0';
+const VERSION = '1.15.0';
 const CACHE = `panel-herramientas-v${VERSION}`;
 
 // Rutas relativas a propósito: en GitHub Pages la app vive en un subdirectorio
@@ -28,6 +28,8 @@ const APP_SHELL = [
     'assets/launcher.js',
     'assets/tools.js',
     'assets/version-moodle.js',
+    'assets/volver.js',
+    'assets/reparto.js',
     'assets/tablas.js',
     'assets/zip.js',
     'assets/theme.js',

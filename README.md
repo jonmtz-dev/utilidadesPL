@@ -84,6 +84,8 @@ assets/
   modulos-311.js            Módulos y paletas 3.11 (Integrador y Bibliografías)
   tablas.js                 Conversión de tablas a tarjetas responsivas
   version-moodle.js         Inyecta la insignia de versión en cada herramienta
+  volver.js                 Botón de volver: regresa a la plataforma con la que se entró
+  reparto.js                Divisor arrastrable y previa ampliada (Guion e Integrador)
   zip.js                    Escritor de .zip (Micrositio y Guion a Página)
   icons/                    Iconos PWA (generados, ver §7)
 tools/
@@ -105,6 +107,28 @@ tools/
 
 El launcher **se dibuja solo** a partir del arreglo `TOOLS` de
 `assets/tools.js`. No hay tarjetas escritas a mano en `index.html`.
+
+### De qué plataforma se entró
+
+La portada pregunta primero por la plataforma (Prepa en Línea / Margarita Maza)
+y filtra la rejilla por el campo `moodle` de cada herramienta. Esa elección se
+recuerda en el **hash** de la dirección (`index.html#plataforma=5.1`) y se le
+pega a la liga de cada tarjeta, así que:
+
+- el botón de volver de la herramienta regresa a **esa** lista y lo dice
+  ("← Margarita Maza"), en vez de mandarte a elegir plataforma otra vez;
+- el atrás del navegador hace lo mismo;
+- abrir una herramienta directo (favorito, app instalada) no cambia nada: sin
+  marca, el botón sigue diciendo "Panel" y lleva a la portada.
+
+> ⚠️ **En el hash, nunca en la query.** El hash no viaja en la petición; con
+> `?plataforma=…` el Service Worker busca en caché por dirección completa, no
+> encontraría `index.html` ni la herramienta y **sin conexión te dejaría en el
+> panel** en vez de abrir lo que pediste.
+
+El nombre corto de cada plataforma (`corto` en `PLATAFORMAS`) vive en
+`assets/tools.js` por lo mismo que la versión de Moodle: fuente única, nunca
+escrito en el HTML de una herramienta.
 
 ---
 

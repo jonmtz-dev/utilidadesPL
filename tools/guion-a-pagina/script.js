@@ -9,9 +9,10 @@
 
    1. La vista previa va en un <iframe sandbox> con la hoja real del tema. El
       CSS de Moodle trae selectores globales (body, #page…): inyectarlo en la
-      página del panel lo desfiguraría. Además el sandbox sin allow-same-origin
-      impide que ese CSS ajeno toque nada de aquí. Misma solución que Micrositio
-      a Página, por la misma razón.
+      página del panel lo desfiguraría. Quien lo aísla es el iframe en sí: es
+      otro documento. Misma solución que Micrositio a Página, por la misma
+      razón. El sandbox lleva allow-same-origin porque las imágenes del Word son
+      blob: del documento padre y porque el lienzo y la previa se sincronizan.
    2. Escribir en un campo NO redibuja el lienzo (se perdería el cursor y la
       selección): actualiza el modelo, el resumen del bloque y la vista previa.
       Solo lo estructural (agregar, borrar, mover, cambiar de opción) redibuja.
@@ -133,9 +134,9 @@
        las pestañas se verían apiladas y en blanco, y la previa mentiría. */
     function documentoPrevia(htmlOriginal) {
         let html = htmlOriginal;
-        // El iframe va en sandbox sin allow-same-origin, así que un embebido de
-        // YouTube no cargaría (se vería una caja negra y parecería un error).
-        // Se cambia por un cartel que dice justo lo que habrá en Moodle.
+        // El embebido de YouTube no se pone a jugar dentro del sandbox de la
+        // previa; una caja negra parecería un error, así que se cambia por un
+        // cartel que dice justo lo que habrá en Moodle.
         // Las imágenes del guion se ven de verdad en la previa: se cambia el
         // @@PLUGINFILE@@ por el blob: del archivo que venía en el .docx. En el
         // HTML que se copia a Moodle, por supuesto, se queda el @@PLUGINFILE@@.
@@ -148,6 +149,9 @@
         return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
 <style>${window.CSS_VISTA_PREVIA || ''}</style>
 <style>${window.HOJA_MOODLE_DEFAULT || ''}</style>
+<!-- Va después de la hoja del tema a propósito: es andamiaje de la
+     herramienta y ninguna regla de Moodle debe poder ganarle. -->
+<style>${window.CSS_BARRA_PREVIA || ''}</style>
 </head><body class="path-mod-page"><div class="previa-hoja">${conCartel}</div>
 <script>
 /* Acordeón y pestañas: en Moodle los mueve el Bootstrap de la plataforma.
@@ -204,8 +208,17 @@ document.addEventListener('click', function (e) {
         $('#preview-caja').classList.toggle('hidden', !html);
         if (html) {
             const frame = $('#preview-frame');
+            /* Sustituir el srcdoc recarga el documento y lo deja hasta arriba.
+               Con la barra flotante eso se nota de más: mueves un bloque a media
+               página y la previa salta al principio. Se guarda y se repone. */
+            const antes = frame.contentDocument && frame.contentDocument.scrollingElement;
+            const desplazado = antes ? antes.scrollTop : 0;
             frame.srcdoc = documentoPrevia(generarHTML(true));
-            frame.addEventListener('load', conectarPrevia, { once: true });
+            frame.addEventListener('load', () => {
+                const ahora = frame.contentDocument && frame.contentDocument.scrollingElement;
+                if (ahora && desplazado) ahora.scrollTop = desplazado;
+                conectarPrevia();
+            }, { once: true });
         }
         dibujarRevision(html);
     }
@@ -220,7 +233,13 @@ document.addEventListener('click', function (e) {
 
     function conectarPrevia() {
         const doc = $('#preview-frame').contentDocument;
-        if (!doc) return;
+        if (!doc || !doc.body) return;
+        /* Dos asignaciones seguidas de srcdoc (pasa al cargar el estado) dejan
+           dos escuchas de "load" apuntando al MISMO documento: la primera no
+           alcanzó a cargar. Sin esta marca, ese documento acababa con dos barras
+           flotantes y con todas las escuchas duplicadas. */
+        if (doc.body.dataset.conectada) { señalarEnPrevia(seleccion); return; }
+        doc.body.dataset.conectada = '1';
         doc.addEventListener('click', e => {
             const marcado = e.target.closest('[data-bq]');
             if (!marcado) return;
@@ -238,7 +257,95 @@ document.addEventListener('click', function (e) {
             const card = document.querySelector(`.bloque-card[data-id="${id}"]`);
             if (card) card.scrollIntoView({ block: 'center', behavior: 'smooth' });
         });
+        const colocarBarra = montarBarraPrevia(doc);
+        /* Tras mover un bloque la previa se reconstruye entera y el mouse sigue
+           donde estaba, así que no habrá ningún mouseover que devuelva la barra:
+           se repone a mano sobre el bloque que se acaba de tocar. Si se borró,
+           colocar() no lo encuentra y se esconde. */
+        if (bqBarra) colocarBarra(doc.querySelector(`[data-bq="${bqBarra}"]`));
         señalarEnPrevia(seleccion);
+    }
+
+    /* ---------------------------------------------------------------------
+       Barra flotante de la vista previa
+
+       Reordenar desde la previa: al pasar el mouse por un bloque aparecen
+       subir/bajar/duplicar/quitar sobre su esquina.
+
+       Vive DENTRO del iframe, inyectada después de cargar. Dentro porque así
+       scrollea con la página sola, sin traducir coordenadas entre dos
+       documentos; inyectada porque el HTML que se copia a Moodle no debe
+       enterarse, igual que pasa con el data-bq.
+
+       No es arrastre a propósito: el contenido de la previa ya reacciona al
+       clic (acordeones, pestañas, ventanas), y hacerlo draggable dejaría cada
+       clic peleado entre abrir y mover.
+       --------------------------------------------------------------------- */
+
+    let bqBarra = null;   // id del bloque sobre el que quedó la barra
+
+    // Trazos propios: dentro del iframe no hay Phosphor (ni fuentes externas).
+    const BOTONES_BARRA = [
+        ['subir', 'Subir', 'M8 13V4M4.2 7.8 8 4l3.8 3.8'],
+        ['bajar', 'Bajar', 'M8 3v9M4.2 8.2 8 12l3.8-3.8'],
+        ['duplicar', 'Duplicar', 'M6 5.5h6.5a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1M10.5 3H3.5a.5.5 0 0 0-.5.5v7'],
+        ['borrar', 'Quitar', 'M2.8 4.5h10.4M6.2 4.5V2.9h3.6v1.6M4.4 4.5l.6 8.6h6l.6-8.6']
+    ];
+
+    function montarBarraPrevia(doc) {
+        const vista = doc.defaultView;
+        const barra = doc.createElement('div');
+        barra.className = 'previa-barra';
+        barra.innerHTML = BOTONES_BARRA.map(([accion, titulo, trazo]) =>
+            `<button type="button" data-accion="${accion}" title="${titulo}" aria-label="${titulo}">` +
+            `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" ` +
+            `stroke-linecap="round" stroke-linejoin="round"><path d="${trazo}"/></svg></button>`).join('');
+        doc.body.appendChild(barra);
+
+        function ocultar() {
+            barra.classList.remove('visible');
+            bqBarra = null;
+        }
+
+        function colocar(destino) {
+            const sitio = destino && buscar(Number(destino.dataset.bq));
+            if (!sitio) return ocultar();
+            bqBarra = sitio.bloque.id;
+            // Los topes se ven: subir el primero de su lista no hace nada.
+            barra.querySelector('[data-accion="subir"]').disabled = sitio.i === 0;
+            barra.querySelector('[data-accion="bajar"]').disabled = sitio.i === sitio.lista.length - 1;
+            /* Una ventana emergente es position:fixed: sumarle el scroll de la
+               página dejaría la barra a media pantalla del bloque. */
+            const fija = Boolean(destino.closest('.modal'));
+            barra.classList.toggle('previa-barra--fija', fija);
+            const caja = destino.getBoundingClientRect();
+            const dx = fija ? 0 : vista.scrollX;
+            const dy = fija ? 0 : vista.scrollY;
+            barra.style.left = (caja.right + dx) + 'px';
+            // La barra se centra en el borde de arriba del bloque (translate en
+            // el CSS): sin el tope, la del primer bloque saldría medio cortada.
+            barra.style.top = Math.max(caja.top + dy, dy + 18) + 'px';
+            barra.classList.add('visible');
+        }
+
+        doc.addEventListener('mouseover', e => {
+            // Pasar por encima de la propia barra no la mueve ni la esconde.
+            if (barra.contains(e.target)) return;
+            colocar(e.target.closest('[data-bq]'));
+        });
+        doc.documentElement.addEventListener('mouseleave', ocultar);
+
+        barra.addEventListener('click', e => {
+            const btn = e.target.closest('[data-accion]');
+            if (!btn || btn.disabled || !bqBarra) return;
+            const id = bqBarra;
+            /* Se deja señalado el bloque movido: la previa se reconstruye entera
+               y sin el destello uno pierde de vista qué acaba de moverse. */
+            if (btn.dataset.accion !== 'borrar') seleccion = id;
+            accionDeBloque(btn.dataset.accion, id);
+        });
+
+        return colocar;
     }
 
     function señalarEnPrevia(id) {
@@ -249,7 +356,14 @@ document.addEventListener('click', function (e) {
         const destino = doc.querySelector(`[data-bq="${id}"]`);
         if (!destino) return;
         destino.classList.add('previa-senalado');
-        destino.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        /* Solo se mueve el scroll si el bloque NO se ve. Ahora que la previa
+           conserva su posición al redibujar, centrarlo siempre daba un tirón
+           por cada tecla que se escribe. */
+        const caja = destino.getBoundingClientRect();
+        const alto = doc.documentElement.clientHeight;
+        if (caja.bottom < 40 || caja.top > alto - 40) {
+            destino.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
     }
 
     /* Escribir dispara una previa por tecleo; con la hoja del tema (240 KB) eso
@@ -552,7 +666,7 @@ document.addEventListener('click', function (e) {
 
     function dibujarLista(lista, contenedor) {
         lista.forEach((bloque, i) => {
-            contenedor.appendChild(tarjetaDeBloque(bloque, lista));
+            contenedor.appendChild(tarjetaDeBloque(bloque));
             contenedor.appendChild(barraInsertar(lista, i + 1));
         });
         prepararArrastre(contenedor, lista);
@@ -597,7 +711,55 @@ document.addEventListener('click', function (e) {
         return barra;
     }
 
-    function tarjetaDeBloque(bloque, lista) {
+    /* ---------------------------------------------------------------------
+       Acciones estructurales de un bloque
+
+       Las comparten la cabeza de la tarjeta del lienzo y la barra flotante de
+       la vista previa: si vivieran por separado, subir desde un lado y desde el
+       otro acabarían haciendo cosas distintas. Mover es SIEMPRE dentro de la
+       lista de sus hermanos —la que devuelve buscar()—, así que un bloque de un
+       acordeón no se sale del acordeón sin querer.
+       --------------------------------------------------------------------- */
+    function accionDeBloque(accion, id) {
+        const sitio = buscar(id);
+        if (!sitio) return false;
+        const { lista, i, bloque } = sitio;
+        // Los topes se revisan ANTES de tocar el historial: subir el primero no
+        // cambia nada y no debería gastar un "deshacer".
+        if (accion === 'subir' && i === 0) return false;
+        if (accion === 'bajar' && i === lista.length - 1) return false;
+        guardarHistorial();
+        if (accion === 'subir') lista.splice(i - 1, 0, lista.splice(i, 1)[0]);
+        if (accion === 'bajar') lista.splice(i + 1, 0, lista.splice(i, 1)[0]);
+        if (accion === 'duplicar') {
+            const copia = JSON.parse(JSON.stringify(bloque));
+            soltarIds([copia]);
+            asignarIds([copia]);
+            lista.splice(i + 1, 0, copia);
+            seleccion = copia.id;
+        }
+        if (accion === 'borrar') {
+            lista.splice(i, 1);
+            if (seleccion === id) seleccion = null;
+        }
+        dibujarTodo();
+        return true;
+    }
+
+    /* Al duplicar hay que soltar TODOS los ids, no solo el del bloque: la copia
+       de un acordeón se llevaba los de sus hijos, y como asignarIds() solo pone
+       los que faltan, quedaban dos bloques con el mismo id. buscar() se queda
+       con el primero, así que el enlace lienzo↔previa apuntaba al gemelo
+       equivocado (y ahora también lo haría la barra flotante). */
+    function soltarIds(lista) {
+        (lista || []).forEach(b => {
+            b.id = null;
+            soltarIds(b.hijos);
+            (b.items || []).forEach(it => soltarIds(it.hijos));
+        });
+    }
+
+    function tarjetaDeBloque(bloque) {
         const comp = COMPONENTES[bloque.tipo];
         const card = document.createElement('div');
         // Plegado por omisión: un guion importado deja 20 bloques y con todos
@@ -640,18 +802,7 @@ document.addEventListener('click', function (e) {
                 señalarEnPrevia(bloque.id);
                 return;
             }
-            const i = lista.indexOf(bloque);
-            guardarHistorial();
-            if (btn.dataset.accion === 'subir' && i > 0) lista.splice(i - 1, 0, lista.splice(i, 1)[0]);
-            if (btn.dataset.accion === 'bajar' && i < lista.length - 1) lista.splice(i + 1, 0, lista.splice(i, 1)[0]);
-            if (btn.dataset.accion === 'duplicar') {
-                const copia = JSON.parse(JSON.stringify(bloque));
-                copia.id = null;
-                asignarIds([copia]);
-                lista.splice(i + 1, 0, copia);
-            }
-            if (btn.dataset.accion === 'borrar') lista.splice(i, 1);
-            dibujarTodo();
+            accionDeBloque(btn.dataset.accion, bloque.id);
         });
 
         // La indicación que traía el guion para este bloque ("<Crear un grupo
@@ -1883,83 +2034,25 @@ document.addEventListener('click', function (e) {
     /* ---------------------------------------------------------------------
        Reparto de la pantalla: divisor y previa ampliada
 
-       Editar y revisar piden anchos distintos (armar una tabla necesita el
-       editor; ver si la página quedó bien necesita la previa), así que el reparto
-       no puede ser una decisión fija de CSS: se arrastra, se recuerda, y hay un
-       clic para dejarle la pantalla entera a la previa.
+       La conducta (arrastrar, recordar, doble clic, teclado, ampliar) vive en
+       assets/reparto.js, compartida con el Integrador HTML. Aquí solo queda lo
+       que es de esta herramienta: los mínimos y la medida en píxeles.
        --------------------------------------------------------------------- */
 
-    const CLAVE_COL = 'guion-col-editor';
-    const COL_MIN = 360;
-    // Lo que se le reserva a la previa aunque se arrastre a lo bestia: por debajo
-    // de esto la rejilla de escritorio de Moodle ya no se parece a un escritorio.
-    const PREVIA_MIN = 520;
-
-    function anchoWorkspace() {
-        return $('#workspace').getBoundingClientRect().width;
-    }
-
-    function fijarCol(px, recordar = true) {
-        const tope = Math.max(COL_MIN, Math.min(760, anchoWorkspace() - PREVIA_MIN));
-        const ancho = Math.round(Math.min(tope, Math.max(COL_MIN, px)));
-        $('#workspace').style.setProperty('--col-editor', `${ancho}px`);
-        if (recordar) localStorage.setItem(CLAVE_COL, String(ancho));
-    }
-
-    function alternarPreviaMax(forzar) {
-        const ws = $('#workspace');
-        const max = forzar === undefined ? !ws.classList.contains('previa-max') : forzar;
-        ws.classList.toggle('previa-max', max);
-        const btn = $('#btn-previa-max');
-        btn.querySelector('i').className = `ph ph-corners-${max ? 'in' : 'out'}`;
-        btn.title = max ? 'Volver al editor (Esc)' : 'Ampliar la vista previa';
-        btn.setAttribute('aria-pressed', String(max));
-    }
+    let reparto = null;
 
     function prepararDivisor() {
-        const ws = $('#workspace');
-        const divisor = $('#divisor');
-        const guardado = Number(localStorage.getItem(CLAVE_COL));
-        // Sin recordar: el valor ya venía de una sesión anterior y volver a
-        // guardarlo recortado por una ventana chica lo perdería para siempre.
-        if (guardado) fijarCol(guardado, false);
-
-        let arrastrando = false;
-        divisor.addEventListener('pointerdown', e => {
-            e.preventDefault();
-            arrastrando = true;
-            divisor.classList.add('arrastrando');
-            /* La captura es lo que permite arrastrar POR ENCIMA de la vista
-               previa: es un iframe y, sin captura, se queda con los eventos del
-               ratón y el divisor se congela a media pantalla. */
-            try { divisor.setPointerCapture(e.pointerId); } catch (err) { /* sin captura, los movimientos igual llegan a window */ }
+        reparto = Reparto.iniciar({
+            workspace: '#workspace',
+            divisor: '#divisor',
+            clave: 'guion-col-editor',
+            colMin: 360,
+            // Lo que se le reserva a la previa aunque se arrastre a lo bestia:
+            // por debajo de esto la rejilla de escritorio de Moodle ya no se
+            // parece a un escritorio.
+            restoMin: 520,
+            botonMax: '#btn-previa-max'
         });
-        // En window y no en el divisor: son 20px de ancho y el cursor se sale.
-        window.addEventListener('pointermove', e => {
-            if (arrastrando) fijarCol(e.clientX - ws.getBoundingClientRect().left);
-        });
-        const soltar = () => {
-            arrastrando = false;
-            divisor.classList.remove('arrastrando');
-        };
-        window.addEventListener('pointerup', soltar);
-        window.addEventListener('pointercancel', soltar);
-
-        // Doble clic: de vuelta al reparto por omisión (el clamp del CSS).
-        divisor.addEventListener('dblclick', () => {
-            ws.style.removeProperty('--col-editor');
-            localStorage.removeItem(CLAVE_COL);
-        });
-
-        // Con el teclado: el divisor es enfocable, así que también se mueve.
-        divisor.addEventListener('keydown', e => {
-            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-            e.preventDefault();
-            const paso = (e.shiftKey ? 80 : 24) * (e.key === 'ArrowLeft' ? -1 : 1);
-            fijarCol($('.editor-panel').getBoundingClientRect().width + paso);
-        });
-
-        $('#btn-previa-max').addEventListener('click', () => alternarPreviaMax());
 
         /* El ancho real de la previa en px. Es la única forma de saber si lo que
            se está mirando de verdad es un escritorio o una tableta disfrazada. */
@@ -2061,8 +2154,8 @@ document.addEventListener('click', function (e) {
                 e.preventDefault();
                 deshacer();
             }
-            if (e.key === 'Escape' && $('#workspace').classList.contains('previa-max')) {
-                alternarPreviaMax(false);
+            if (e.key === 'Escape' && reparto && reparto.maximizada()) {
+                reparto.maximizar(false);
             }
         });
     }

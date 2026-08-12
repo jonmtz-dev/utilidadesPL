@@ -56,6 +56,10 @@ editor no obligue a scrollear para trabajar.**
    no en el divisor: son 20px y el cursor se sale; y la captura del puntero es lo
    que permite arrastrar **por encima del iframe** de la previa, que si no se
    queda con los eventos del ratón.
+
+   > La conducta vive en `assets/reparto.js`, **compartida con el Integrador
+   > HTML**. Aquí solo quedan los mínimos de esta herramienta y la medida en px.
+   > Los estilos del divisor y de la barra de la previa están en `shared.css`.
 4. **El botón ⤢ le da a la previa el área completa** (Esc para volver) y junto a
    la barra se escribe **el ancho real en px**, que es lo que evita creer que se
    está viendo un escritorio cuando no.
@@ -111,6 +115,38 @@ ser fiel.
 > pestaña, o la ventana emergente— se cerraba **en el mismo clic con que se
 > abría** y la previa parecía estar muerta. Abrir o seleccionar un bloque no
 > cambia el HTML: no hay nada que refrescar allá.
+
+### La barra flotante de la previa
+
+Al pasar el mouse por un bloque de la previa aparece, en su esquina de arriba a
+la derecha, una barra con **subir · bajar · duplicar · quitar**: reordenar sin
+bajar la vista al lienzo. Vive **dentro** del iframe (así scrollea con la página
+sola, sin traducir coordenadas entre dos documentos) y se inyecta con JS después
+de cargar, de modo que —igual que el `data-bq`— nunca forma parte del HTML que
+se copia a Moodle.
+
+Tres cosas que conviene no deshacer:
+
+- **No es arrastre, y es a propósito.** El contenido de la previa ya reacciona
+  al clic (acordeones, pestañas, ventanas); hacerlo `draggable` deja cada clic
+  peleado entre abrir y mover. En el lienzo el arrastre sí existe porque ahí hay
+  un asa (`.arrastre`) que no compite con nada.
+- **Mover es siempre dentro de la lista de hermanos**, la que devuelve
+  `buscar()`. Un bloque de un acordeón se reordena entre los de su apartado y no
+  puede salirse sin querer.
+- **Dentro de una ventana emergente la barra va `position: fixed`**
+  (`.previa-barra--fija`). El `.modal` es fijo: sumarle el scroll de la página
+  dejaba la barra a media pantalla del bloque.
+
+Las cuatro acciones son las mismas del lienzo porque son literalmente la misma
+función (`accionDeBloque`): separadas, subir desde un lado y desde el otro
+acabarían haciendo cosas distintas.
+
+> Reordenar **sí** regenera la previa (cambia el HTML), así que ahí no aplica la
+> regla de arriba. Para que no se sienta, `refrescarSalida()` conserva el scroll
+> del iframe, la barra vuelve sola sobre el bloque movido —tras recargar el
+> mouse no se movió y no habrá `mouseover`— y `señalarEnPrevia()` solo desplaza
+> cuando el bloque no se ve.
 
 ## Las marcas del guion (lo que más importa del importador)
 
@@ -323,9 +359,15 @@ Va en un `<iframe sandbox>` con dos hojas:
    Micrositio a Página**. No se duplica a propósito: así fue como el hex
    `#d8a7b6` sobrevivió meses en una copia ya corregida en la otra.
 
-El iframe va en sandbox sin `allow-same-origin` para que ese CSS ajeno no pueda
-tocar el panel, y con un script propio mínimo que abre acordeones y pestañas
-(en Moodle eso lo mueve el Bootstrap de la plataforma).
+El iframe va en sandbox **con** `allow-same-origin` —lo necesitan las imágenes
+del Word (son `blob:` del documento padre) y la sincronía con el lienzo—, y con
+un script propio mínimo que abre acordeones y pestañas (en Moodle eso lo mueve
+el Bootstrap de la plataforma). Quien aísla al panel del CSS de Moodle es el
+iframe en sí, no esa bandera: el documento de la previa es otro documento.
+
+La hoja de la barra flotante (`CSS_BARRA_PREVIA`) va en un tercer `<style>`,
+**después** de la del tema: si compartiera bloque con la primera, cualquier
+regla de Moodle sobre `<button>` le ganaría por orden.
 
 ## Pendiente de validar en producción
 

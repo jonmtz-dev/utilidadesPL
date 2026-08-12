@@ -27,22 +27,8 @@
 .guion-workspace.previa-max .editor-panel,
 .guion-workspace.previa-max .divisor { display: none; }
 
-.divisor {
-    position: relative; cursor: col-resize; touch-action: none;
-    display: flex; align-items: center; justify-content: center;
-}
-.divisor::before {
-    content: ""; width: 4px; height: 44px; border-radius: 999px;
-    background: var(--control-border);
-    transition: background .18s ease, height .18s ease;
-}
-.divisor:hover::before,
-.divisor.arrastrando::before { background: var(--accent); height: 96px; }
-.divisor:focus-visible { outline: none; }
-.divisor:focus-visible::before {
-    background: var(--accent); height: 96px;
-    box-shadow: 0 0 0 3px rgba(0, 102, 204, .25);
-}
+/* .divisor, .preview-barra, .preview-nota y .btn-icono-barra viven en
+   assets/shared.css: los comparte el Integrador HTML. */
 
 .section-header--acciones { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .section-header--acciones h2 { margin-bottom: 16px; }
@@ -376,7 +362,6 @@
 /* --------------------------------------------------------------------------
    Panel derecho: vista previa
    -------------------------------------------------------------------------- */
-.preview-barra { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-shrink: 0; }
 .anchos { display: flex; gap: 3px; background: var(--control-bg); border-radius: 11px; padding: 4px; }
 .ancho-btn {
     display: inline-flex; align-items: center; gap: 7px;
@@ -387,22 +372,11 @@
 .ancho-btn i { font-size: 17px; }
 .ancho-btn:hover { color: var(--text-main); }
 .ancho-btn.active { background: var(--surface-raised); color: var(--text-main); box-shadow: 0 2px 8px rgba(0, 0, 0, .06); }
-.preview-nota { font-size: 11.5px; color: var(--text-muted); }
 .preview-medida {
     margin-left: auto; flex-shrink: 0;
     font-size: 11.5px; font-weight: 600; color: var(--text-muted);
     font-variant-numeric: tabular-nums;
 }
-
-.btn-icono-barra {
-    flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px;
-    display: inline-flex; align-items: center; justify-content: center;
-    border: 1px solid var(--control-border); background: var(--input-bg);
-    color: var(--text-muted); font: inherit; font-size: 17px; cursor: pointer;
-    transition: all .18s ease;
-}
-.btn-icono-barra:hover { color: var(--accent); border-color: var(--accent); }
-.btn-icono-barra[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 
 /* Con la previa angosta el nombre del dispositivo estorba; el icono ya se
    entiende y el título lo dice. */

@@ -3,10 +3,30 @@
 .section-header--acciones h2 { margin-bottom:20px; }
 .insert-hint { color:var(--text-muted); font-size:12px; margin:-3px 0 10px; }
 .block--seleccionado { border-color:var(--accent); box-shadow:0 0 0 2px rgba(0,102,204,.18); }
-.editor-ampliado { grid-template-columns:minmax(620px, 1.35fr) minmax(380px, .65fr); }
-.editor-ampliado .output-panel { display:flex; }
-.editor-ampliado .blocks { min-height:500px; }
-.integrador-workspace { grid-template-columns: minmax(480px, 1.08fr) minmax(440px, .92fr); }
+/* Esta herramienta se sale del tope de 1400px del resto, igual que Guion a
+   Página: es un constructor con vista previa y ahí el ancho es materia prima.
+   Con 1400 la previa se quedaba en ~530px y una tabla de cuatro columnas no
+   cabía sin scrollear, que es justo lo que hay que revisar antes de publicar. */
+.integrador-app { max-width: 1760px; }
+
+/* Tres columnas: editor · divisor · salida. El ancho del editor es una variable
+   porque el divisor se arrastra (assets/reparto.js la fija y la recuerda); el
+   clamp es el reparto por omisión, el mismo ~54/46 de antes. El divisor hace de
+   gutter, así que aquí el gap va en cero. */
+.integrador-workspace {
+    /* El tope de 720px es lo que hace que el ancho extra de una pantalla grande
+       se lo lleve la PREVIA y no el editor: en 1400px el reparto queda como
+       estaba (~644px de editor) y en 1760px la previa gana ~490px. */
+    grid-template-columns: var(--col-editor, clamp(440px, 46%, 720px)) 20px minmax(0, 1fr);
+    gap: 0;
+}
+/* Vista previa a pantalla completa del área de trabajo: un clic cuando toca
+   revisar de verdad, y Esc para volver. */
+.integrador-workspace.previa-max { grid-template-columns: minmax(0, 1fr); }
+.integrador-workspace.previa-max .editor-panel,
+.integrador-workspace.previa-max .divisor { display: none; }
+/* El botón de ampliar, hasta la derecha de su barra. */
+.preview-barra .btn-icono-barra { margin-left: auto; }
 .editor-panel, .output-panel { min-height: 0; }
 .field-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
 .field-row label, .field-label { font-weight:600; font-size:14px; }
@@ -34,7 +54,7 @@
 .img-word-info span { color:var(--text-muted); }
 .img-word-info a { align-self:flex-start; text-decoration:none; }
 .block-controls input[type="color"] { width:34px; height:26px; padding:2px; border:1px solid var(--control-border); border-radius:6px; background:var(--input-bg); cursor:pointer; }
-.toolbar { display:flex; flex-wrap:wrap; gap:7px; margin:15px 0 10px; }.btn-chico{padding:7px 10px;font-size:12px}.blocks{display:flex;flex:1 1 280px;flex-direction:column;gap:9px;overflow:auto;min-height:240px;padding-right:8px}.block{border:1px solid var(--control-border);border-radius:12px;padding:10px;background:var(--control-bg)}.block-head{display:flex;align-items:center;gap:7px;margin-bottom:8px;font-size:13px;font-weight:700}.block-head i{color:var(--accent)}.block-tools{margin-left:auto;display:flex;align-items:center;gap:2px}.block-move{border:0;background:transparent;color:var(--text-muted);font:inherit;cursor:pointer;font-size:15px;padding:2px 4px;border-radius:6px}.block-move:hover:not(:disabled){color:var(--accent);background:var(--input-bg)}.block-move:disabled{opacity:.3;cursor:default}.block-remove{border:0;background:transparent;color:var(--danger);font:inherit;cursor:pointer;font-size:16px}.block-field{width:100%;box-sizing:border-box;background:var(--input-bg);border:1px solid var(--control-border);border-radius:8px;padding:7px;color:var(--text-main);font:inherit;resize:vertical}.block-field+ .block-field{margin-top:6px}.block-title{font-weight:600}.table-fields{display:flex;flex-direction:column;gap:6px}.block small{display:block;color:var(--text-muted);font-size:11px;margin:5px 0}.acciones{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;flex-shrink:0}.preview-container{background:#fff;color:#000;border:1px solid var(--control-border);border-radius:12px;padding:14px;min-height:0;overflow:auto;flex-grow:1}.moodle-preview{font-family:Raleway,Arial,sans-serif}.moodle-preview .tema{color:#fff;text-align:center;padding:14px;margin:0;text-shadow:0 4px 4px rgba(0,0,0,.3);font-size:1.55em}.moodle-preview .subtema{color:#fff;padding:10px;margin:0;text-shadow:0 4px 4px rgba(0,0,0,.3);font-size:1.35em}.moodle-preview .content{padding:10px;overflow:auto;font-size:14px;line-height:1.5}.moodle-preview p{margin:0 0 10px}.moodle-preview ol{list-style-type:decimal}.moodle-preview ul{list-style-type:disc}.moodle-preview table{border-collapse:collapse;max-width:100%;margin:8px auto}.moodle-preview td,.moodle-preview th{border:1px solid #555;padding:6px}.moodle-preview img{max-width:100%;height:auto}.qa-aviso{padding:11px;border-left:3px solid var(--accent);background:rgba(0,102,204,.1);border-radius:9px;font-size:13px;line-height:1.5}.opcion-entrega{margin-top:15px;padding-top:12px;border-top:1px solid var(--control-border)}.opcion-entrega h3{font-size:14px;margin:0 0 5px}.bookmarklet-link{display:inline-flex;cursor:grab}.hidden{display:none!important}@media(max-width:1024px),(max-height:620px){.integrador-workspace{grid-template-columns:1fr}.blocks{max-height:none}.editor-panel{overflow:visible}}@media(max-width:640px){.panel-section{padding:18px}.toolbar .btn-chico{flex:1}}
+.toolbar { display:flex; flex-wrap:wrap; gap:7px; margin:15px 0 10px; }.btn-chico{padding:7px 10px;font-size:12px}.blocks{display:flex;flex:1 1 280px;flex-direction:column;gap:9px;overflow:auto;min-height:240px;padding-right:8px}.block{border:1px solid var(--control-border);border-radius:12px;padding:10px;background:var(--control-bg)}.block-head{display:flex;align-items:center;gap:7px;margin-bottom:8px;font-size:13px;font-weight:700}.block-head i{color:var(--accent)}.block-tools{margin-left:auto;display:flex;align-items:center;gap:2px}.block-move{border:0;background:transparent;color:var(--text-muted);font:inherit;cursor:pointer;font-size:15px;padding:2px 4px;border-radius:6px}.block-move:hover:not(:disabled){color:var(--accent);background:var(--input-bg)}.block-move:disabled{opacity:.3;cursor:default}.block-remove{border:0;background:transparent;color:var(--danger);font:inherit;cursor:pointer;font-size:16px}.block-field{width:100%;box-sizing:border-box;background:var(--input-bg);border:1px solid var(--control-border);border-radius:8px;padding:7px;color:var(--text-main);font:inherit;resize:vertical}.block-field+ .block-field{margin-top:6px}.block-title{font-weight:600}.table-fields{display:flex;flex-direction:column;gap:6px}.block small{display:block;color:var(--text-muted);font-size:11px;margin:5px 0}.acciones{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;flex-shrink:0}.preview-container{position:relative;background:#fff;color:#000;border:1px solid var(--control-border);border-radius:12px;padding:14px;min-height:0;overflow:auto;flex-grow:1}.moodle-preview{font-family:Raleway,Arial,sans-serif}.moodle-preview .tema{color:#fff;text-align:center;padding:14px;margin:0;text-shadow:0 4px 4px rgba(0,0,0,.3);font-size:1.55em}.moodle-preview .subtema{color:#fff;padding:10px;margin:0;text-shadow:0 4px 4px rgba(0,0,0,.3);font-size:1.35em}.moodle-preview .content{padding:10px;overflow:auto;font-size:14px;line-height:1.5}.moodle-preview p{margin:0 0 10px}.moodle-preview ol{list-style-type:decimal}.moodle-preview ul{list-style-type:disc}.moodle-preview table{border-collapse:collapse;max-width:100%;margin:8px auto}.moodle-preview td,.moodle-preview th{border:1px solid #555;padding:6px}.moodle-preview img{max-width:100%;height:auto}.qa-aviso{padding:11px;border-left:3px solid var(--accent);background:rgba(0,102,204,.1);border-radius:9px;font-size:13px;line-height:1.5}.opcion-entrega{margin-top:15px;padding-top:12px;border-top:1px solid var(--control-border)}.opcion-entrega h3{font-size:14px;margin:0 0 5px}.bookmarklet-link{display:inline-flex;cursor:grab}.hidden{display:none!important}@media(max-width:1024px),(max-height:620px){.integrador-workspace{grid-template-columns:1fr;gap:24px}.divisor{display:none}.blocks{max-height:none}.editor-panel{overflow:visible}}@media(max-width:640px){.panel-section{padding:18px}.toolbar .btn-chico{flex:1}}
 
 /* Modal recordatorio al generar: los enlaces y las imágenes del HTML deben
    volver a enlazarse dentro de Moodle. Usa los tokens compartidos del modal. */
@@ -53,3 +73,50 @@
 @keyframes modalFade{from{opacity:0}to{opacity:1}}
 @keyframes modalSube{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 #qa-result .qa-aviso::after { content:'OJO: coteja que las imágenes publicadas en Moodle coincidan con las imágenes adjuntas del Word.'; display:block; margin-top:9px; padding:8px 9px; border-left:3px solid #f4c400; background:#fffde7; color:#5d4b00; font-weight:600; }
+
+/* --------------------------------------------------------------------------
+   Barra flotante para reordenar desde la vista previa
+
+   Al pasar el cursor por un bloque aparecen subir/bajar/quitar en su esquina.
+   Vive DENTRO de #preview (por eso .preview-container es position: relative) y
+   se vuelve a colgar después de cada repintado, que aquí ocurre en cada tecla.
+
+   Colores fijos y NO tokens del tema: la previa es una isla clara a propósito
+   —imita la página real de Moodle— y un botón que siguiera el tema oscuro
+   cantaría dentro de ella.
+
+   No es arrastre a propósito: en la previa no hay dónde poner un asa sin
+   ensuciar lo que se va a copiar a Moodle, y hacer draggable el contenido deja
+   cada clic peleado entre seleccionar y mover.
+   -------------------------------------------------------------------------- */
+.previa-barra {
+    position: absolute;
+    z-index: 5;
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 9px;
+    background: #fff;
+    border: 1px solid #d5dce3;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
+    /* Anclada al borde de arriba y a la derecha del bloque, como en el lienzo. */
+    transform: translate(-100%, -50%);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .12s ease;
+}
+.previa-barra.visible { opacity: 1; visibility: visible; }
+.previa-barra > button {
+    display: flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; padding: 0;
+    border: 0; border-radius: 6px;
+    background: transparent; color: #333340; cursor: pointer; line-height: 1;
+}
+.previa-barra > button > i { font-size: 16px; }
+.previa-barra > button:hover { background: #eef2f7; color: #0066cc; }
+.previa-barra > button[data-accion="borrar"]:hover { background: #fdecee; color: #c0293a; }
+.previa-barra > button:disabled { opacity: .28; cursor: default; background: transparent; color: #333340; }
+
+/* El bloque señalado tras moverlo. Colores fijos por lo mismo de arriba. */
+.bloque-previa { scroll-margin: 24px; }
+.bloque-previa--senalado { outline: 2px solid #0066cc; outline-offset: 2px; border-radius: 4px; }

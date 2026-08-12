@@ -14,10 +14,9 @@
    acento grave suelto —hasta en un comentario— la cierra y deja el archivo sin
    parsear, con la previa entera sin estilos. Ya pasó una vez.
 
-   Va como cadena en un .js (y no como .css) porque el iframe se arma con
-   srcdoc y sandbox sin allow-same-origin: en ese documento de origen opaco un
-   <link> a un archivo local no carga. Mismo motivo por el que la hoja de
-   Micrositio a Página también vive en un .js.
+   Va como cadena en un .js (y no como .css) porque el documento de la previa se
+   arma entero con srcdoc: la hoja viaja dentro de la cadena. Mismo formato que
+   la hoja del tema de Micrositio a Página, que aquí se reutiliza tal cual.
    ========================================================================== */
 
 window.CSS_VISTA_PREVIA = `
@@ -226,4 +225,64 @@ a { color: var(--primary-50, #6b4c8b); }
 /* --- Modal <details> --- */
 details > summary { cursor: pointer; }
 details[open] > summary { position: relative; z-index: 98; }
+`;
+
+/* ==========================================================================
+   Barra flotante para reordenar desde la previa.
+
+   Andamiaje de la herramienta, como .previa-senalado: colores fijos (los del
+   panel), nunca tokens del tema, y nunca sale en el HTML que se copia a Moodle
+   —se inyecta con JS después de cargar—.
+
+   Va aparte de CSS_VISTA_PREVIA porque en documentoPrevia se pega DESPUÉS de la
+   hoja del tema: si compartiera bloque, cualquier regla de Moodle sobre
+   <button> le ganaría por orden.
+
+   ⚠️ Igual que arriba: nada de acentos graves aquí dentro, ni en los
+   comentarios; cerrarían la plantilla de texto.
+   ========================================================================== */
+
+window.CSS_BARRA_PREVIA = `
+.previa-barra {
+    position: absolute;
+    z-index: 1000;
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 9px;
+    background: #fff;
+    border: 1px solid #d5dce3;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
+    /* Anclada al borde de arriba y a la derecha del bloque, como en el lienzo. */
+    transform: translate(-100%, -50%);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .12s ease;
+}
+.previa-barra.visible { opacity: 1; visibility: visible; }
+/* Dentro de una ventana emergente (position: fixed) la barra va fija también, y
+   por encima del .modal (z-index 1055). */
+.previa-barra--fija { position: fixed; z-index: 1060; }
+.previa-barra > button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px; height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #333340;
+    cursor: pointer;
+    line-height: 1;
+}
+.previa-barra > button > svg { width: 16px; height: 16px; display: block; }
+.previa-barra > button:hover { background: #eef2f7; color: #0066cc; }
+.previa-barra > button[data-accion="borrar"]:hover { background: #fdecee; color: #c0293a; }
+.previa-barra > button:disabled {
+    opacity: .28;
+    cursor: default;
+    background: transparent;
+    color: #333340;
+}
 `;

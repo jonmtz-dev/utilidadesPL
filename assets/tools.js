@@ -114,6 +114,10 @@ const PLATAFORMAS = [
     {
         moodle: '3.11',
         nombre: 'Prepa en Línea SEP',
+        // Cómo se llama en el botón de volver de cada herramienta, donde el
+        // nombre largo no cabe. Mismo criterio que la insignia: se escribe una
+        // sola vez, aquí.
+        corto: 'Prepa en Línea',
         detalle: 'Rúbricas, bibliografías y actividades de la plataforma anterior',
         imagen: 'assets/plataformas/prepa-en-linea.webp',
         // El acento tiñe el brillo y el borde al pasar el cursor: es el verde de
@@ -123,6 +127,7 @@ const PLATAFORMAS = [
     {
         moodle: '5.1',
         nombre: 'Bachillerato Nacional Margarita Maza',
+        corto: 'Margarita Maza',
         detalle: 'Tablas responsivas, micrositios y páginas de la plataforma nueva',
         imagen: 'assets/plataformas/margarita-maza.webp',
         acento: '#9d2248'

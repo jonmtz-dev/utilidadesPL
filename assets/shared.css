@@ -556,6 +556,53 @@ body {
     overflow-y: auto; /* Si la columna no cabe, scrollea aquí dentro */
 }
 
+/* --------------------------------------------------------------------------
+   Reparto de la pantalla: divisor arrastrable
+
+   Editar y revisar piden anchos distintos (armar una tabla necesita el editor;
+   ver si la página quedó bien necesita la previa), así que el reparto no puede
+   ser una decisión fija de CSS. La conducta la pone assets/reparto.js; el
+   ancho de las columnas lo decide cada herramienta, porque no todas necesitan
+   lo mismo.
+
+   El divisor hace también de gutter entre las dos columnas: por eso el
+   workspace que lo usa va con gap: 0.
+   -------------------------------------------------------------------------- */
+.divisor {
+    position: relative; cursor: col-resize; touch-action: none;
+    display: flex; align-items: center; justify-content: center;
+}
+.divisor::before {
+    content: ""; width: 4px; height: 44px; border-radius: 999px;
+    background: var(--control-border);
+    transition: background .18s ease, height .18s ease;
+}
+.divisor:hover::before,
+.divisor.arrastrando::before { background: var(--accent); height: 96px; }
+.divisor:focus-visible { outline: none; }
+.divisor:focus-visible::before {
+    background: var(--accent); height: 96px;
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, .25);
+}
+/* Apilado no hay dos columnas que repartir. */
+@media (max-width: 1024px) {
+    .divisor { display: none; }
+}
+
+/* Barra de encima de la vista previa y su botón de icono (ampliar la previa,
+   elegir ancho…). La usan Guion Instruccional e Integrador HTML. */
+.preview-barra { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-shrink: 0; }
+.preview-nota { font-size: 11.5px; color: var(--text-muted); }
+.btn-icono-barra {
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--control-border); background: var(--input-bg);
+    color: var(--text-muted); font: inherit; font-size: 17px; cursor: pointer;
+    transition: all .18s ease;
+}
+.btn-icono-barra:hover { color: var(--accent); border-color: var(--accent); }
+.btn-icono-barra[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
 .section-header {
     flex-shrink: 0;
 }
