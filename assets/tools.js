@@ -96,3 +96,35 @@ const TOOLS = [
         status: 'ready'
     }
 ];
+
+/* ==========================================================================
+   Plataformas: la pantalla de inicio del panel.
+
+   Las herramientas de 3.11 y de 5.1 no se mezclan en el trabajo real —quien
+   monta en Prepa en Línea no toca las de Margarita Maza—, así que el panel
+   pregunta primero por la plataforma y luego enseña solo lo que aplica. Esto es
+   lo único que hay que tocar para cambiar una imagen o un nombre; las
+   herramientas siguen saliendo del campo `moodle` de TOOLS, que es la fuente
+   única: aquí no se repite ninguna lista.
+
+   Las imágenes vienen de los banners reales de cada plataforma, recortadas al
+   MISMO encuadre (880x425) para que las dos tarjetas se vean igual de grandes.
+   ========================================================================== */
+const PLATAFORMAS = [
+    {
+        moodle: '3.11',
+        nombre: 'Prepa en Línea SEP',
+        detalle: 'Rúbricas, bibliografías y actividades de la plataforma anterior',
+        imagen: 'assets/plataformas/prepa-en-linea.webp',
+        // El acento tiñe el brillo y el borde al pasar el cursor: es el verde de
+        // su banner, no un color inventado.
+        acento: '#a8bf2f'
+    },
+    {
+        moodle: '5.1',
+        nombre: 'Bachillerato Nacional Margarita Maza',
+        detalle: 'Tablas responsivas, micrositios y páginas de la plataforma nueva',
+        imagen: 'assets/plataformas/margarita-maza.webp',
+        acento: '#9d2248'
+    }
+];

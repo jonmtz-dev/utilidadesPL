@@ -42,7 +42,21 @@
             </div>
         </header>
 
-        <div class="launcher-toolbar">
+        <!-- Pantalla de inicio: primero la plataforma, luego sus herramientas.
+             Las tarjetas las dibuja launcher.js desde PLATAFORMAS (tools.js). -->
+        <section class="portada" id="portada" aria-label="Elige la plataforma">
+            <p class="portada-titulo">¿Para qué plataforma vas a maquetar?</p>
+            <div class="portada-opciones" id="portada-opciones"></div>
+            <button class="portada-todas" id="ver-todas" type="button">
+                <i class="ph ph-squares-four"></i> Ver todas las herramientas
+            </button>
+        </section>
+
+        <div class="launcher-toolbar hidden" id="launcher-toolbar">
+            <!-- Con qué plataforma se entró, y la puerta de vuelta a la portada. -->
+            <button class="chip-plataforma" id="chip-plataforma" type="button" title="Cambiar de plataforma">
+                <i class="ph ph-arrow-left"></i> <span id="chip-texto"></span>
+            </button>
             <div class="search-field glass-panel">
                 <i class="ph ph-magnifying-glass"></i>
                 <input type="search" id="search-input" placeholder="Buscar herramienta…" autocomplete="off" aria-label="Buscar herramienta">
@@ -52,7 +66,7 @@
 
         <!-- La rejilla scrollea aquí dentro, pero sin barra: la píldora de abajo
              es la que avisa que hay más (y baja al pulsarla). -->
-        <div class="tools-viewport">
+        <div class="tools-viewport hidden" id="tools-viewport">
             <section class="tools-grid scroll-sin-barra" id="tools-grid"
                      data-pista-scroll data-pista="#pista-abajo"
                      aria-label="Herramientas disponibles"></section>

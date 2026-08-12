@@ -2,9 +2,242 @@
    Launcher (cajón de apps)
    ========================================================================== */
 
+/* ==========================================================================
+   Portada: elegir plataforma
+
+   Quien monta en Prepa en Línea no toca las herramientas de Margarita Maza (el
+   editor de rúbricas y el de libros cambiaron entre 3.11 y 5.1, así que usar la
+   equivocada produce HTML que se ve bien aquí y falla allá). El panel pregunta
+   primero y luego enseña solo lo que aplica.
+   ========================================================================== */
+.portada {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 26px;
+    padding: 8px 0;
+}
+
+.portada-titulo {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    text-align: center;
+    animation: portadaEntra 0.5s ease backwards;
+}
+
+.portada-opciones {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 26px;
+    width: 100%;
+    max-width: 940px;
+}
+
+/* La tarjeta de plataforma. El color de marca entra por --acento (lo pone
+   launcher.js desde PLATAFORMAS): el borde, el brillo y la flecha lo usan. */
+.plataforma {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: var(--glass-shadow);
+    color: inherit;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    overflow: hidden;
+    animation: portadaEntra 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+                box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+/* La imagen conserva el encuadre del banner (mismo alto en las dos tarjetas) y
+   se acerca un poco al pasar el cursor: el movimiento es de la foto, no del
+   texto, así que se lee igual de bien mientras pasa. */
+.plataforma-foto {
+    position: relative;
+    aspect-ratio: 553 / 267;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.plataforma-foto img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transform: scale(1.01);
+    transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Velo del color de marca: sube apenas al pasar el cursor para que la tarjeta
+   "se encienda" sin tapar el logo. */
+.plataforma-foto::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 45%, color-mix(in srgb, var(--acento) 55%, transparent));
+    opacity: 0.55;
+    transition: opacity 0.3s ease;
+}
+
+.plataforma-cuerpo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 22px 20px;
+}
+
+.plataforma-textos {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.plataforma-version {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    /* El acento mezclado con el color de texto del tema: el verde de Prepa en
+       Línea sobre blanco daba 2:1 de contraste (ilegible), y así se oscurece en
+       claro y se aclara en oscuro sin dejar de ser su color. */
+    color: color-mix(in srgb, var(--acento) 55%, var(--text-main));
+}
+
+.plataforma-nombre {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+}
+
+.plataforma-detalle {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+
+.plataforma-cuenta {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.plataforma-flecha {
+    margin-left: auto;
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: #fff;
+    /* Un toque más oscuro que el acento puro: la flecha blanca sobre el verde
+       claro de Prepa en Línea se perdía. */
+    background: color-mix(in srgb, var(--acento) 86%, #000);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--acento) 45%, transparent);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.plataforma:hover,
+.plataforma:focus-visible {
+    outline: none;
+    transform: translateY(-8px);
+    border-color: color-mix(in srgb, var(--acento) 45%, transparent);
+    box-shadow: 0 22px 48px color-mix(in srgb, var(--acento) 28%, transparent);
+}
+
+.plataforma:hover .plataforma-foto img,
+.plataforma:focus-visible .plataforma-foto img { transform: scale(1.07); }
+
+.plataforma:hover .plataforma-foto::after,
+.plataforma:focus-visible .plataforma-foto::after { opacity: 0.75; }
+
+.plataforma:hover .plataforma-flecha,
+.plataforma:focus-visible .plataforma-flecha { transform: translateX(5px) scale(1.06); }
+
+.plataforma:active { transform: translateY(-3px) scale(0.995); }
+
+/* Salida de la portada al elegir: se va hacia arriba mientras la rejilla entra.
+   Sin esto el cambio era un corte seco. */
+.portada.saliendo { animation: portadaSale 0.32s ease forwards; pointer-events: none; }
+
+.portada-todas {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--control-border);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    animation: portadaEntra 0.5s ease 0.25s backwards;
+    transition: all 0.2s ease;
+}
+
+.portada-todas:hover {
+    color: var(--text-main);
+    border-color: var(--accent);
+    background: var(--surface-translucent);
+}
+
+@keyframes portadaEntra {
+    from { opacity: 0; transform: translateY(18px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes portadaSale {
+    to { opacity: 0; transform: translateY(-14px) scale(0.985); }
+}
+
+/* Chip de la plataforma activa: dice dónde estás y vuelve a la portada. */
+.chip-plataforma {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 12px 16px;
+    border-radius: 16px;
+    border: 1px solid color-mix(in srgb, var(--acento, var(--accent)) 35%, transparent);
+    background: color-mix(in srgb, var(--acento, var(--accent)) 12%, transparent);
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.chip-plataforma:hover {
+    background: color-mix(in srgb, var(--acento, var(--accent)) 20%, transparent);
+    transform: translateY(-2px);
+}
+
+.chip-plataforma i { font-size: 15px; }
+
 .launcher-toolbar {
     display: flex;
     justify-content: center;
+    align-items: center;
+    gap: 14px;
     flex-shrink: 0;
 }
 
@@ -256,14 +489,28 @@
 
     .tool-card { padding: 20px; }
     .search-field kbd { display: none; }
+
+    /* Apiladas, y con la barra de la plataforma en su propio renglón para que el
+       buscador no se quede en 90px. */
+    .portada-opciones { grid-template-columns: 1fr; gap: 18px; }
+    .portada { gap: 18px; justify-content: flex-start; }
+    .portada-titulo { font-size: 17px; }
+    .launcher-toolbar { flex-wrap: wrap; }
+    .chip-plataforma { width: 100%; justify-content: center; }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .tool-card,
     .tool-card::before,
     .tool-footer i,
-    .shape {
+    .shape,
+    .portada-titulo,
+    .portada-todas,
+    .plataforma,
+    .plataforma-foto img,
+    .plataforma-flecha {
         animation: none !important;
         transition: none !important;
     }
+    .portada.saliendo { animation: none !important; }
 }

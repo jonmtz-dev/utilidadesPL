@@ -13,7 +13,7 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.13.0';
+const VERSION = '1.14.0';
 const CACHE = `panel-herramientas-v${VERSION}`;
 
 // Rutas relativas a propósito: en GitHub Pages la app vive en un subdirectorio
@@ -38,6 +38,10 @@ const APP_SHELL = [
     'assets/icons/icon-maskable-512.png',
     'assets/icons/apple-touch-icon.png',
     'assets/icons/favicon-32.png',
+    // Los banners de la portada: sin ellos, la primera pantalla del panel se ve
+    // vacía sin conexión.
+    'assets/plataformas/prepa-en-linea.webp',
+    'assets/plataformas/margarita-maza.webp',
     'tools/convertidor-tablas/index.html',
     'tools/convertidor-tablas/script.js',
     'tools/convertidor-tablas/styles.css',
