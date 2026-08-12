@@ -2051,7 +2051,8 @@ document.addEventListener('click', function (e) {
             // por debajo de esto la rejilla de escritorio de Moodle ya no se
             // parece a un escritorio.
             restoMin: 520,
-            botonMax: '#btn-previa-max'
+            botonMax: '#btn-previa-max',
+            botonEditorMax: '#btn-editor-max'
         });
 
         /* El ancho real de la previa en px. Es la única forma de saber si lo que
@@ -2154,9 +2155,8 @@ document.addEventListener('click', function (e) {
                 e.preventDefault();
                 deshacer();
             }
-            if (e.key === 'Escape' && reparto && reparto.maximizada()) {
-                reparto.maximizar(false);
-            }
+            // Un solo Escape para los dos paneles ampliados.
+            if (e.key === 'Escape' && reparto) reparto.cerrarAmpliado();
         });
     }
 

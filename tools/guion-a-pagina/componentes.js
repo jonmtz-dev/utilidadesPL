@@ -129,6 +129,28 @@ function modalBootstrap(id, titulo, contenidoHtml, n) {
     ].filter(l => l !== '').join('\n');
 }
 
+/* Alineación horizontal, en clases de Bootstrap. Vive aquí y no repetida en
+   cada componente porque el vocabulario tiene que ser el mismo: si un dia la
+   plantilla cambia de text-start a otra cosa, se cambia en un solo lugar.
+
+   Ojo: las clases que salgan de aqui tienen que existir tambien en el CSS de la
+   vista previa (vista-previa.js) o la previa mentiría. */
+const ALINEACION = {
+    izquierda: { texto: 'text-start', fila: 'justify-content-start' },
+    centro: { texto: 'text-center', fila: 'justify-content-center' },
+    derecha: { texto: 'text-end', fila: 'justify-content-end' }
+};
+function alineacionDe(valor) { return ALINEACION[valor] || ALINEACION.centro; }
+
+/* El campo, tal cual, para los componentes que lo ofrecen. */
+const CAMPO_ALINEACION = {
+    k: 'alineacion', tipo: 'opciones', etiqueta: 'Alineación', ops: [
+        { v: 'izquierda', etiqueta: 'Izquierda', icono: 'text-align-left' },
+        { v: 'centro', etiqueta: 'Centro', icono: 'text-align-center' },
+        { v: 'derecha', etiqueta: 'Derecha', icono: 'text-align-right' }
+    ]
+};
+
 /** Botón que dispara un modal (el "Mesopotámica ▸" de las tarjetas). */
 function botonModal(id, etiqueta) {
     return `<button class="btn btn-secondary btn-sm rounded-4 border border-4 border-secondary-10 flecha_btn" ` +
@@ -615,19 +637,24 @@ const COMPONENTES = {
         ayuda: 'Un botón que abre una ventana con más información',
         icono: 'app-window',
         mini: MINI.modal,
-        nuevo: () => ({ etiqueta: 'Ver más', titulo: 'Título de la ventana', hijos: [] }),
+        nuevo: () => ({ etiqueta: 'Ver más', titulo: 'Título de la ventana', alineacion: 'centro', hijos: [] }),
         resumen: b => b.etiqueta,
         campos: [
             { k: 'etiqueta', tipo: 'texto', etiqueta: 'Texto del botón' },
             { k: 'titulo', tipo: 'texto', etiqueta: 'Título de la ventana' },
+            Object.assign({}, CAMPO_ALINEACION, { etiqueta: 'Alineación del botón' }),
             { k: 'hijos', tipo: 'hijos', etiqueta: 'Contenido de la ventana' }
         ],
         html: (b, n) => {
             const id = nuevoId('modal');
             const dentro = htmlDeBloques(b.hijos, n + 4) || `${ind(n + 4)}<p></p>`;
+            // La fila y el texto se alinean juntos: con solo uno de los dos, un
+            // botón "a la derecha" se quedaba centrado dentro de una columna
+            // pegada a la derecha, que no es lo que nadie espera.
+            const alineado = alineacionDe(b.alineacion);
             return [
-                `${ind(n)}<div class="row bloque justify-content-center">`,
-                `${ind(n + 1)}<div class="col-12 text-center">`,
+                `${ind(n)}<div class="row bloque ${alineado.fila}">`,
+                `${ind(n + 1)}<div class="col-12 ${alineado.texto}">`,
                 `${ind(n + 2)}${botonModal(id, b.etiqueta || 'Ver más')}`,
                 `${ind(n + 1)}</div>`,
                 `${ind(n)}</div>`,
@@ -643,6 +670,7 @@ const COMPONENTES = {
         icono: 'cards-three',
         mini: MINI.tarjetas,
         nuevo: () => ({
+            alineacion: 'centro',
             items: [
                 { img: '', alt: '', etiqueta: 'Tarjeta 1', titulo: 'Tarjeta 1', hijos: [] },
                 { img: '', alt: '', etiqueta: 'Tarjeta 2', titulo: 'Tarjeta 2', hijos: [] }
@@ -650,6 +678,7 @@ const COMPONENTES = {
         }),
         resumen: b => `${(b.items || []).length} tarjetas`,
         campos: [
+            Object.assign({}, CAMPO_ALINEACION, { etiqueta: 'Alineación de los botones' }),
             {
                 k: 'items', tipo: 'repetible', etiqueta: 'Tarjetas', nombreItem: 'Tarjeta',
                 nuevo: () => ({ img: '', alt: '', etiqueta: 'Nueva tarjeta', titulo: 'Nueva tarjeta', hijos: [] }),
@@ -676,7 +705,10 @@ const COMPONENTES = {
                     partes.push(`${ind(n + 3)}<img class="card-img-top img-fluid" src="${ligaSegura(item.img.trim())}" alt="${escapar(item.alt || '')}">`);
                 }
                 partes.push(
-                    `${ind(n + 3)}<div class="card-body mx-auto">${botonModal(ids[i], item.etiqueta || '')}</div>`,
+                    // El mx-auto viene del montaje real, pero centra la CAJA, no lo
+                    // que lleva dentro: sin la clase de texto los botones quedaban
+                    // pegados a la izquierda de su tarjeta y la fila se veía despareja.
+                    `${ind(n + 3)}<div class="card-body mx-auto ${alineacionDe(b.alineacion).texto}">${botonModal(ids[i], item.etiqueta || '')}</div>`,
                     `${ind(n + 2)}</div>`);
             });
             partes.push(`${ind(n + 1)}</div>`, `${ind(n)}</div>`);
@@ -764,7 +796,7 @@ const COMPONENTES = {
         ayuda: 'Enlace a un documento o a otro sitio',
         icono: 'link',
         mini: MINI.boton,
-        nuevo: () => ({ texto: 'Descargar el documento', url: '', estilo: 'boton' }),
+        nuevo: () => ({ texto: 'Descargar el documento', url: '', estilo: 'boton', alineacion: 'centro' }),
         resumen: b => b.texto,
         campos: [
             { k: 'texto', tipo: 'texto', etiqueta: 'Texto' },
@@ -774,7 +806,8 @@ const COMPONENTES = {
                     { v: 'boton', etiqueta: 'Botón', icono: 'rectangle' },
                     { v: 'enlace', etiqueta: 'Enlace', icono: 'link-simple' }
                 ]
-            }
+            },
+            CAMPO_ALINEACION
         ],
         html: (b, n) => {
             const url = (b.url || '').trim();
@@ -782,9 +815,13 @@ const COMPONENTES = {
             const clase = b.estilo === 'enlace'
                 ? 'nomediaplugin'
                 : 'btn btn-secondary btn-sm rounded-4 border border-4 border-secondary-10 nomediaplugin';
+            // La fila y el texto se alinean juntos: con solo uno de los dos, un
+            // botón "a la derecha" se quedaba centrado dentro de una columna
+            // pegada a la derecha, que no es lo que nadie espera.
+            const alineado = alineacionDe(b.alineacion);
             return [
-                `${ind(n)}<div class="row bloque justify-content-center">`,
-                `${ind(n + 1)}<div class="col-12 text-center">`,
+                `${ind(n)}<div class="row bloque ${alineado.fila}">`,
+                `${ind(n + 1)}<div class="col-12 ${alineado.texto}">`,
                 `${ind(n + 2)}<a href="${ligaSegura(url)}" target="_blank" class="${clase}">${marcas(b.texto || '')}</a>`,
                 `${ind(n + 1)}</div>`,
                 `${ind(n)}</div>`

@@ -63,6 +63,11 @@ editor no obligue a scrollear para trabajar.**
 4. **El botón ⤢ le da a la previa el área completa** (Esc para volver) y junto a
    la barra se escribe **el ancho real en px**, que es lo que evita creer que se
    está viendo un escritorio cuando no.
+5. **Y el ⤢ del encabezado del editor hace lo mismo al revés.** Los dos son
+   excluyentes y el mismo Esc cierra el que esté abierto. No es solo ancho: con
+   el panel entero la paleta del pie pasa de tres renglones a uno (la rejilla es
+   `auto-fill`) y ese alto se lo queda el lienzo. En 1536×864 el lienzo pasa de
+   **231px a 339px**, y con la paleta plegada a **420px**.
 
 Y dos cosas del panel del editor, que es donde se sentía apretado:
 
@@ -78,6 +83,29 @@ Y dos cosas del panel del editor, que es donde se sentía apretado:
 
 Ninguna zona saca barra de scroll a media pantalla; el borde se difumina cuando
 queda contenido. La convención y sus clases están en el README de la raíz (§4).
+
+## Alinear los botones
+
+Botón, Ventana emergente y Tarjetas tienen un campo **Alineación**
+(izquierda · centro · derecha). Sale de `CAMPO_ALINEACION` y de la tabla
+`ALINEACION` de `componentes.js`, que traduce a clases de Bootstrap: nadie
+escribe `text-start` a mano en un componente.
+
+Dos cosas que costaron y conviene no deshacer:
+
+- **La fila y el texto se alinean juntos.** Con solo `justify-content-*`, un
+  botón "a la derecha" se quedaba centrado dentro de una columna pegada a la
+  derecha. Van los dos: `justify-content-end` en el `.row` y `text-end` en la
+  columna.
+- **En Tarjetas el `mx-auto` del montaje real no centraba nada.** Centra la
+  *caja* (`.card-body`), no lo que lleva dentro, y como la caja ya ocupa el ancho
+  de la tarjeta no movía un píxel: los botones quedaban pegados a la izquierda y
+  la fila se veía despareja. Se le suma la clase de texto y se deja el `mx-auto`,
+  que sí viene de la página publicada.
+
+> Las tres clases (`text-start`, `text-end`, `justify-content-start/end`) están
+> también en `CSS_VISTA_PREVIA`. Si faltaran, la previa enseñaría todo centrado y
+> mentiría justo en lo que se acaba de elegir.
 
 ## Las imágenes del guion
 

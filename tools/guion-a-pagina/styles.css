@@ -27,6 +27,15 @@
 .guion-workspace.previa-max .editor-panel,
 .guion-workspace.previa-max .divisor { display: none; }
 
+/* Y lo mismo al revés, que es lo que pedía el lienzo: con el panel entero, la
+   paleta del pie se acomoda en uno o dos renglones en vez de cuatro (la rejilla
+   es auto-fill) y ese alto se lo queda el lienzo. Se gana ancho Y alto. */
+.guion-workspace.editor-max { grid-template-columns: minmax(0, 1fr); }
+.guion-workspace.editor-max .output-panel,
+.guion-workspace.editor-max .divisor { display: none; }
+/* Con el panel a lo ancho, la paleta no necesita scrollear: caben todas. */
+.guion-workspace.editor-max .paleta-grid { max-height: none; }
+
 /* .divisor, .preview-barra, .preview-nota y .btn-icono-barra viven en
    assets/shared.css: los comparte el Integrador HTML. */
 

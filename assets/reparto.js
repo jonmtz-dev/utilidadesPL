@@ -30,8 +30,16 @@
            clave:     'integrador-col-editor',   // dónde se recuerda
            colMin:    360,                        // lo mínimo para el editor
            restoMin:  520,                        // lo que se le reserva a la previa
-           botonMax:  '#btn-previa-max'           // opcional
+           botonMax:  '#btn-previa-max',          // opcional: previa a pantalla completa
+           botonEditorMax: '#btn-editor-max'      // opcional: editor a pantalla completa
        });
+
+   Los dos "maximizar" son excluyentes: encender uno apaga el otro. El CSS del
+   editor ampliado es el espejo del de la previa:
+
+       .mi-workspace.editor-max { grid-template-columns: minmax(0, 1fr); }
+       .mi-workspace.editor-max .output-panel,
+       .mi-workspace.editor-max .divisor { display: none; }
    ========================================================================== */
 
 window.Reparto = (function () {
@@ -98,22 +106,62 @@ window.Reparto = (function () {
             fijarCol(actual + paso);
         });
 
-        const boton = opciones.botonMax && document.querySelector(opciones.botonMax);
+        /* Los dos paneles se amplían con el mismo mecanismo: una clase en el
+           workspace y un botón que cambia de icono. Encender uno apaga el otro,
+           porque no hay forma de tener las dos cosas a pantalla completa. */
+        const PANELES = {
+            previa: {
+                clase: 'previa-max',
+                boton: opciones.botonMax && document.querySelector(opciones.botonMax),
+                titulos: ['Ampliar la vista previa', 'Volver al editor (Esc)']
+            },
+            editor: {
+                clase: 'editor-max',
+                boton: opciones.botonEditorMax && document.querySelector(opciones.botonEditorMax),
+                titulos: ['Ampliar el área de edición', 'Volver a la vista previa (Esc)']
+            }
+        };
 
-        function maximizar(forzar) {
-            const max = forzar === undefined ? !ws.classList.contains('previa-max') : forzar;
-            ws.classList.toggle('previa-max', max);
-            if (!boton) return max;
-            const icono = boton.querySelector('i');
-            if (icono) icono.className = `ph ph-corners-${max ? 'in' : 'out'}`;
-            boton.title = max ? 'Volver al editor (Esc)' : 'Ampliar la vista previa';
-            boton.setAttribute('aria-pressed', String(max));
+        function pintar(panel) {
+            const activo = ws.classList.contains(panel.clase);
+            if (!panel.boton) return activo;
+            const icono = panel.boton.querySelector('i');
+            if (icono) icono.className = `ph ph-corners-${activo ? 'in' : 'out'}`;
+            panel.boton.title = panel.titulos[activo ? 1 : 0];
+            panel.boton.setAttribute('aria-pressed', String(activo));
+            return activo;
+        }
+
+        function alternar(cual, forzar) {
+            const panel = PANELES[cual];
+            const otro = PANELES[cual === 'previa' ? 'editor' : 'previa'];
+            const max = forzar === undefined ? !ws.classList.contains(panel.clase) : forzar;
+            ws.classList.toggle(panel.clase, max);
+            if (max) ws.classList.remove(otro.clase);
+            pintar(panel); pintar(otro);
             return max;
         }
 
-        if (boton) boton.addEventListener('click', () => maximizar());
+        Object.keys(PANELES).forEach(cual => {
+            const panel = PANELES[cual];
+            if (panel.boton) panel.boton.addEventListener('click', () => alternar(cual));
+        });
 
-        return { fijarCol, maximizar, maximizada: () => ws.classList.contains('previa-max') };
+        // Un solo Escape para los dos: el que esté ampliado, se cierra.
+        function cerrarAmpliado() {
+            if (ws.classList.contains('previa-max')) { alternar('previa', false); return true; }
+            if (ws.classList.contains('editor-max')) { alternar('editor', false); return true; }
+            return false;
+        }
+
+        return {
+            fijarCol,
+            maximizar: forzar => alternar('previa', forzar),
+            maximizada: () => ws.classList.contains('previa-max'),
+            maximizarEditor: forzar => alternar('editor', forzar),
+            editorMaximizado: () => ws.classList.contains('editor-max'),
+            cerrarAmpliado
+        };
     }
 
     return { iniciar };

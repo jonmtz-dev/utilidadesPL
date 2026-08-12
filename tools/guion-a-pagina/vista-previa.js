@@ -39,6 +39,12 @@ hr { border: 0; border-top: 1px solid #d5dce3; margin: 1.5rem 0; }
 .row { display: flex; flex-wrap: wrap; margin: 0 -12px; }
 .row > [class*="col-"] { padding: 0 12px; width: 100%; }
 .justify-content-center { justify-content: center; }
+/* Las de alinear: las genera el campo "Alineación" de Botón, Ventana emergente
+   y Tarjetas. Si faltaran aquí, la previa enseñaría todo centrado y mentiría. */
+.justify-content-start { justify-content: flex-start; }
+.justify-content-end { justify-content: flex-end; }
+.text-start { text-align: left; }
+.text-end { text-align: right; }
 .align-items-center { align-items: center; }
 .text-center { text-align: center; }
 .text-justify { text-align: justify; }
