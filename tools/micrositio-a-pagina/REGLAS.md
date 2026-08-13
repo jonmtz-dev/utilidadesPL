@@ -466,9 +466,16 @@ medido, para no volver a perseguir al culpable equivocado:
 
 Por eso el arreglo va en dos partes:
 
-1. **En la herramienta:** `display: inline-block` inline en cada `<math>` que no
-   sea de bloque. Evita el `display:block` que mete TinyMCE. Las de
-   `display="block"` (las centradas, con `class="tml-display"`) no se tocan.
+1. **En la herramienta:**
+   - `display: inline-block` inline en cada `<math>` que no sea de bloque. Evita
+     el `display:block` que mete TinyMCE. Las de `display="block"` (las centradas,
+     con `class="tml-display"`) no se tocan en su modo de presentación.
+   - El tamaño se mide con `getComputedStyle()` en una copia aislada que carga el
+     CSS del micrositio y se fija como `font-size` inline **solo en el `<math>`
+     raíz**. No se presupone `16px`: si una fórmula computaba a 18px o 20px, ese
+     es el valor que conserva. Así, cuando TinyMCE saca el `<math>` de un `<p>`,
+     no pierde el tamaño heredado. Nunca se fija el tamaño en `<mn>`, `<mo>`,
+     `<mi>` ni otros nodos internos, para no romper exponentes o fracciones.
 2. **En el complemento del tema:** el `<p>` partido sigue siendo bloque, así que
    hay que hacerlo fluir. El HTML resultante siempre queda con el patrón
    `<p>` + `<math>` + `<p>` como hermanos, y eso se puede atacar con `:has()`:
@@ -522,7 +529,7 @@ un `<p>` hermano adyacente.
 | Texto de `<th>` grisáceo | El blindaje congelaba el color **heredado**: sin el Bootstrap del micro, el `<th>` hereda `#333340` de `.mainPlantilla23` en vez del `#212529` real | Solo se congela el color si lo pide una clase `text-*`; el heredado se deja a Moodle |
 | Título de tabla más angosto | **Moodle constriñe `.container-fluid`** (max-width + márgenes auto, lo usa para el layout de página). La barra del título salía angosta y centrada, sin abarcar la tabla | `width/max-width: 100%` y márgenes `0` **inline con `!important`** en el `.container-fluid` hijo de `.table-responsive`. Además, si la tabla es `w-auto`, se le da `width: fit-content` al `.table-responsive` para que encoja como con el padre flex del micro |
 | Enlaces con subrayado de más | Moodle subraya los `<a>` por accesibilidad con una regla más específica que la clase `.text-decoration-none` de Bootstrap, así que los enlaces-botón del micro (los de `<mark>`, modales…) salían subrayados | `text-decoration: none !important` inline **solo** en elementos con la clase `.text-decoration-none`. Los demás enlaces conservan su subrayado (verificado) |
-| Fórmulas MathML que saltan de renglón | **TinyMCE**, no la herramienta (comprobado: su parser conserva el `<math>` dentro del `<p>`). El editor parte el `<p>` en dos y agrega `display:block`. **El truco del `<span>` NO funciona: TinyMCE lo borra** | `display:inline-block` inline en el `<math>` (eso sí sobrevive) **+** regla `:has()` en el complemento del tema para que el `<p>` partido vuelva a fluir (§6-quater). Medido: 208px → 115px de alto |
+| Fórmulas MathML que saltan de renglón o pierden 1px | **TinyMCE**, no el parser de la herramienta: el editor parte el `<p>`, saca el `<math>` y agrega `display:block`. Al perder el `<p>`, también puede perder su `font-size` heredado (16px en el caso medido) y caer al tamaño base de Moodle. **El truco del `<span>` NO funciona: TinyMCE lo borra** | `display:inline-block` inline en el `<math>` + tamaño computado del micrositio fijado solo en el `<math>` raíz (dinámico, no 16px fijo) **+** regla `:has()` en el complemento del tema para que el `<p>` partido vuelva a fluir (§6-quater). Medido: 208px → 115px de alto y 16px → 16px tras perder el párrafo |
 | Botones desplegables que no abren nada | Los botones `data-bs-toggle="collapse"` no hacían nada en Moodle, aunque otros idénticos sí servían. El micrositio marcaba el objetivo con `href="#desplegable1"`; `href` no es válido en `<button>` y TinyMCE lo borra, dejando al botón sin saber qué desplegar. Los que funcionaban usaban `data-bs-target` | `sanearParaTinyMCE()` traduce `href="#id"` a `data-bs-target="#id"` en los `<button>` y quita el `href`. Ver §4-bis |
 | Encabezado gris en UNA tabla y bien en las demás | Una tabla armaba su `<thead>` con `<td>` en vez de `<th>`. El blindaje solo cubría `thead th`, así que esas celdas no recibían el fondo inline y el Bootstrap de Moodle las pintaba encima del rosa del `<thead>`. Desconcertante porque el resto de tablas del mismo micrositio salían bien | El blindaje ahora cubre `thead td` además de `thead th`, y `esTh` se decide por **posición** (`closest('thead')`), no por etiqueta |
 | Iconos enormes tras el arreglo anterior | La flechita de las cajas de instrucción pasó de 80px a **1162px**. El `width:100%` inline puesto para las ilustraciones fluidas le ganaba a `.mainPlantilla23 .instrucciones img { width:56px }` de la hoja de Moodle, y se aplicaba a **toda** imagen sin medidas en px, no solo a las de los modales | Dos cambios: (1) `max-width` en vez de `width` (y sin `height:auto`), que no compite con el CSS que dimensiona iconos; (2) **acotado** a imágenes dentro de modales o con ancho en `%`. Ver §4-ter |

@@ -616,6 +616,51 @@ async function blindar(doc, cssMicro) {
 }
 
 /**
+ * Conserva en cada <math> el tamaño que realmente tenía en el micrositio.
+ *
+ * TinyMCE puede sacar el <math> de su <p> al guardar. Si el tamaño venía
+ * heredado de ese párrafo (por ejemplo, 16px), la fórmula pasa a heredar el
+ * tamaño base de Moodle y se ve un píxel más pequeña. Para no asumir que todos
+ * los micrositios usan 16px, rendimos una copia con SU CSS, leemos el tamaño
+ * computado y lo fijamos únicamente en el elemento raíz <math>.
+ *
+ * No se tocan <mn>, <mo>, <mi> ni los demás nodos internos: el motor MathML
+ * conserva así sus reducciones propias para exponentes, fracciones, etc.
+ */
+function preservarTamanoMath(doc, cssMicro) {
+    if (!doc.body) return;
+
+    const destino = [...doc.querySelectorAll('math')];
+    if (!destino.length) return;
+
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.cssText = 'position:absolute;left:-99999px;top:0;width:1200px;height:20px;border:0;visibility:hidden';
+    document.body.appendChild(iframe);
+
+    try {
+        const idoc = iframe.contentDocument;
+        idoc.open();
+        idoc.write('<!doctype html><html><head><meta charset="utf-8"><style>' +
+            (cssMicro || '') + '</style></head><body>' + doc.body.innerHTML + '</body></html>');
+        idoc.close();
+
+        const origen = [...idoc.querySelectorAll('math')];
+        if (origen.length !== destino.length) return;
+
+        for (let i = 0; i < origen.length; i++) {
+            // getComputedStyle fuerza el cálculo de estilos; no hay que esperar
+            // fuentes o recursos externos para conocer el font-size.
+            const tamano = iframe.contentWindow.getComputedStyle(origen[i]).fontSize;
+            if (!/^\d+(?:\.\d+)?px$/i.test(tamano)) continue;
+            destino[i].style.setProperty('font-size', tamano, 'important');
+        }
+    } finally {
+        iframe.remove();
+    }
+}
+
+/**
  * Marca el contenido convertido con la clase .ms-convertido para que las reglas
  * ADITIVAS de tu tema (`.ms-convertido .accordion-button:hover`, etc.) apliquen
  * solo a micrositios convertidos, sin tocar tus reglas existentes. La marca va
@@ -1210,6 +1255,7 @@ function initMicrositio() {
             css.push(`/* ===== <style> en ${rutaHtml} ===== */\n${s.textContent.trim()}`);
             if (opt.quitarCss.checked) s.remove();
         });
+        const cssMicro = css.join('\n\n');
 
         // El CSS se va a vivir a la hoja de Moodle, donde las rutas relativas
         // del micrositio (fonts/…, img/…) ya no existen. Las data: URI sí viajan.
@@ -1508,11 +1554,15 @@ function initMicrositio() {
         // TinyMCE borra las listas inválidas y descuadra los contenedores flex.
         reporte.saneado = sanearParaTinyMCE(doc);
 
+        // TinyMCE también puede sacar <math> de su <p>. Conservamos el tamaño
+        // computado del micrositio en el <math> raíz para que no cambie al perder
+        // ese ancestro. Solo afecta fórmulas y respeta tamaños distintos de 16px.
+        preservarTamanoMath(doc, cssMicro);
+
         // Opción A: marca el contenido para que las reglas aditivas .ms-convertido
         // de tu tema (acordeones, etc.) apliquen sin tocar tus reglas existentes.
         marcarConvertido(doc);
 
-        const cssMicro = css.join('\n\n');
         const salida = () => opt.soloBody.checked
             ? doc.body.innerHTML.trim()
             : doc.documentElement.outerHTML;
