@@ -86,6 +86,7 @@ assets/
   version-moodle.js         Inyecta la insignia de versión en cada herramienta
   volver.js                 Botón de volver: regresa a la plataforma con la que se entró
   reparto.js                Divisor arrastrable y previa ampliada (Guion e Integrador)
+  paletas.js                Paletas de aula 5.1 (Guion y Bibliografías Margarita)
   zip.js                    Escritor de .zip (Micrositio y Guion a Página)
   icons/                    Iconos PWA (generados, ver §7)
 tools/
@@ -411,6 +412,35 @@ Así no hay que subir imagen por imagen ni copiar URLs largas.
 > si el flujo manual demuestra ser el cuello de botella.
 
 ---
+
+### Bibliografías Margarita Maza (`tools/bibliografias-margarita/`)
+
+Dos modos, y es a propósito que usen marcas distintas:
+
+1. **Desde Word** — el .docx de fuentes se vuelve la página completa:
+   `container-fluid mainPlantilla23 <paleta> pb-3 mw-100`, título con su rayita
+   de color, `<hr>`, y las fuentes en `text-multicol text-multicol-rule` (dos
+   columnas con línea punteada) como `<p class="fuente">`. Todos los enlaces con
+   `target="_blank"`; los de YouTube envueltos en `<span class="nolink">`.
+   El envoltorio salió de **cotejar una bibliografía ya publicada**: 345
+   fuentes, 294 enlaces, todos con target, 21 con nolink y **cero**
+   `nomediaplugin`.
+
+   Dos interruptores: **sangría francesa** (es la clase `fuente`, que el tema
+   define como `text-indent:-25px; padding-left:25px`; apagada, el `<p>` sale
+   pelado) y **dos columnas**. Las **cursivas del Word sí se conservan** —el
+   título de una ficha va en itálica por norma de citación—: llegan del lector
+   como `*texto*` y salen como `<i>`. Ese ejemplo publicado no las traía, pero
+   era solo un ejemplo.
+2. **Corregir HTML pegado** — la lógica original: a los `<a>` de YouTube les
+   agrega `class="nomediaplugin"`. **No se cambió a `nolink`**: hay páginas
+   montadas con esa marca y cambiarla les reescribiría el criterio a media obra.
+
+El selector de paleta cambia la clase del contenedor, y de ahí sale el color de
+la rayita del `<h1>` (`.tituloUnidad h1 { border-left: 8px var(--primary-40) }`).
+La lista vive en `assets/paletas.js`, compartida con Guion a Página. La previa va
+en un iframe con la hoja real del tema, porque esa rayita y la línea entre
+columnas salen de ahí.
 
 ### QA de Actividad y Rúbrica (`tools/qa-51/`)
 

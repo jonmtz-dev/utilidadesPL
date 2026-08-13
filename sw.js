@@ -30,6 +30,7 @@ const APP_SHELL = [
     'assets/version-moodle.js',
     'assets/volver.js',
     'assets/reparto.js',
+    'assets/paletas.js',
     'assets/tablas.js',
     'assets/zip.js',
     'assets/theme.js',

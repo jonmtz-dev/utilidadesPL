@@ -99,10 +99,10 @@ const TOOLS = [
         slug: 'bibliografias-margarita',
         moodle: '5.1',
         title: 'Bibliografías Margarita Maza',
-        description: 'Agrega la clase nomediaplugin a los enlaces de YouTube para que Moodle no los convierta en reproductor incrustado.',
-        icon: 'youtube-logo',
+        description: 'Convierte el Word de fuentes en la página de bibliografía (dos columnas, sangría francesa, sin vistas previas de YouTube) o corrige los enlaces de un HTML ya hecho.',
+        icon: 'books',
         accent: ['#FF0000', '#B20000'],
-        tags: ['YouTube', 'Enlaces', 'HTML'],
+        tags: ['Bibliografía', 'Word', 'Enlaces', 'HTML'],
         url: 'tools/bibliografias-margarita/index.html',
         status: 'ready'
     }

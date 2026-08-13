@@ -900,10 +900,5 @@ const ORDEN_PALETA = ['titulo', 'texto', 'lista', 'pasos', 'imagen', 'instruccio
 
 /* Paletas del aula. Las clases son las del tema (mainPlantilla23.M01 …); los
    hex son SOLO la muestra de color del selector, no salen al HTML. */
-const PALETAS = [
-    { clase: 'M01', nombre: 'Módulo 1', color: '#8d67b7' },
-    { clase: 'M02', nombre: 'Módulo 2', color: '#6597d8' },
-    { clase: 'M03', nombre: 'Módulo 3', color: '#d15454' },
-    { clase: 'MM', nombre: 'Margarita Maza', color: '#9d2248' },
-    { clase: 'reg', nombre: 'Regular / DGB', color: '#215c50' }
-];
+/* PALETAS vive en assets/paletas.js: la comparten esta herramienta y
+   Bibliografías Margarita Maza. */

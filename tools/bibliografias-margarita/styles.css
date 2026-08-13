@@ -1,12 +1,91 @@
 /* ==========================================================================
-   Bloqueador de Vista Previa YouTube — estilos propios de la herramienta.
+   Bibliografías Margarita Maza — estilos propios de la herramienta.
    Los tokens, el fondo, los paneles glass y los componentes de UI
-   (toggles, botones, pestañas, salida de código) vienen de /assets/shared.css.
+   (toggles, botones, pestañas, divisor, salida de código) vienen de
+   /assets/shared.css.
    ========================================================================== */
 
+.logo--margarita {
+    background: linear-gradient(135deg, #9d2248, #d1607f);
+    box-shadow: 0 4px 12px rgba(157, 34, 72, .34);
+}
+/* El logo anterior, por si queda algún enlace viejo apuntando a la clase. */
 .logo--ytnolink {
     background: linear-gradient(135deg, #FF0000, #B20000);
     box-shadow: 0 4px 12px rgba(255, 0, 0, 0.35);
+}
+
+/* Esta herramienta se sale del tope de 1400px del resto: la bibliografía se
+   publica a DOS columnas y con 1400 la previa no alcanzaba a mostrarlas. */
+.biblio-app { max-width: 1760px; }
+
+/* Tres columnas: entrada · divisor · salida. El ancho es una variable porque el
+   divisor se arrastra (assets/reparto.js la fija y la recuerda). El divisor hace
+   de gutter, así que aquí el gap va en cero. */
+.biblio-workspace {
+    grid-template-columns: var(--col-editor, clamp(380px, 42%, 640px)) 20px minmax(0, 1fr);
+    gap: 0;
+}
+.editor-panel, .output-panel { min-height: 0; }
+.biblio-workspace.previa-max { grid-template-columns: minmax(0, 1fr); }
+.biblio-workspace.previa-max .editor-panel,
+.biblio-workspace.previa-max .divisor { display: none; }
+.preview-barra .btn-icono-barra { margin-left: auto; }
+
+/* Los dos modos de trabajo. Van como segmentos y no como pestañas del panel de
+   salida porque son ENTRADAS distintas: un Word o un HTML ya escrito. */
+.modos {
+    display: flex; gap: 4px; padding: 4px; margin-bottom: 16px;
+    background: var(--control-bg); border-radius: 12px; flex-shrink: 0;
+}
+.modo-btn {
+    flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    border: 0; background: transparent; color: var(--text-muted);
+    font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    padding: 9px 12px; border-radius: 9px; transition: all .18s ease;
+}
+.modo-btn:hover { color: var(--text-main); }
+.modo-btn.active { background: var(--surface-raised); color: var(--text-main); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.modo-panel { display: none; flex: 1; min-height: 0; flex-direction: column; }
+.modo-panel.activo { display: flex; }
+
+/* Ficha: paleta del aula y título, cada etiqueta en línea con su control. */
+.ficha { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 12px; }
+.campo-etiqueta { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.campo-ayuda { font-size: 11.5px; font-weight: 400; color: var(--text-muted); }
+.campo-modulo { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+.campo-modulo .campo-etiqueta { margin-bottom: 0; }
+.campo-titulo { display: flex; align-items: center; gap: 10px; }
+.campo-titulo .campo-etiqueta { margin-bottom: 0; flex-shrink: 0; }
+.campo-titulo .plain-input { min-height: 0; flex: 1; border-style: solid; border-width: 1px; border-radius: 10px; padding: 9px 11px; }
+
+.modulos { display: flex; flex-wrap: wrap; gap: 6px; }
+.modulo {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 11px; border-radius: 999px; cursor: pointer;
+    background: var(--input-bg); border: 1px solid var(--control-border);
+    color: var(--text-main); font: inherit; font-size: 12px; font-weight: 600;
+    transition: all .16s ease;
+}
+.modulo:hover { border-color: var(--accent); }
+.modulo.activo { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.modulo-color { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+.opciones-linea { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.opciones-linea code { font-family: 'Courier New', monospace; font-size: 11.5px; background: var(--input-bg); padding: 1px 5px; border-radius: 5px; }
+
+/* La previa: isla clara con la hoja real del tema dentro de un iframe. */
+.preview-caja {
+    flex: 1; min-height: 0; display: flex;
+    background: #f3f4f6; border: 1px solid var(--control-border); border-radius: 12px;
+    padding: 10px; overflow: auto;
+}
+.preview-caja iframe { width: 100%; height: 100%; min-height: 320px; border: 0; border-radius: 8px; background: #fff; }
+
+@media (max-width: 1024px), (max-height: 620px) {
+    .biblio-workspace { grid-template-columns: 1fr; gap: 24px; }
+    .divisor { display: none; }
+    .preview-caja iframe { min-height: 420px; }
 }
 
 /* Entrada de texto plano */

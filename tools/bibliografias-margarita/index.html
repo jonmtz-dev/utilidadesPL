@@ -3,105 +3,168 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bloqueador de Vista Previa YouTube - Moodle</title>
-
-    <!-- PWA -->
+    <title>Bibliografías Margarita Maza - Moodle</title>
     <link rel="manifest" href="../../manifest.json">
     <meta name="theme-color" content="#f0f2f5">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32">
     <link rel="apple-touch-icon" href="../../assets/icons/apple-touch-icon.png">
-
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../../assets/shared.css">
     <link rel="stylesheet" href="styles.css">
-    <!-- Iconos Phosphor -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <!-- Sin defer: aplica el tema antes del primer pintado -->
     <script src="../../assets/theme.js"></script>
     <script src="../../assets/pwa.js"></script>
-    <!-- Insignia de version de Moodle: lee el campo `moodle` de tools.js -->
     <script src="../../assets/tools.js"></script>
     <script src="../../assets/version-moodle.js" defer></script>
     <!-- El botón de volver: regresa a la plataforma con la que se entró. -->
     <script src="../../assets/volver.js" defer></script>
+    <!-- Divisor arrastrable y previa ampliada (compartido con las demás). -->
+    <script src="../../assets/reparto.js"></script>
+    <!-- Paletas de aula (compartidas con Guion Instruccional a Página). -->
+    <script src="../../assets/paletas.js"></script>
 </head>
 <body>
-    <div class="background-mesh">
-        <div class="shape shape-1"></div>
-        <div class="shape shape-2"></div>
-        <div class="shape shape-3"></div>
-    </div>
+    <div class="background-mesh"><div class="shape shape-1"></div><div class="shape shape-2"></div><div class="shape shape-3"></div></div>
 
-    <main class="app-container glass-panel">
+    <!-- biblio-app ensancha el contenedor: la bibliografía sale a dos columnas
+         y con los 1400px del resto la previa no alcanzaba a mostrarlas. -->
+    <main class="app-container glass-panel biblio-app">
         <header class="app-header">
-            <div class="logo logo--ytnolink">
-                <i class="ph ph-youtube-logo"></i>
-            </div>
+            <div class="logo logo--margarita"><i class="ph ph-books"></i></div>
             <div>
-                <h1>Bloqueador de Vista Previa YouTube</h1>
-                <p>Pega tu código y agrega <code>nomediaplugin</code> a los enlaces de YouTube para que Moodle no los convierta en reproductor</p>
+                <h1>Bibliografías Margarita Maza</h1>
+                <p>Convierte el Word de fuentes en la página de bibliografía, o corrige los enlaces de un HTML ya hecho</p>
             </div>
-            <a class="btn-back" href="../../index.html">
-                <i class="ph ph-arrow-left"></i> Panel
-            </a>
+            <a class="btn-back" href="../../index.html"><i class="ph ph-arrow-left"></i> Panel</a>
         </header>
 
-        <div class="workspace">
-            <!-- Columna Izquierda: Código de entrada -->
-            <section class="panel-section glass-panel">
-                <div class="section-header">
-                    <h2><i class="ph ph-code"></i> 1. Pega tu código HTML</h2>
+        <div class="workspace biblio-workspace" id="workspace">
+            <!-- ============ Columna izquierda: la entrada ============ -->
+            <section class="panel-section glass-panel editor-panel">
+                <div class="modos" role="tablist" aria-label="Cómo quieres trabajar">
+                    <button class="modo-btn active" data-modo="word" role="tab" aria-selected="true">
+                        <i class="ph ph-file-doc"></i> Desde Word
+                    </button>
+                    <button class="modo-btn" data-modo="pegar" role="tab" aria-selected="false">
+                        <i class="ph ph-code"></i> Corregir HTML pegado
+                    </button>
                 </div>
 
-                <textarea id="input-code" class="plain-input code-input" placeholder="Pega aquí el bloque de HTML que quieras corregir: párrafos, bibliografía, una sección completa..."></textarea>
+                <!-- ---------- Modo 1: el .docx ---------- -->
+                <div id="modo-word" class="modo-panel activo">
+                    <div class="dropzone" id="dropzone" tabindex="0" role="button"
+                         aria-label="Subir el Word de la bibliografía">
+                        <i class="ph ph-file-doc"></i>
+                        <span class="dropzone-titulo"><strong>Suelta aquí el Word</strong></span>
+                        <span class="dropzone-nota">.docx — una fuente por párrafo</span>
+                        <input id="input-docx" type="file" accept=".docx" hidden>
+                    </div>
+                    <p class="field-hint" id="docx-info"></p>
 
-                <p class="field-hint tool-hint">
-                    Busca etiquetas <code>&lt;a&gt;</code> cuyo <code>href</code> apunte a
-                    <code>youtube.com</code> o <code>youtu.be</code> y les agrega
-                    <code>class="nomediaplugin"</code>. Todo lo demás queda exactamente igual.
-                </p>
+                    <div class="ficha">
+                        <div class="campo-modulo">
+                            <span class="campo-etiqueta"><i class="ph ph-palette"></i> Paleta del aula</span>
+                            <div id="modulos" class="modulos" role="radiogroup" aria-label="Paleta del aula"></div>
+                        </div>
+                        <div class="campo-titulo">
+                            <label class="campo-etiqueta" for="titulo-pagina"><i class="ph ph-text-h-one"></i> Título</label>
+                            <input id="titulo-pagina" class="plain-input" value="Bibliografía" placeholder="Bibliografía">
+                        </div>
+                    </div>
 
-                <button id="btn-process" class="btn-primary mt-4" disabled>
-                    <i class="ph ph-magic-wand"></i> Corregir enlaces de YouTube
-                </button>
+                    <div class="opciones-linea">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="opt-columnas" checked>
+                            <span class="slider"></span>
+                            <span class="label-text">Dos columnas con línea divisoria</span>
+                        </label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="opt-sangria" checked>
+                            <span class="slider"></span>
+                            <span class="label-text">Sangría francesa (<code>class="fuente"</code>)</span>
+                        </label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="opt-nolink" checked>
+                            <span class="slider"></span>
+                            <span class="label-text">Proteger enlaces de YouTube (<code>span.nolink</code>)</span>
+                        </label>
+                    </div>
+
+                    <label class="campo-etiqueta" for="input-fuentes">
+                        <i class="ph ph-list-bullets"></i> Fuentes <span class="campo-ayuda">una por renglón · las cursivas del Word viajan como <code>*texto*</code></span>
+                    </label>
+                    <textarea id="input-fuentes" class="plain-input code-input"
+                              placeholder="Sube el Word o pega aquí las fuentes, una por renglón…"></textarea>
+                </div>
+
+                <!-- ---------- Modo 2: el HTML pegado (la lógica de siempre) ---------- -->
+                <div id="modo-pegar" class="modo-panel">
+                    <p class="field-hint">
+                        Busca etiquetas <code>&lt;a&gt;</code> cuyo <code>href</code> apunte a
+                        <code>youtube.com</code> o <code>youtu.be</code> y les agrega
+                        <code>class="nomediaplugin"</code>. Todo lo demás queda exactamente igual.
+                    </p>
+                    <textarea id="input-code" class="plain-input code-input"
+                              placeholder="Pega aquí el bloque de HTML que quieras corregir: párrafos, bibliografía, una sección completa..."></textarea>
+                    <button id="btn-process" class="btn-primary mt-4" disabled>
+                        <i class="ph ph-magic-wand"></i> Corregir enlaces de YouTube
+                    </button>
+                </div>
             </section>
 
-            <!-- Columna Derecha: Resultado -->
-            <section class="panel-section glass-panel">
+            <!-- Reparto ajustable, igual que en las demás herramientas. -->
+            <div class="divisor" id="divisor" role="separator" aria-orientation="vertical"
+                 aria-label="Ancho del panel" tabindex="0"
+                 title="Arrástralo para repartir el espacio · doble clic para restablecer"></div>
+
+            <!-- ============ Columna derecha: la salida ============ -->
+            <section class="panel-section glass-panel output-panel">
                 <div class="tabs">
-                    <button class="tab-btn active" data-target="code"><i class="ph ph-code"></i> Código corregido</button>
+                    <button class="tab-btn active" data-target="preview"><i class="ph ph-eye"></i> Vista previa</button>
+                    <button class="tab-btn" data-target="code"><i class="ph ph-code"></i> HTML</button>
                     <button class="tab-btn" data-target="links"><i class="ph ph-link"></i> Enlaces detectados</button>
                 </div>
 
-                <div class="tab-content active" id="code-content">
+                <div id="preview-content" class="tab-content active">
+                    <div class="preview-barra">
+                        <span class="preview-nota">Así se ve en Moodle</span>
+                        <button class="btn-icono-barra" id="btn-previa-max" type="button" aria-pressed="false"
+                                title="Ampliar la vista previa"><i class="ph ph-corners-out"></i></button>
+                    </div>
+                    <div id="preview-empty" class="empty-state">
+                        <i class="ph ph-books"></i>
+                        <p>Sube el Word para ver aquí la página de bibliografía</p>
+                    </div>
+                    <!-- El sandbox lleva allow-same-origin a propósito: es contenido
+                         propio y la hoja del tema pesa 240 KB, así que va inyectada. -->
+                    <div id="preview-caja" class="preview-caja hidden">
+                        <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin"
+                                title="Vista previa de la bibliografía"></iframe>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="code-content">
                     <div class="empty-state" id="result-empty">
-                        <i class="ph ph-youtube-logo"></i>
-                        <p>Pega tu código y corrígelo para ver el resultado aquí</p>
+                        <i class="ph ph-code"></i>
+                        <p>El HTML aparecerá aquí</p>
                     </div>
                     <div id="result-wrapper" class="code-wrapper hidden">
-                        <button id="btn-copy" class="btn-icon" title="Copiar código">
-                            <i class="ph ph-copy"></i>
-                        </button>
-                        <textarea id="output-code" class="code-output" readonly placeholder="El código corregido aparecerá aquí..."></textarea>
+                        <button id="btn-copy" class="btn-icon" title="Copiar código"><i class="ph ph-copy"></i></button>
+                        <textarea id="output-code" class="code-output" readonly
+                                  placeholder="El código aparecerá aquí..."></textarea>
                     </div>
                 </div>
 
                 <div class="tab-content" id="links-content">
                     <div class="stats-bar hidden" id="stats-bar">
-                        <span class="stat-pill stat-pill--nuevo">
-                            <i class="ph ph-check-circle"></i>
-                            <span id="stat-corregidos">0</span> corregidos
-                        </span>
-                        <span class="stat-pill stat-pill--existente">
-                            <i class="ph ph-info"></i>
-                            <span id="stat-existentes">0</span> ya tenían la clase
-                        </span>
+                        <div class="stat"><i class="ph ph-check-circle"></i>
+                            <span id="stat-corregidos">0</span> protegidos</div>
+                        <div class="stat"><i class="ph ph-info"></i>
+                            <span id="stat-existentes">0</span> ya estaban</div>
                     </div>
                     <div class="empty-state" id="links-empty">
-                        <i class="ph ph-link-break"></i>
-                        <p id="links-empty-text">Aquí verás la lista de enlaces de YouTube encontrados al corregir tu código.</p>
+                        <i class="ph ph-youtube-logo"></i>
+                        <p id="links-empty-text">Aquí verás la lista de enlaces de YouTube encontrados.</p>
                     </div>
                     <ul id="links-list" class="links-list hidden"></ul>
                 </div>
@@ -109,6 +172,8 @@
         </div>
     </main>
 
+    <script src="../../assets/docx.js"></script>
+    <script src="../micrositio-a-pagina/hoja-moodle-default.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
