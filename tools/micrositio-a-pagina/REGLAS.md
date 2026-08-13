@@ -367,8 +367,15 @@ un `bg-*` del tema, ese color sí es real y lo congela el camino normal.
   > todavía la trae y la vuelve una fila flex. En varios micrositios el `<p>` del
   > pie de figura va DENTRO del `.card-deck`, y al montar se subía a un lado de
   > la tarjeta en vez de quedar debajo. Medido: con `display:flex` la nota cae en
-  > `left: 396` (junto a una tarjeta que termina en 396) y `top: 24`. Volverla
-  > `display: block` reproduce lo que hace el micrositio.
+  > `left: 396` (junto a una tarjeta que termina en 396) y `top: 24`.
+  >
+  > Se resuelve **inline en la conversión** (`display: block !important` sobre el
+  > `.card-deck`), no en el complemento: así una página nueva sale bien aunque el
+  > tema no tenga la regla. Inline se vale aquí porque lo que prohíbe §4 es
+  > congelar componentes CON ESTADO —a un botón le mata el hover— y un
+  > `.card-deck` no tiene estados. La entrada del complemento se queda de todas
+  > formas: es la única forma de arreglar las páginas **ya montadas**, que no
+  > llevan ese inline.
 
   > **El caso de `a.btn-primary`.** Tu hoja trae
   > `.mainPlantilla23 a { color: blue; text-decoration: underline }` y

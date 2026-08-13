@@ -519,12 +519,24 @@ function congelarElemento(src, dst) {
                congelaría el color de un aula en las demás. */
             dst.style.setProperty('background-color', cs.backgroundColor, 'important');
         }
-        // Borde: el borde fino es default de Bootstrap y Moodle lo quita a TODAS las
-        // tarjetas (con o sin color). Lo reponemos para que se vean separadas como en
-        // el micro. Si la tarjeta define su propio borde, respetamos ese color.
+        /* Borde: el borde fino es default de Bootstrap y Moodle lo quita a TODAS
+           las tarjetas (con o sin color), así que se repone para que se vean
+           separadas como en el micro.
+
+           Y cuando la tarjeta trae borde PROPIO se congela COMPLETO —grosor,
+           estilo y color—, no solo el color. Congelar el color a secas suponía
+           que Moodle ya ponía el grosor, y no siempre: con `border-color` sin
+           `border-width`, el marco de las figuras simplemente no se dibujaba.
+           No se notaba mientras la tarjeta salía gris sobre fondo blanco (el
+           contraste hacía las veces de marco); al reponer el blanco del micro,
+           la tarjeta quedó invisible. */
         const sinBorde = cs.borderTopStyle === 'none' || parseFloat(cs.borderTopWidth) === 0;
-        if (sinBorde) dst.style.setProperty('border', '1px solid rgba(0, 0, 0, 0.176)', 'important');
-        else if (!esTransparente(cs.borderTopColor)) dst.style.setProperty('border-color', cs.borderTopColor, 'important');
+        if (sinBorde) {
+            dst.style.setProperty('border', '1px solid rgba(0, 0, 0, 0.176)', 'important');
+        } else if (!esTransparente(cs.borderTopColor)) {
+            dst.style.setProperty('border',
+                `${cs.borderTopWidth} ${cs.borderTopStyle} ${cs.borderTopColor}`, 'important');
+        }
         return;
     }
 
@@ -1462,6 +1474,20 @@ function initMicrositio() {
             if (m.getAttribute('display') === 'block') return;   // fórmula de bloque
             m.style.setProperty('display', 'inline-block', 'important');
             m.style.setProperty('vertical-align', 'middle');
+        });
+
+        // --- .card-deck: Bootstrap 5 la ELIMINÓ. En el micrositio (5.2.3) no hace
+        // absolutamente nada y sus hijos se apilan; el Bootstrap de Moodle todavía
+        // la trae y la vuelve una fila flex. Resultado: el <p> del pie de figura,
+        // que en varios micrositios va DENTRO del .card-deck, se sube a un lado de
+        // la tarjeta en vez de quedar debajo.
+        //
+        // Se repone inline el comportamiento del micrositio. Inline SÍ se vale
+        // aquí: lo que prohíbe §4 es congelar componentes CON ESTADO —a un botón
+        // le mata el hover—, y un .card-deck no tiene estados. Así las páginas
+        // nuevas salen bien sin depender de que el tema traiga la regla.
+        doc.querySelectorAll('.card-deck').forEach(caja => {
+            caja.style.setProperty('display', 'block', 'important');
         });
 
         // --- Enlaces a otras páginas del micrositio: no se pueden resolver solos
