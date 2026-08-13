@@ -65,6 +65,14 @@ Renderiza el cuerpo convertido en un **iframe oculto con el CSS del micrositio**
 (donde se ve como debe ser), lee los colores **computados** finales y los fija
 `style="… !important"` en la salida. Reglas exactas de `congelarElemento()`:
 
+- **Tarjetas (`.card`) — el fondo va en los DOS sentidos.** Si no trae color
+  propio se repone el blanco default de Bootstrap (Moodle lo pinta gris). Y si SÍ
+  trae color pero **no** viene de una utilidad `bg-*`, también se congela: ese
+  color sale de una regla del micrositio (`.img-contenedor` y compañía) que
+  Moodle no tiene, y sin congelarlo la tarjeta se queda con el gris del tema —que
+  se ve ALREDEDOR de las figuras transparentes; el PNG conserva su alfa (se
+  comprobó: salen RGBA), lo que cambia es el fondo de atrás—. Una utilidad `bg-*`
+  sí se respeta: existe en los dos lados y su color depende del módulo.
 - **Interactivos (`.accordion-button`, `.btn*`): se SALTAN.** Nada inline; un
   inline les mataría los estados. Los cubre el complemento del tema (§5).
 - **Celdas de encabezado — `<th>` Y `<td>` dentro de un `<thead>`**: fondo
@@ -352,7 +360,15 @@ un `bg-*` del tema, ese color sí es real y lo congela el camino normal.
     (punto 2 de la lista de arriba).
 
   Las dos listas van creciendo conforme aparecen casos: así entraron `.card`, el
-  `<th>`, `.btn-secondary` y los **botones que son enlaces**.
+  `<th>`, `.btn-secondary`, los **botones que son enlaces** y `.card-deck`.
+
+  > **El caso de `.card-deck`.** Bootstrap 5 la ELIMINÓ, así que en el
+  > micrositio (5.2.3) no hace nada y sus hijos se apilan; el Bootstrap de Moodle
+  > todavía la trae y la vuelve una fila flex. En varios micrositios el `<p>` del
+  > pie de figura va DENTRO del `.card-deck`, y al montar se subía a un lado de
+  > la tarjeta en vez de quedar debajo. Medido: con `display:flex` la nota cae en
+  > `left: 396` (junto a una tarjeta que termina en 396) y `top: 24`. Volverla
+  > `display: block` reproduce lo que hace el micrositio.
 
   > **El caso de `a.btn-primary`.** Tu hoja trae
   > `.mainPlantilla23 a { color: blue; text-decoration: underline }` y

@@ -346,6 +346,13 @@ function selectorComplemento(sel) {
  * resultado es un botón guinda con el texto azul de liga, que es justo lo que se
  * ve en el micrositio bien montado y en Moodle no.
  *
+ * `.card-deck` es el caso inverso y por eso también vive aquí: Bootstrap 5 la
+ * ELIMINÓ, así que en el micrositio (5.2.3) no hace absolutamente nada y sus
+ * hijos se apilan; el Bootstrap de Moodle todavía la trae y la vuelve una fila
+ * flex. Resultado: el `<p>` del pie de figura, que en varios micrositios va
+ * DENTRO del .card-deck, se sube a un lado de la tarjeta en vez de quedar
+ * debajo. Devolverla a `display: block` reproduce lo que hace el micrositio.
+ *
  * Por eso las entradas van con el `a` al frente: `.ms-convertido a.btn-primary`
  * queda en (0,2,1) —le gana al azul— y la variante `:visited` en (0,3,1), que es
  * lo único que puede con un `!important` de (0,2,1). El subrayado NO se toca: el
@@ -365,6 +372,7 @@ a.btn-primary { color: #fff; }
 a.btn-primary:visited { color: #fff; }
 a.btn-secondary { color: #fff; }
 a.btn-secondary:visited { color: #fff; }
+.card-deck { display: block; }
 `;
 
 function compararCSS(cssMicrositio, cssMoodle, doc) {
@@ -496,10 +504,20 @@ function congelarElemento(src, dst) {
     // quita; nunca pisamos un color que la tarjeta ya trae por clase.
     if (esCard) {
         // Fondo: si NO trae color propio, su fondo es el blanco default de Bootstrap
-        // (Moodle lo pinta gris) -> reponemos blanco. Si SÍ trae color (clase bg-*),
-        // esa clase funciona igual en micro y en Moodle: NO la tocamos (theme-aware).
+        // (Moodle lo pinta gris) -> reponemos blanco.
         if (esTransparente(cs.backgroundColor)) {
             dst.style.setProperty('background-color', 'rgb(255, 255, 255)', 'important');
+        } else if (!/(^|\s)bg-/.test(cls)) {
+            /* Trae color propio, pero NO de una utilidad `bg-*`: viene de una regla
+               del micrositio (.img-contenedor y compañía) que Moodle no tiene. Sin
+               congelarla, la tarjeta se queda con el gris del tema y ese gris se ve
+               ALREDEDOR de las figuras transparentes: el PNG conserva su alfa, lo
+               que cambió es el fondo de atrás.
+
+               Una utilidad `bg-*` sí se respeta: esa clase existe en los dos lados
+               y su color depende del módulo (theme-aware), así que fijarla inline
+               congelaría el color de un aula en las demás. */
+            dst.style.setProperty('background-color', cs.backgroundColor, 'important');
         }
         // Borde: el borde fino es default de Bootstrap y Moodle lo quita a TODAS las
         // tarjetas (con o sin color). Lo reponemos para que se vean separadas como en
