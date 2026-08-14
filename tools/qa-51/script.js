@@ -59,19 +59,53 @@
         lista.push({ etiqueta, texto: d.texto, negritas: d.negritas, cursivas: d.cursivas });
     }
 
+    /** La marca de un bloque de párrafo (`<h1>`, `<Figura>`), o '' si no lo es. */
+    function marcaDe(bloque) {
+        if (!bloque || bloque.tipo !== 'parrafo') return '';
+        const m = (bloque.texto || '').replace(/\*/g, '').trim().match(MARCA);
+        return m ? m[1] : '';
+    }
+
+    /* Celdas que solo existen en la hoja de control editorial del guion. Sirven
+       para reconocerla cuando el Word no trae NINGUNA marca de encabezado. */
+    const HOJA_DE_CONTROL = /^(nombre del m[óo]dulo|nombre y n[úu]mero del subm[óo]dulo|n[úu]mero de semana|tipo de recurso|t[íi]tulo del recurso|meta educativa|prop[óo]sito\(s\) formativo\(s\)|elaborador o elaboradora|indicaciones|insumos requeridos|idm\/mon)/i;
+
+    /**
+     * Dónde empieza lo que SÍ se publica.
+     *
+     * Se entra por el primer encabezado: todo lo anterior son las fichas de
+     * control editorial (módulo, elaboradores, indicaciones para producción) y
+     * nunca se publica. Empezar ahí evita reportar cincuenta "textos faltantes"
+     * que en realidad nadie tenía que montar.
+     *
+     * ⚠️ No se busca `<h1>`: **no todos los guiones lo traen.** De tres guiones
+     * reales de regularización, dos abren el título con `<h2>` y solo uno con
+     * `<h1>`; exigir `<h1>` dejaba entrar la hoja de control entera y el reporte
+     * salía con 49 errores inventados sobre una actividad bien montada. Y si no
+     * hay ninguna marca de encabezado, se salta la hoja de control por lo que
+     * dicen sus celdas.
+     */
+    function dondeEmpieza(bloques) {
+        const enc = bloques.findIndex(b => /^h[1-6]$/i.test(marcaDe(b)));
+        if (enc >= 0) return { inicio: enc, entrada: marcaDe(bloques[enc]).toLowerCase() };
+
+        let ultima = -1;
+        bloques.forEach((b, i) => {
+            if (b.tipo !== 'tabla') return;
+            const celdas = (b.filas || []).reduce((t, f) => t.concat(f), [])
+                .map(c => (c.texto || '').trim());
+            if (celdas.some(t => HOJA_DE_CONTROL.test(t))) ultima = i;
+        });
+        if (ultima >= 0) return { inicio: ultima + 1, entrada: 'hoja de control' };
+        return { inicio: 0, entrada: '' };
+    }
+
     /**
      * Guion → { titulo, textos, tablas, enlaceRubrica }.
-     *
-     * Se entra por el `<h1>`: todo lo anterior son las fichas de control
-     * editorial (módulo, elaboradores, indicaciones para producción) y nunca se
-     * publica. Empezar ahí evita reportar veinte "textos faltantes" que en
-     * realidad nadie tenía que montar.
      */
     function construirActividad(bloques) {
-        const inicio = bloques.findIndex(b =>
-            b.tipo === 'parrafo' && MARCA.test((b.texto || '').replace(/\*/g, '').trim())
-            && /^h1$/i.test((b.texto || '').replace(/\*/g, '').trim().replace(MARCA, '$1')));
-        const cuerpo = inicio >= 0 ? bloques.slice(inicio) : bloques;
+        const arranque = dondeEmpieza(bloques);
+        const cuerpo = bloques.slice(arranque.inicio);
 
         const textos = [];
         const tablas = [];
@@ -79,6 +113,7 @@
         let esperando = '';        // 'h1' | 'h2' | 'tabla'
         let enLista = false;
         let enCentrado = false;
+        let enFigura = false;      // dentro de <Figura>…<Termina figura>
         let punto = 0;
         let tituloTablaPendiente = '';
         let enlaceRubrica = null;
@@ -90,8 +125,11 @@
                 const filas = (bloque.filas || []).map(f => f.map(c => (c.texto || '').trim()));
                 if (esperando === 'h1' || esperando === 'h2') {
                     const t = desmarcar(filas.flat().join(' ')).texto;
-                    if (esperando === 'h1') titulo = t;
-                    agregarTexto(textos, esperando === 'h1' ? 'Título' : 'Subtítulo', t);
+                    // El título es el PRIMER encabezado, venga marcado como
+                    // <h1> o como <h2>: hay guiones que solo traen <h2>.
+                    const esPrimero = !titulo;
+                    if (esPrimero) titulo = t;
+                    agregarTexto(textos, esPrimero ? 'Título' : 'Subtítulo', t);
                     esperando = '';
                     return;
                 }
@@ -123,15 +161,30 @@
                     if (/lista/.test(clave)) enLista = false;
                     if (/centrado/.test(clave)) enCentrado = false;
                     if (/tabla/.test(clave)) esperando = '';
+                    if (/figura|imagen|v[ií]deo|pop|ventana/.test(clave)) enFigura = false;
                     return;
                 }
-                if (/lista numerada/.test(clave)) { enLista = true; punto = 0; return; }
+                // "Lista con letras" y "Lista numerada" son las dos listas del
+                // guion: numerarlas aparte solo cambia la etiqueta del reporte.
+                if (/^lista/.test(clave)) {
+                    enLista = true;
+                    if (/numerada/.test(clave)) punto = 0;
+                    return;
+                }
                 if (/centrado/.test(clave)) { enCentrado = true; return; }
                 if (/^tabla/.test(clave)) { esperando = 'tabla'; return; }
+                /* Lo que va DENTRO de <Figura>…<Termina figura> es la DESCRIPCIÓN
+                   de la imagen para quien la produce ("Profile / Age: 13 years
+                   old / Nationality: Brazilian…"), no texto de la página: se
+                   monta como imagen y por eso nunca aparece escrito en Moodle.
+                   Compararlo daba un "falta el punto 7" en un montaje correcto. */
+                if (/^(figura|imagen|v[ií]deo|pop-?up|ventana)/.test(clave)) { enFigura = true; return; }
                 // Cualquier otra marca es una indicación para el montador y no
                 // se publica. No se compara, pero sí se avisa si aparece.
                 return;
             }
+
+            if (enFigura) return;
 
             // El título de una tabla va en el párrafo de antes, en negritas.
             if (esperando === 'tabla' && !tituloTablaPendiente) {
@@ -148,10 +201,15 @@
                 agregarTexto(textos, 'Párrafo', crudo);
             }
 
-            // "…con base en la siguiente rúbrica, que incluye…": esa palabra
-            // tiene que quedar enlazada al PDF. Es lo que más se olvida.
-            if (/\br[úu]brica\b/i.test(plano) && !enlaceRubrica) {
-                enlaceRubrica = { texto: 'rúbrica', archivo: '' };
+            /* "…con base en la siguiente rúbrica, que incluye…": esa palabra
+               tiene que quedar enlazada al PDF. Es lo que más se olvida.
+
+               No siempre dice "rúbrica": los foros se evalúan con una **lista de
+               cotejo** y ahí la palabra enlazada es esa. Buscando solo "rúbrica"
+               la actividad de foro se revisaba sin comprobar ningún enlace. */
+            const instrumento = plano.match(/\b(r[úu]bricas?|listas? de cotejo)\b/i);
+            if (instrumento && !enlaceRubrica) {
+                enlaceRubrica = { texto: instrumento[0], archivo: '' };
             }
         });
 
@@ -163,6 +221,8 @@
 
         return {
             titulo, textos, tablas, enlaceRubrica,
+            // Por dónde se entró al guion, para poder decirlo en el resumen.
+            entrada: arranque.entrada,
             // `clave` normaliza para comparar (SM02S3AA3 y SM2_S3_AA3 dan "2-3-3");
             // `codigoTexto` es lo que el guion dice tal cual, para enseñarlo.
             clave: codigo ? codigo.slice(1, 4).map(Number).join('-') : '',
@@ -337,6 +397,15 @@
         dibujarRevision();
     }
 
+    /* Se enseña por dónde entró el guion porque es lo que explica un conteo raro
+       de textos: si dice "hoja de control" es que el Word no traía ni <h1> ni
+       <h2> y el corte se adivinó. */
+    function entradaLegible(entrada) {
+        if (/^h\d$/.test(entrada || '')) return `la marca <${entrada}>`;
+        if (entrada === 'hoja de control') return 'después de la hoja de control (el guion no trae <h1> ni <h2>)';
+        return 'el principio del Word (no se encontró dónde empieza lo publicable)';
+    }
+
     function dibujarResumen() {
         const caja = $('#resumen');
         const partes = [];
@@ -349,7 +418,8 @@
                         <button class="btn-quitar" type="button" data-quitar="actividad"
                                 title="Quitar el guion"><i class="ph ph-x"></i></button></h3>
                     <div class="resumen-dato"><span>Archivo</span><span><code>${escapar(archivos.guion)}</code></span></div>
-                    <div class="resumen-dato"><span>Título</span><span>${escapar(a.titulo || '(no se encontró el &lt;h1&gt;)')}</span></div>
+                    <div class="resumen-dato"><span>Título</span><span>${escapar(a.titulo || '(no se encontró ningún encabezado)')}</span></div>
+                    <div class="resumen-dato"><span>Empieza en</span><span>${escapar(entradaLegible(a.entrada))}</span></div>
                     <div class="resumen-dato"><span>Textos por cotejar</span><span>${a.textos.length}</span></div>
                     <div class="resumen-dato"><span>Tablas</span><span>${a.tablas.length}</span></div>
                     <div class="resumen-dato"><span>Enlace de la rúbrica</span><span>${a.enlaceRubrica ? (a.enlaceRubrica.archivo || 'sí, sin archivo definido') : 'no se menciona'}</span></div>

@@ -13,7 +13,7 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.17.0';
+const VERSION = '1.18.5';
 const CACHE = `panel-herramientas-v${VERSION}`;
 
 // Rutas relativas a propósito: en GitHub Pages la app vive en un subdirectorio
@@ -75,7 +75,11 @@ const APP_SHELL = [
     'tools/qa-51/index.html',
     'tools/qa-51/script.js',
     'tools/qa-51/verificador.js',
-    'tools/qa-51/styles.css'
+    'tools/qa-51/styles.css',
+    'tools/qa-cuestionario-formativo/index.html',
+    'tools/qa-cuestionario-formativo/script.js',
+    'tools/qa-cuestionario-formativo/verificador.js',
+    'tools/qa-cuestionario-formativo/styles.css'
 ];
 
 self.addEventListener('install', (event) => {

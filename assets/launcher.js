@@ -22,6 +22,8 @@ function initLauncher() {
         // Con qué plataforma se filtra desde la portada. Sale del mismo campo
         // `moodle` que las insignias: aquí no se decide nada.
         card.dataset.moodle = tool.moodle || '';
+        // Para qué encabezado de sección cuenta esta tarjeta.
+        card.dataset.grupo = tool.grupo || '';
         card.dataset.search = [tool.title, tool.description, ...(tool.tags || [])]
             .join(' ')
             .toLowerCase();
@@ -79,7 +81,34 @@ function initLauncher() {
         return card;
     }
 
-    TOOLS.forEach((tool, index) => grid.appendChild(buildCard(tool, index)));
+    /* Encabezado de grupo. Va DENTRO de la misma rejilla, ocupando el renglón
+       entero (`grid-column: 1 / -1`), y no en rejillas separadas: así el brillo
+       que sigue al cursor, el filtro y la animación escalonada siguen siendo
+       uno solo para todas las tarjetas. */
+    function buildGroupHeader(grupo) {
+        const cabecera = document.createElement('div');
+        cabecera.className = 'grupo-titulo';
+        cabecera.dataset.grupo = grupo.clave;
+        cabecera.innerHTML = `
+            <h2><i class="ph ph-${grupo.icono}"></i> ${grupo.nombre}</h2>
+            <span>${grupo.detalle}</span>`;
+        return cabecera;
+    }
+
+    /* Se dibuja grupo por grupo, y dentro de cada uno en el orden de TOOLS (que
+       ya viene por versión de Moodle). Así, al ver todas, cada sección enseña
+       primero las de 3.11 y luego las de 5.1, sin barajarse. */
+    let indice = 0;
+    GRUPOS.forEach(grupo => {
+        const suyas = TOOLS.filter(t => t.grupo === grupo.clave);
+        if (!suyas.length) return;
+        grid.appendChild(buildGroupHeader(grupo));
+        suyas.forEach(tool => grid.appendChild(buildCard(tool, indice++)));
+    });
+
+    // Una herramienta sin `grupo` no se queda fuera del panel: va al final.
+    TOOLS.filter(t => !GRUPOS.some(g => g.clave === t.grupo))
+        .forEach(tool => grid.appendChild(buildCard(tool, indice++)));
 
     // El brillo radial de cada tarjeta sigue al cursor.
     grid.addEventListener('pointermove', (e) => {
@@ -96,12 +125,26 @@ function initLauncher() {
     function applyFilter() {
         const query = searchInput.value.trim().toLowerCase();
         let visible = 0;
+        const porGrupo = {};
 
         grid.querySelectorAll('.tool-card').forEach(card => {
             const deLaPlataforma = !plataforma || card.dataset.moodle === plataforma;
             const match = deLaPlataforma && (!query || card.dataset.search.includes(query));
             card.classList.toggle('hidden', !match);
-            if (match) visible++;
+            if (match) {
+                visible++;
+                porGrupo[card.dataset.grupo] = (porGrupo[card.dataset.grupo] || 0) + 1;
+            }
+        });
+
+        /* El encabezado se esconde si su grupo se quedó sin tarjetas, y también
+           si es el único que quedó en pantalla: en Prepa en Línea, que hoy no
+           tiene QA, un "Montaje" solitario encima de todo no separa nada. Lo
+           mismo al buscar algo que solo cae en un grupo. */
+        const gruposEnPantalla = Object.keys(porGrupo).filter(g => g && porGrupo[g]).length;
+        grid.querySelectorAll('.grupo-titulo').forEach(cabecera => {
+            const tiene = porGrupo[cabecera.dataset.grupo] > 0;
+            cabecera.classList.toggle('hidden', !tiene || gruposEnPantalla < 2);
         });
 
         noResults.classList.toggle('hidden', visible > 0);

@@ -108,6 +108,19 @@ window.VERIFICADOR_QA = function (DATOS) {
         return trozos;
     }
 
+    /** Firma sin plurales: "listas de cotejo" y "lista de cotejo" dan lo mismo. */
+    function sinPlural(s) {
+        return firma(s).split(' ').map(function (p) { return p.replace(/s$/, ''); }).join(' ');
+    }
+
+    /* "SM2_S3_AA3_Rubrica" / "PR_SM1S1-RU_Rubrica_AA3.pdf" -> "3". Sin `\b`
+       delante: en esos nombres el guion bajo es carácter de palabra y no hay
+       frontera entre "_" y "AA". */
+    function numeroDeActividad(s) {
+        var m = String(s || '').match(/A[AC]\s*_?\s*0?(\d+)/i);
+        return m ? m[1] : '';
+    }
+
     function esc(s) {
         var d = document.createElement('div');
         d.textContent = s == null ? '' : String(s);
@@ -176,6 +189,29 @@ window.VERIFICADOR_QA = function (DATOS) {
             return firma(s).replace(/^(tabla|figura|cuadro)\s*(\d+)?\s*(de la|del|de)?\s*/, '');
         }
 
+        /* Qué tanto se parecen dos textos, contando palabras en común.
+
+           Hace falta porque al montar se corrige alguna palabra suelta
+           ("…información personal inglés" -> "…información personal EN inglés").
+           Sin esto el mismo párrafo salía DOS veces —como "falta" y como
+           "sobra"—, así que un cambio de una palabra abultaba el reporte al
+           doble y escondía los errores de verdad. */
+        function parecidoDe(a, b) {
+            var pa = a.split(' ').filter(Boolean);
+            var pb = b.split(' ').filter(Boolean);
+            var largo = Math.max(pa.length, pb.length);
+            // Frases cortas no: "Ejemplo:" se parece a cualquier cosa.
+            if (pa.length < 5 || pb.length < 5) return 0;
+            if (Math.min(pa.length, pb.length) / largo < 0.7) return 0;
+            var resto = pb.slice();
+            var comunes = 0;
+            pa.forEach(function (p) {
+                var i = resto.indexOf(p);
+                if (i >= 0) { resto.splice(i, 1); comunes++; }
+            });
+            return comunes / largo;
+        }
+
         function buscar(txt) {
             var esperadoLimpio = limpiar(sinPrefijoDeLista(txt));
             var claveEsperada = firma(esperadoLimpio);
@@ -192,7 +228,26 @@ window.VERIFICADOR_QA = function (DATOS) {
             return { nodo: elegido, exacto: Boolean(exacto) };
         }
 
+        /** El nodo libre que más se parezca. Solo para la segunda pasada. */
+        function buscarCasi(txt) {
+            var claveEsperada = firma(limpiar(sinPrefijoDeLista(txt)));
+            var casi = null, mejor = 0.85;
+            nodos.forEach(function (x) {
+                if (x.usado) return;
+                var p = parecidoDe(claveEsperada, firma(limpiar(sinPrefijoDeLista(x.t))));
+                if (p > mejor) { mejor = p; casi = x; }
+            });
+            if (casi) casi.usado = true;
+            return casi;
+        }
+
         var correctos = 0;
+        /* El parecido es SEGUNDA pasada, nunca primera: si compite con las
+           coincidencias exactas se queda con el nodo de otro. En la AA1 el
+           "Título de tabla" se llevaba el punto 9 ("La tabla de afirmaciones…"),
+           que era casi idéntico, y entonces el punto 9 salía como faltante y el
+           título numerado como sobrante. Dos errores inventados por adelantarse. */
+        var pendientes = [];
 
         esperado.textos.forEach(function (item) {
             var r = buscar(item.texto);
@@ -212,7 +267,7 @@ window.VERIFICADOR_QA = function (DATOS) {
                 }
             }
             if (!r.nodo) {
-                anotar('error', 'Textos', item.etiqueta, item.texto, '', null);
+                pendientes.push(item);
                 return;
             }
             if (!r.exacto) {
@@ -224,6 +279,21 @@ window.VERIFICADOR_QA = function (DATOS) {
             revisarFormato(item, r.nodo);
         });
 
+        /* Segunda pasada: lo que no apareció, ¿está con una palabra cambiada?
+           Al montar se corrige alguna ("…información personal inglés" ->
+           "…personal EN inglés"), y sin emparejarlas el mismo párrafo salía dos
+           veces, como "falta" y como "sobra". */
+        pendientes.forEach(function (item) {
+            var casi = buscarCasi(item.texto);
+            if (!casi) {
+                anotar('error', 'Textos', item.etiqueta, item.texto, '', null);
+                return;
+            }
+            anotar('aviso', 'Textos', item.etiqueta + ' — cambia una palabra al montar',
+                item.texto, casi.t, casi.n);
+            revisarFormato(item, casi);
+        });
+
         /* Negritas y cursivas: el Word marca las corridas, el montaje las
            convierte en <strong>/<em>. Se comparan por firma porque el montaje
            deja la coma fuera de la negrita ("**rúbrica,**" -> "<strong>rúbrica</strong>,"). */
@@ -231,16 +301,32 @@ window.VERIFICADOR_QA = function (DATOS) {
             [['negritas', 'strong,b', 'negrita'], ['cursivas', 'em,i', 'cursiva']].forEach(function (par) {
                 var esperadas = (item[par[0]] || []).map(firma).filter(Boolean);
                 if (!esperadas.length) return;
-                var enPagina = [].slice.call(nodo.n.querySelectorAll(par[1]))
-                    .map(function (e) { return firma(e.textContent); }).filter(Boolean);
-                esperadas.forEach(function (f) {
-                    var esta = enPagina.some(function (p) {
+                var casa = function (lista, f) {
+                    return lista.some(function (p) {
                         return p === f || (p.length > 3 && f.indexOf(p) === 0) || (f.length > 3 && p.indexOf(f) === 0);
                     });
-                    if (!esta) {
-                        anotar('error', 'Formato', 'Falta la ' + par[2] + ' en «' + item.etiqueta + '»',
+                };
+                var deTexto = function (sel) {
+                    return [].slice.call(nodo.n.querySelectorAll(sel))
+                        .map(function (e) { return firma(e.textContent); }).filter(Boolean);
+                };
+                var enPagina = deTexto(par[1]);
+                var enlazadas = deTexto('a');
+                esperadas.forEach(function (f) {
+                    if (casa(enPagina, f)) return;
+                    /* La negrita que se volvió ENLACE no es un error: el guion
+                       resalta así la palabra que hay que enlazar ("…la siguiente
+                       **rúbrica**") y en las seis páginas de ejemplo esa palabra
+                       va como <a>, nunca como <strong>. Marcarlo como error lo
+                       ponía en el 100% de los montajes correctos. Pero tampoco se
+                       calla: sale como aviso, con su nombre, para que se vea. */
+                    if (casa(enlazadas, f)) {
+                        anotar('aviso', 'Formato', 'La ' + par[2] + ' de «' + f + '» quedó como enlace, no como formato',
                             f, nodo.t, nodo.n);
+                        return;
                     }
+                    anotar('error', 'Formato', 'Falta la ' + par[2] + ' en «' + item.etiqueta + '»',
+                        f, nodo.t, nodo.n);
                 });
             });
         }
@@ -270,8 +356,12 @@ window.VERIFICADOR_QA = function (DATOS) {
         /* El enlace de la rúbrica: la palabra tiene que ser un <a> al PDF, en
            pestaña nueva. Es lo que más se olvida al montar. */
         if (esperado.enlaceRubrica) {
+            /* En singular o en plural es el mismo enlace: el guion dice tanto
+               "la siguiente rúbrica" como "las rúbricas", y comparando la firma
+               tal cual, un plural daba «no quedó enlazada» sobre un enlace que
+               estaba perfecto. */
             var ancla = [].slice.call(raiz.querySelectorAll('a')).find(function (a) {
-                return firma(a.textContent) === firma(esperado.enlaceRubrica.texto);
+                return sinPlural(a.textContent) === sinPlural(esperado.enlaceRubrica.texto);
             });
             if (!ancla) {
                 anotar('error', 'Enlaces', 'La palabra «' + esperado.enlaceRubrica.texto + '» no quedó enlazada',
@@ -279,13 +369,21 @@ window.VERIFICADOR_QA = function (DATOS) {
             } else {
                 var href = limpiar(ancla.getAttribute('href'));
                 var archivo = (href.split('?')[0].split('/').pop() || '').toLowerCase();
-                if (esperado.enlaceRubrica.archivo
-                    && archivo.indexOf(esperado.enlaceRubrica.archivo.toLowerCase()) === -1) {
-                    anotar('error', 'Enlaces', 'El enlace de la rúbrica apunta a otro archivo',
+                /* El PDF que se sube a Moodle casi nunca se llama igual que el
+                   Word de la rúbrica: "rubrica aa3.docx" se publica como
+                   "PR_SM1S1-RU_Rubrica_AA3.pdf". Exigir que el nombre coincidiera
+                   marcaba como error un enlace correcto. Lo que sí tiene que
+                   coincidir —y es lo que caza el enlace pegado de otra
+                   actividad— es el número de la AA. */
+                var deEsta = numeroDeActividad(esperado.enlaceRubrica.archivo);
+                var deEnlace = numeroDeActividad(archivo);
+                if (deEsta && deEnlace && deEsta !== deEnlace) {
+                    anotar('error', 'Enlaces', 'El enlace apunta a la rúbrica de otra actividad',
                         esperado.enlaceRubrica.archivo, href, ancla);
                 }
                 if ((ancla.getAttribute('target') || '').toLowerCase() !== '_blank') {
-                    anotar('aviso', 'Enlaces', 'La rúbrica no abre en pestaña nueva', 'target="_blank"', href, ancla);
+                    anotar('aviso', 'Enlaces', 'El enlace de «' + esperado.enlaceRubrica.texto + '» no abre en pestaña nueva',
+                        'target="_blank"', href, ancla);
                 }
             }
         }

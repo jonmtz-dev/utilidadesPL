@@ -319,6 +319,52 @@
     margin: -8px;
 }
 
+/* Encabezado de sección (Montaje / Revisión · QA)
+
+   Vive dentro de la MISMA rejilla y ocupa el renglón entero: separar en dos
+   rejillas partía en dos el filtro, el brillo que sigue al cursor y la entrada
+   escalonada de las tarjetas. Y sin `1 / -1` se metía en una columna y dejaba
+   dos tarjetas a su lado.
+
+   Sin fondo ni caja a propósito: la rejilla ya está llena de .glass-panel y
+   otra superficie más solo compite. Aquí separa la línea, no el relleno. */
+.grupo-titulo {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--control-border);
+    /* Pega el encabezado a SU grupo y lo despega del anterior: sin esto, con el
+       gap parejo de 24px, el título quedaba a la misma distancia de las
+       tarjetas de arriba que de las suyas y no se sabía a cuáles titulaba. */
+    margin-top: 10px;
+}
+
+/* El primero no necesita ese aire: ya lo da la barra de búsqueda. */
+.grupo-titulo:first-child { margin-top: 0; }
+
+.grupo-titulo h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text-main);
+}
+
+.grupo-titulo h2 i {
+    font-size: 18px;
+    color: var(--accent);
+}
+
+.grupo-titulo span {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
 .tool-card {
     position: relative;
     display: flex;

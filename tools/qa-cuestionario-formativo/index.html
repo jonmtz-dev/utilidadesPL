@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QA de Cuestionario Formativo - Moodle</title>
+    <link rel="manifest" href="../../manifest.json">
+    <meta name="theme-color" content="#f0f2f5">
+    <link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="../../assets/icons/apple-touch-icon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../assets/shared.css">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="../../assets/theme.js"></script>
+    <script src="../../assets/pwa.js"></script>
+    <script src="../../assets/tools.js"></script>
+    <script src="../../assets/version-moodle.js" defer></script>
+    <script src="../../assets/volver.js" defer></script>
+</head>
+<body>
+    <div class="background-mesh"><div class="shape shape-1"></div><div class="shape shape-2"></div><div class="shape shape-3"></div></div>
+
+    <main class="app-container glass-panel">
+        <header class="app-header">
+            <div class="logo logo--qa"><i class="ph ph-exam"></i></div>
+            <div>
+                <h1>QA de Cuestionario Formativo</h1>
+                <p>Coteja el guion contra las preguntas, respuestas, retroalimentaciones y configuración de Moodle</p>
+            </div>
+            <a class="btn-back" href="../../index.html"><i class="ph ph-arrow-left"></i> Panel</a>
+        </header>
+
+        <div class="aviso aviso-info">
+            <i class="ph ph-info"></i>
+            <span><strong>Solo lee, nunca contesta ni guarda.</strong> Sube el Word, copia el verificador y ejecútalo
+            en la <strong>vista previa completa</strong> del cuestionario. Si tu sesión permite editar, también revisa
+            la configuración y cada pregunta sin crear intentos.</span>
+        </div>
+
+        <div class="workspace qa-workspace">
+            <section class="panel-section glass-panel editor-panel">
+                <div class="section-header"><h2><i class="ph ph-file-doc"></i> Guion de producción</h2></div>
+
+                <div class="zona-doble zona-simple">
+                    <div class="dropzone" id="zona-guion" tabindex="0" role="button"
+                         aria-label="Subir el guion del cuestionario formativo en Word">
+                        <i class="ph ph-file-doc"></i>
+                        <span class="dropzone-titulo"><strong>Cuestionario formativo</strong></span>
+                        <span class="dropzone-nota">.docx — la respuesta resaltada en morado se toma como correcta</span>
+                        <input id="input-guion" type="file" accept=".docx" hidden>
+                    </div>
+                </div>
+
+                <p class="field-hint" id="aviso-lectura"></p>
+                <div id="resumen" class="resumen scroll-sin-barra scroll-difuso" data-pista-scroll></div>
+            </section>
+
+            <div class="divisor" id="divisor" role="separator" aria-orientation="vertical"
+                 aria-label="Ancho del panel" tabindex="0"
+                 title="Arrástralo para repartir el espacio · doble clic para restablecer"></div>
+
+            <section class="panel-section glass-panel output-panel">
+                <div class="tabs">
+                    <button class="tab-btn active" data-target="verificador"><i class="ph ph-shield-check"></i> Verificador</button>
+                    <button class="tab-btn" data-target="revisar"><i class="ph ph-list-magnifying-glass"></i> Qué se revisa</button>
+                    <button class="tab-btn" data-target="pasos"><i class="ph ph-list-numbers"></i> Cómo se usa</button>
+                </div>
+
+                <div id="verificador-content" class="tab-content active">
+                    <div id="verificador-vacio" class="empty-state">
+                        <i class="ph ph-exam"></i>
+                        <p>Sube el guion para generar el verificador</p>
+                    </div>
+                    <div id="verificador-caja" class="hidden">
+                        <div class="incluye" id="incluye"></div>
+                        <div class="opcion-entrega">
+                            <h3><i class="ph ph-bookmark-simple"></i> Marcador</h3>
+                            <p class="field-hint">Arrástralo a la barra de marcadores y púlsalo en la vista previa del cuestionario.</p>
+                            <a class="btn-secondary btn-chico bookmarklet-link" id="marcador" href="#" onclick="return false;">
+                                <i class="ph ph-shield-check"></i> Verificar cuestionario
+                            </a>
+                        </div>
+                        <div class="opcion-entrega">
+                            <h3><i class="ph ph-terminal-window"></i> Consola</h3>
+                            <p class="field-hint">F12 → Console. Pega y ejecuta; solo consulta páginas de Moodle.</p>
+                            <div class="code-wrapper">
+                                <button id="btn-copiar" class="btn-icon" title="Copiar verificador"><i class="ph ph-copy"></i></button>
+                                <textarea id="codigo" class="code-output" readonly></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="revisar-content" class="tab-content">
+                    <div id="revisar-vacio" class="empty-state">
+                        <i class="ph ph-list-magnifying-glass"></i>
+                        <p>Aquí aparecerá lo que se detectó en el Word</p>
+                    </div>
+                    <div id="revisar-lista" class="check-lista hidden"></div>
+                </div>
+
+                <div id="pasos-content" class="tab-content">
+                    <div class="check-lista">
+                        <div class="check-bloque">
+                            <h3><i class="ph ph-number-circle-one"></i> Sube el Word</h3>
+                            <p class="check-nota">El guion completo del cuestionario formativo. La herramienta identifica la tabla
+                            Pregunta · Respuestas · Retroalimentación y la respuesta resaltada en morado.</p>
+                        </div>
+                        <div class="check-bloque">
+                            <h3><i class="ph ph-number-circle-two"></i> Abre la vista previa completa</h3>
+                            <p class="check-nota">En Moodle abre el cuestionario como docente y pulsa <code>Vista previa</code>.
+                            No respondas ni envíes nada: el verificador no necesita crear un intento real.</p>
+                        </div>
+                        <div class="check-bloque">
+                            <h3><i class="ph ph-number-circle-three"></i> Ejecuta el verificador</h3>
+                            <p class="check-nota">Usa el marcador o la consola. El panel coteja lo visible y, si están disponibles
+                            los enlaces de edición, consulta la configuración y las respuestas internamente.</p>
+                        </div>
+                        <div class="check-bloque">
+                            <h3><i class="ph ph-traffic-signal"></i> Cómo leer el resultado</h3>
+                            <ul class="check-archivos">
+                                <li><span class="punto punto--error"></span> <strong>Error:</strong> falta o cambia contenido, la respuesta correcta no coincide o falla una configuración solicitada.</li>
+                                <li><span class="punto punto--aviso"></span> <strong>Aviso:</strong> no fue posible consultar una pantalla o hay una diferencia tolerable que requiere revisión.</li>
+                                <li><span class="punto punto--ok"></span> <strong>Información:</strong> puntajes encontrados; por ahora no se exige un total.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script src="../../assets/docx.js"></script>
+    <script src="../../assets/scroll-pista.js"></script>
+    <script src="../../assets/reparto.js"></script>
+    <script src="verificador.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

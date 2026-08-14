@@ -112,6 +112,29 @@ tools/
 El launcher **se dibuja solo** a partir del arreglo `TOOLS` de
 `assets/tools.js`. No hay tarjetas escritas a mano en `index.html`.
 
+### Montaje y QA: dos secciones, no una lista
+
+Cada herramienta declara un `grupo` en `TOOLS`: **`rm`** (Responsable de
+Montaje: arma el contenido) o **`qa`** (revisa lo ya montado contra el Word).
+Los nombres y el orden salen de `GRUPOS`, en el mismo archivo — **agregar una
+herramienta es ponerle su `grupo`, nada más**; si se olvida, no desaparece: cae
+al final, sin encabezado.
+
+Se usan en momentos distintos del trabajo, y mezcladas en una sola rejilla
+costaba encontrar la que tocaba. Detalles del dibujo:
+
+- El encabezado vive **dentro de la misma rejilla**, ocupando el renglón entero
+  con `grid-column: 1 / -1`. Partirlo en dos rejillas partía también el filtro,
+  el brillo que sigue al cursor y la entrada escalonada de las tarjetas.
+- **Solo aparece si en pantalla hay más de un grupo.** En Prepa en Línea, que
+  hoy no tiene herramientas de QA, un "Montaje" solitario encima de todas las
+  tarjetas no separa nada; igual al buscar algo que solo cae en un grupo.
+- Dentro de cada sección se respeta el orden de `TOOLS`, que ya viene por
+  versión de Moodle: al *Ver todas*, cada sección enseña primero las de 3.11 y
+  luego las de 5.1, sin barajarse.
+- Sin fondo ni caja: la rejilla ya está llena de `.glass-panel` y otra
+  superficie más solo compite. Ahí separa la línea, no el relleno.
+
 ### De qué plataforma se entró
 
 La portada pregunta primero por la plataforma (Prepa en Línea / Margarita Maza)

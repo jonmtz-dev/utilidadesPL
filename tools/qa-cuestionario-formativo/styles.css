@@ -1,0 +1,46 @@
+/* El QA de cuestionarios comparte deliberadamente la misma interfaz del QA 5.1. */
+@import url('../qa-51/styles.css');
+
+.zona-simple { grid-template-columns: minmax(0, 1fr); }
+.zona-simple .dropzone { min-height: 150px; }
+
+.resumen-alerta {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin-top: 9px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.qa-opciones {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    margin-top: 5px;
+}
+
+.qa-opcion {
+    overflow: hidden;
+    padding: 4px 6px;
+    border: 1px solid var(--control-border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qa-opcion--correcta {
+    border-color: var(--success);
+    background: color-mix(in srgb, var(--success) 12%, transparent);
+    color: var(--success);
+    font-weight: 700;
+}
+
+@media (max-width: 760px) {
+    .qa-opciones { grid-template-columns: 1fr 1fr; }
+}

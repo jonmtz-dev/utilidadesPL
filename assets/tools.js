@@ -10,6 +10,9 @@
    moodle: version de Moodle para la que sirve ('3.11' o '5.1'). FUENTE UNICA:
            de aqui salen tanto la insignia de la tarjeta como la del encabezado
            de la herramienta. No la repitas en el HTML o se desincronizan.
+   grupo:  quien la usa: 'rm' (Responsable de Montaje: arma el contenido) o
+           'qa' (revisa lo ya montado). Manda el orden y los encabezados de
+           seccion del panel; los nombres estan en GRUPOS, abajo.
    ========================================================================== */
 
 // Agrupadas por versión de Moodle a propósito: primero las de 3.11 y al final
@@ -19,6 +22,7 @@ const TOOLS = [
     /* ---------- Moodle 3.11 ---------- */
     {
         slug: 'generador-bibliografias',
+        grupo: 'rm',
         moodle: '3.11',
         title: 'Generador de Bibliografías',
         description: 'Convierte fuentes de consulta en párrafos HTML con sangría francesa y enlaces, sin vistas previas de YouTube.',
@@ -30,6 +34,7 @@ const TOOLS = [
     },
     {
         slug: 'adaptador-rubricas',
+        grupo: 'rm',
         moodle: '3.11',
         title: 'Adaptador de Rúbricas Moodle',
         description: 'Pega la tabla de una rúbrica (Word) y genera un script que la vacía en "Definir rúbrica": compara por nombre de criterio, nunca a ciegas.',
@@ -41,6 +46,7 @@ const TOOLS = [
     },
     {
         slug: 'integrador-html-311',
+        grupo: 'rm',
         moodle: '3.11',
         title: 'Integrador HTML',
         description: 'Maqueta actividades por bloques, importa la estructura del Word y genera HTML con QA de textos y enlaces.',
@@ -53,6 +59,7 @@ const TOOLS = [
     /* ---------- Moodle 5.1 ---------- */
     {
         slug: 'guion-a-pagina',
+        grupo: 'rm',
         moodle: '5.1',
         title: 'Guion Instruccional a Página',
         description: 'Arma la página visualmente desde el Word: acordeones, tablas, ventanas emergentes y tarjetas, sin escribir HTML.',
@@ -64,6 +71,7 @@ const TOOLS = [
     },
     {
         slug: 'convertidor-tablas',
+        grupo: 'rm',
         moodle: '5.1',
         title: 'Convertidor de Tablas',
         description: 'Convierte tablas de Word o HTML crudo al formato responsivo de tarjetas (data-label) para Moodle.',
@@ -75,6 +83,7 @@ const TOOLS = [
     },
     {
         slug: 'micrositio-a-pagina',
+        grupo: 'rm',
         moodle: '5.1',
         title: 'Micrositio a Página',
         description: 'Convierte un micrositio .zip en un recurso Página: reescribe las imágenes a @@PLUGINFILE@@ y avisa qué se rompe.',
@@ -86,6 +95,7 @@ const TOOLS = [
     },
     {
         slug: 'qa-51',
+        grupo: 'qa',
         moodle: '5.1',
         title: 'QA de Actividad y Rúbrica',
         description: 'Coteja lo montado en Moodle contra el guion y la rúbrica en Word: textos, negritas, tablas, criterios y puntajes.',
@@ -96,7 +106,20 @@ const TOOLS = [
         status: 'ready'
     },
     {
+        slug: 'qa-cuestionario-formativo',
+        grupo: 'qa',
+        moodle: '5.1',
+        title: 'QA de Cuestionario Formativo',
+        description: 'Coteja el cuestionario montado contra el Word: reactivos, respuesta morada, retroalimentaciones y configuración.',
+        icon: 'exam',
+        accent: ['#0f9d58', '#1f6f4a'],
+        tags: ['QA', 'Cuestionarios', 'Word', 'Configuración'],
+        url: 'tools/qa-cuestionario-formativo/index.html',
+        status: 'ready'
+    },
+    {
         slug: 'bibliografias-margarita',
+        grupo: 'rm',
         moodle: '5.1',
         title: 'Bibliografías Margarita Maza',
         description: 'Convierte el Word de fuentes en la página de bibliografía (dos columnas, sangría francesa, sin vistas previas de YouTube) o corrige los enlaces de un HTML ya hecho.',
@@ -105,6 +128,35 @@ const TOOLS = [
         tags: ['Bibliografía', 'Word', 'Enlaces', 'HTML'],
         url: 'tools/bibliografias-margarita/index.html',
         status: 'ready'
+    }
+];
+
+/* ==========================================================================
+   Grupos: para quién es cada herramienta.
+
+   Las de montaje y las de QA se usan en momentos distintos del trabajo —una
+   arma la página, la otra revisa la que ya está montada— y mezcladas en una
+   sola rejilla cuesta encontrar la que toca. El panel las pinta en este orden,
+   con un encabezado por grupo.
+
+   El encabezado solo aparece cuando en pantalla hay más de un grupo: en Prepa
+   en Línea, que hoy no tiene herramientas de QA, un título solitario sobre
+   todas las tarjetas no dice nada.
+
+   `icono` es un nombre de Phosphor sin el prefijo 'ph-'.
+   ========================================================================== */
+const GRUPOS = [
+    {
+        clave: 'rm',
+        nombre: 'Montaje',
+        detalle: 'Para armar el contenido',
+        icono: 'wrench'
+    },
+    {
+        clave: 'qa',
+        nombre: 'Revisión · QA',
+        detalle: 'Para cotejar lo ya montado contra el Word',
+        icono: 'shield-check'
     }
 ];
 

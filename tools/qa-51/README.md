@@ -46,7 +46,8 @@ verificador reportaría errores que no existen.
 - Las **negritas y cursivas** están en las mismas palabras.
 - No quedó publicada ninguna **marca del guion** (`<Tabla>`,
   `<Lista numerada; son las instrucciones>`…).
-- La palabra **rúbrica** quedó enlazada, al archivo correcto y en pestaña nueva.
+- La palabra **rúbrica** (o **lista de cotejo**, en los foros) quedó enlazada, a
+  un PDF de la misma actividad y en pestaña nueva.
 - Las tablas tienen el número de columnas correcto y **`data-label` en cada
   celda** (sin él no se vuelven tarjetas en el celular).
 - Texto que está en Moodle pero **no** en el guion.
@@ -77,6 +78,9 @@ ruido si se reportara como error.
 | Celda vacía | `&nbsp;` | Relleno del editor |
 | Comillas curvas | Comillas rectas | El editor las endereza |
 | `y por tanto no es posible` | `y, por tanto, no es posible` | Corrección de estilo al montar → **aviso** |
+| `…información personal inglés` | `…información personal **en** inglés` | Se corrige una palabra al montar → **aviso**, emparejado (ver §*segunda pasada*) |
+| `la siguiente **rúbrica**` | `la siguiente <a>rúbrica</a>` | El guion resalta en negritas la palabra que hay que **enlazar**; al montarla se vuelve `<a>`, no `<strong>` → **aviso**, no error. No se calla: sale con su nombre para poder verlo |
+| `SM2_S3_AA3_Rubrica.docx` | `PR_SM1S1-RU_Rubrica_AA3.pdf` | El PDF de Moodle casi nunca se llama como el Word. Solo se compara el **número de la AA** |
 
 **Tres severidades**, y esa es la razón de que el reporte se lea: *error* (falta
 o sobra contenido, cambia un puntaje, falta un criterio, falta el enlace),
@@ -100,9 +104,32 @@ o sobra contenido, cambia un puntaje, falta un criterio, falta el enlace),
 - **La cursiva del Word se marca `*texto*`, no `_texto_`** (ver `assets/docx.js`).
   Los guiones piden guardar el archivo como `Apellidos_Nombre_SM02S1AA1`: con
   guiones bajos, ese nombre se leería como una cursiva que nadie escribió.
-- **Se entra por el `<h1>`.** Todo lo anterior del guion son fichas de control
-  editorial (módulo, elaboradores, indicaciones para producción) y no se publica;
-  empezar antes producía veinte "textos faltantes" que nadie tenía que montar.
+- **Se entra por el PRIMER ENCABEZADO, no por el `<h1>`.** Todo lo anterior del
+  guion son fichas de control editorial (módulo, elaboradores, indicaciones para
+  producción) y no se publica; empezar antes producía veinte "textos faltantes"
+  que nadie tenía que montar. Pero **no todos los guiones traen `<h1>`**: de tres
+  guiones de regularización, dos abren el título con `<h2>`. Buscando solo `<h1>`
+  entraba la hoja de control entera y el reporte salía con **49 errores
+  inventados** sobre una actividad bien montada. Si el Word no trae ninguna marca
+  de encabezado, se salta la hoja de control reconociendo sus celdas (`Nombre del
+  módulo:`, `Elaborador o elaboradora`, `Indicaciones`…). El resumen dice por
+  dónde entró, que es lo que explica un conteo de textos raro.
+- **El título es el primer encabezado que aparezca**, venga marcado `<h1>` o
+  `<h2>`. Antes solo lo tomaba del `<h1>` y en esos guiones salía vacío.
+- **Lo que va dentro de `<Figura>`…`<Termina figura>` no se coteja.** Es la
+  descripción de la imagen para quien la produce (`Profile / Age: 13 years old /
+  Nationality: Brazilian…`): se monta como imagen y por eso nunca aparece
+  escrita en Moodle. Compararla daba un "falta el punto 7" en un montaje
+  correcto. Igual con `<Video>`, `<Pop-up>` y `<Imagen>`.
+- **El instrumento de evaluación no siempre es una rúbrica.** Los foros se
+  evalúan con **lista de cotejo** y ahí la palabra enlazada es esa; buscando solo
+  "rúbrica", la actividad de foro se revisaba sin comprobar ningún enlace.
+- **El parecido es SEGUNDA pasada, nunca primera.** Cuando se busca a la vez lo
+  exacto y lo parecido, un texto se queda con el nodo de otro: en la AA1 el
+  "Título de tabla" se llevaba el punto 9 ("La tabla de afirmaciones…"), casi
+  idéntico, y entonces el punto 9 salía como faltante y el título numerado como
+  sobrante. **Dos errores inventados por adelantarse.** Primero se resuelve todo
+  lo exacto; lo que queda sin pareja se busca por parecido en una pasada aparte.
 
 ---
 
@@ -120,3 +147,16 @@ los dos montajes ya correctos), el resultado tiene que ser:
 Los cuatro de la AA3 son de verdad: a esa rúbrica montada le faltan los
 criterios *actitud y ética* y *presentación y formato*, y suma **70 de 100**.
 Si algún día ese caso deja de reportarse, el QA se rompió.
+
+Y con los tres de `AA regularizacion` (guiones con otro formato: dos abren con
+`<h2>`, uno con `<h1>`):
+
+| | Actividad | Qué es |
+|---|---|---|
+| AA1 | 1 error · 1 aviso | Real: el montaje perdió la **cursiva** de *Viento del Este, Viento del Oeste*. El aviso es la negrita de "lista de cotejo" que quedó como enlace |
+| AA2 | **0 errores** · 1 aviso | Montaje limpio; el aviso es la negrita de "rúbrica" que quedó como enlace |
+| AA3 | 1 error · 2 avisos | Real: se perdió la cursiva de *to be*. Los avisos son la negrita enlazada y la palabra "en" que se añadió al montar |
+
+Antes de arreglar la entrada por encabezado, esas tres daban **49, 49 y 4
+errores**. Si vuelven a subir de golpe, lo primero que hay que mirar es por dónde
+dice el resumen que empezó el guion.
