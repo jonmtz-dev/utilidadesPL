@@ -85,9 +85,45 @@
      * hay ninguna marca de encabezado, se salta la hoja de control por lo que
      * dicen sus celdas.
      */
+    /* La barra gris del título: una tabla de UNA sola celda. Es la otra forma
+       de abrir sección, y su forma la distingue de la hoja de control, cuyas
+       fichas son siempre tablas de dos o más columnas. */
+    function esBarraDeTitulo(b) {
+        if (b.tipo !== 'tabla') return false;
+        const filas = b.filas || [];
+        if (filas.length !== 1 || (filas[0] || []).length !== 1) return false;
+        return Boolean(((filas[0][0] || {}).texto || '').trim());
+    }
+
+    /* Para decidir DÓNDE EMPIEZA hace falta además descartar los rótulos de la
+       hoja de control, por si alguno viniera suelto en su propia tabla. Ese
+       filtro no sirve dentro del cuerpo: «Propósito(s) formativo(s)» es a la
+       vez un campo de la ficha editorial y un título real de la actividad, y
+       excluirlo ahí lo convertía en una "tabla de contenido" que Moodle nunca
+       iba a tener. */
+    function abreElContenido(b) {
+        if (!esBarraDeTitulo(b)) return false;
+        return !HOJA_DE_CONTROL.test(((b.filas[0][0] || {}).texto || '').trim());
+    }
+
     function dondeEmpieza(bloques) {
+        /* Manda la que aparezca PRIMERO de las dos formas de abrir. Entrar solo
+           por el encabezado marcado fallaba con los guiones mixtos: la AA1 de
+           regularización abre sus cuatro secciones con barra de título sin
+           marca y trae un único `<h2>` justo antes de "Evidencia de
+           aprendizaje", así que el lector arrancaba ahí y se quedaba con 4
+           textos de 20. Todo lo demás salía en Moodle como "texto que no está
+           en el guion". */
         const enc = bloques.findIndex(b => /^h[1-6]$/i.test(marcaDe(b)));
-        if (enc >= 0) return { inicio: enc, entrada: marcaDe(bloques[enc]).toLowerCase() };
+        const barra = bloques.findIndex(abreElContenido);
+        const candidatos = [enc, barra].filter(i => i >= 0);
+        if (candidatos.length) {
+            const inicio = Math.min.apply(null, candidatos);
+            return {
+                inicio,
+                entrada: inicio === enc ? marcaDe(bloques[enc]).toLowerCase() : 'barra de título'
+            };
+        }
 
         let ultima = -1;
         bloques.forEach((b, i) => {
@@ -123,7 +159,13 @@
                 // Tras un <h1>/<h2>, la tabla de una celda es la barra gris con
                 // el título; en cualquier otro sitio es una tabla de contenido.
                 const filas = (bloque.filas || []).map(f => f.map(c => (c.texto || '').trim()));
-                if (esperando === 'h1' || esperando === 'h2') {
+                /* Una tabla de una sola celda es la barra del título, venga
+                   anunciada por `<h2>` o sin marca ninguna: en Moodle sale como
+                   encabezado, no como tabla. Sin esto, los guiones que no
+                   marcan sus secciones convertían cada título en una "tabla de
+                   contenido" fantasma —de ahí el "Falta la tabla 1 · Evaluación"
+                   sobre una actividad bien montada—. */
+                if (esperando === 'h1' || esperando === 'h2' || esBarraDeTitulo(bloque)) {
                     const t = desmarcar(filas.flat().join(' ')).texto;
                     // El título es el PRIMER encabezado, venga marcado como
                     // <h1> o como <h2>: hay guiones que solo traen <h2>.
@@ -293,6 +335,28 @@
         return m ? m.slice(1, 4).map(Number).join('-') : '';
     }
 
+    /* La clave con que se nombra la evidencia: `SM1S1_AA1`, sacada de
+       `01S.03_PR_SM1S1-AA1_La_tecnologia_en_tu_entorno.docx`. Se calcula UNA
+       vez, aquí, y viaja en los datos: da nombre al PDF y también al marcador,
+       para que al arrastrarlo a la barra el favorito se llame igual que el
+       archivo que va a producir. El separador del archivo da igual
+       (`SM1S1-AA1`, `SM1S1_AA1`, `SM1S1AA1`) y los ceros a la izquierda se
+       quitan.
+
+       Solo esta forma, a propósito: los guiones de módulo (`M17_AI3`) son de
+       Moodle 3.11 y esta herramienta es de 5.1. Reconocerlos le pondría un
+       nombre creíble a una evidencia hecha con la herramienta equivocada, que
+       es justo lo que no debe pasar desapercibido; sin clave cae al nombre del
+       archivo y ahí se nota. */
+    function claveDeEvidencia(nombre) {
+        const texto = String(nombre || '');
+        const clave = texto.match(/SM\s*0?(\d+)\s*[_\-\s]?\s*S\s*0?(\d+)\s*[_\-\s]?\s*AA\s*0?(\d+)/i);
+        if (clave) return `SM${clave[1]}S${clave[2]}_AA${clave[3]}`;
+        const base = texto.replace(/\.[a-z0-9]+$/i, '').trim();
+        if (base) return base.replace(/[\\/:*?"<>|\s]+/g, '_');
+        return new Date().toISOString().slice(0, 10);
+    }
+
     function avisar(mensaje, error) {
         const p = $('#aviso-lectura');
         p.textContent = mensaje || '';
@@ -373,9 +437,22 @@
     const escapar = (s) => String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+    /* La función se envía tal cual y se invoca con los datos ya resueltos. El
+       generador de evidencia vive en `assets/evidencia-qa.js` y lo comparten
+       las dos herramientas de QA, así que viaja serializado a su lado y se pasa
+       como argumento; no se cuelga de `window` para no dejar rastro en Moodle.
+       Los nombres de archivo van dentro de los datos porque dan nombre al PDF. */
     function codigoVerificador() {
-        // La función se envía tal cual y se invoca con los datos ya resueltos.
-        return '(' + window.VERIFICADOR_QA.toString() + ')(' + JSON.stringify(datos) + ');';
+        const paquete = Object.assign({}, datos, {
+            archivos: archivos,
+            // La rúbrica se verifica en su propia pantalla: si solo hay rúbrica,
+            // la clave sale de ella.
+            clave: claveDeEvidencia(archivos.guion || archivos.rubrica)
+        });
+        return 'void (function () {\n'
+            + 'var evidencia = ' + window.EVIDENCIA_QA.toString() + ';\n'
+            + '(' + window.VERIFICADOR_QA.toString() + ')(' + JSON.stringify(paquete) + ', evidencia);\n'
+            + '}());';
     }
 
     function dibujar() {
@@ -394,6 +471,9 @@
         const codigo = codigoVerificador();
         $('#codigo').value = codigo;
         $('#marcador').setAttribute('href', 'javascript:' + encodeURIComponent(codigo));
+        // El texto del enlace es el nombre que toma el favorito al arrastrarlo
+        // a la barra: el mismo del PDF, así el marcador dice de qué guion es.
+        $('#marcador-nombre').textContent = 'QA_' + claveDeEvidencia(archivos.guion || archivos.rubrica);
         dibujarRevision();
     }
 
@@ -402,6 +482,7 @@
        <h2> y el corte se adivinó. */
     function entradaLegible(entrada) {
         if (/^h\d$/.test(entrada || '')) return `la marca <${entrada}>`;
+        if (entrada === 'barra de título') return 'la primera barra de título (el guion no la marca con <h1> ni <h2>)';
         if (entrada === 'hoja de control') return 'después de la hoja de control (el guion no trae <h1> ni <h2>)';
         return 'el principio del Word (no se encontró dónde empieza lo publicable)';
     }

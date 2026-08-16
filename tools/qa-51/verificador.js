@@ -20,7 +20,7 @@
    usa va dentro.
    ========================================================================== */
 
-window.VERIFICADOR_QA = function (DATOS) {
+window.VERIFICADOR_QA = function (DATOS, evidencia) {
     'use strict';
 
     /* ------------------------------------------------------------ Normalizar
@@ -154,6 +154,20 @@ window.VERIFICADOR_QA = function (DATOS) {
             nivel: nivel, grupo: grupo, titulo: titulo,
             esperado: esperado, actual: actual, nodo: nodo || null
         });
+    }
+
+    /* El motivo del hallazgo, en una píldora del color de su nivel y con el
+       título en grande al lado. Antes era una sola línea en negrita del mismo
+       tamaño que el resto del bloque: con quince hallazgos seguidos había que
+       leerlos uno por uno para saber de qué iba cada cual. La comparación «En
+       el Word / En Moodle» sigue debajo, igual que siempre. */
+    function encabezadoDeHallazgo(h, color) {
+        return '<div style="display:flex;gap:7px;align-items:baseline;flex-wrap:wrap">'
+            + '<span style="flex-shrink:0;padding:2px 9px;border-radius:999px;background:' + color + ';'
+            + 'color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase">'
+            + esc(h.grupo) + '</span>'
+            + '<strong style="font-size:13.5px;color:' + color + '">' + esc(h.titulo) + '</strong>'
+            + '</div>';
     }
 
     /* ------------------------------------------------ ¿En qué página estamos?
@@ -520,6 +534,58 @@ window.VERIFICADOR_QA = function (DATOS) {
         return { revisados: esperado.criterios.length, correctos: 0 };
     }
 
+    /* ============================================================ Evidencia */
+
+    function generarEvidencia(modo, resumen, estado, color) {
+        if (typeof evidencia !== 'function') {
+            alert('Este verificador se generó con una versión anterior de la herramienta. '
+                + 'Vuelve a copiarlo desde el panel para poder generar la evidencia.');
+            return;
+        }
+        var esDeRubrica = /r[úu]brica/i.test(modo);
+        var origen = esDeRubrica
+            ? (DATOS.archivos && DATOS.archivos.rubrica) || ''
+            : (DATOS.archivos && DATOS.archivos.guion) || '';
+        var titulo = (DATOS.actividad && DATOS.actividad.titulo)
+            || document.title || 'Actividad de aprendizaje';
+        var ficha = [['Word revisado', origen || '—']];
+        if (esDeRubrica && DATOS.rubrica) {
+            ficha.push(['Criterios', String(DATOS.rubrica.criterios.length) + ' cotejados']);
+            if (DATOS.rubrica.total) ficha.push(['Puntaje del Word', String(DATOS.rubrica.total)]);
+        } else if (DATOS.actividad) {
+            ficha.push(['Textos del guion', String(DATOS.actividad.textos.length) + ' cotejados']);
+            if (DATOS.actividad.codigoTexto) ficha.push(['Código del guion', DATOS.actividad.codigoTexto]);
+        }
+        evidencia({
+            tipo: esDeRubrica ? 'Rúbrica' : 'Actividad de aprendizaje',
+            herramienta: 'QA de Actividad y Rúbrica',
+            titulo: titulo,
+            subtitulo: esDeRubrica
+                ? 'Cotejo de la rúbrica cargada en Moodle contra el Word'
+                : 'Cotejo de la actividad montada en Moodle contra el guion de producción',
+            clave: DATOS.clave || 'evidencia',
+            estado: estado,
+            color: color,
+            resumen: resumen + '.',
+            // Aquí la columna izquierda es literalmente lo que dice el Word.
+            etiquetaEsperado: 'En el Word',
+            ficha: ficha,
+            textoTodoBien: esDeRubrica
+                ? 'Los criterios, los niveles y los puntajes coinciden con el Word.'
+                : 'Todo lo del Word aparece en Moodle, con el mismo texto y el mismo formato.',
+            notaAlcance: 'Cubre lo que la página muestra: textos, formato, tablas y enlaces. '
+                + 'Las imágenes se revisan a ojo.',
+            hallazgos: hallazgos.map(function (x) {
+                var d = diferencia(x.esperado, x.actual);
+                return {
+                    nivel: x.nivel, grupo: x.grupo, titulo: x.titulo,
+                    esperadoHtml: x.esperado ? d.esperado : '',
+                    actualHtml: (x.esperado || x.actual) ? d.actual : ''
+                };
+            })
+        });
+    }
+
     /* ================================================================ Panel */
 
     function pintar(modo, resumen) {
@@ -553,7 +619,10 @@ window.VERIFICADOR_QA = function (DATOS) {
             + '<button id="qa51-cerrar" style="border:0;background:#eee;border-radius:6px;padding:4px 10px;cursor:pointer">Cerrar</button></div>'
             + '<div style="background:' + color + ';color:#fff;padding:9px 11px;border-radius:8px;font-weight:700;margin-bottom:10px">'
             + estado + '</div>'
-            + '<div style="color:#555;margin-bottom:10px">' + resumen + '</div>';
+            + '<div style="color:#555;margin-bottom:10px">' + resumen + '</div>'
+            + '<button id="qa51-evidencia" style="width:100%;border:1px solid ' + color + ';background:#fff;color:'
+            + color + ';border-radius:8px;padding:8px 10px;margin-bottom:10px;cursor:pointer;font:inherit;'
+            + 'font-weight:700">Generar evidencia (PDF)</button>';
 
         if (!hallazgos.length) {
             html += '<div style="background:#e8f5e9;border-left:3px solid #2e7d32;padding:10px;border-radius:6px">'
@@ -567,9 +636,9 @@ window.VERIFICADOR_QA = function (DATOS) {
             lista.forEach(function (h) {
                 var d = diferencia(h.esperado, h.actual);
                 html += '<div style="border-left:3px solid ' + t[2] + ';padding:7px 9px;margin:6px 0;background:' + t[3] + ';border-radius:0 6px 6px 0">'
-                    + '<strong>' + esc(h.grupo) + ' · ' + esc(h.titulo) + '</strong>';
+                    + encabezadoDeHallazgo(h, t[2]);
                 if (h.esperado || h.actual) {
-                    html += '<div style="margin-top:4px;white-space:pre-wrap">'
+                    html += '<div style="margin-top:5px;white-space:pre-wrap">'
                         + (h.esperado ? '<strong>En el Word:</strong> ' + d.esperado + '<br>' : '')
                         + '<strong>En Moodle:</strong> ' + d.actual + '</div>';
                 }
@@ -579,6 +648,9 @@ window.VERIFICADOR_QA = function (DATOS) {
 
         panel.innerHTML = html;
         document.body.appendChild(panel);
+        document.getElementById('qa51-evidencia').onclick = function () {
+            generarEvidencia(modo, resumen, estado, color);
+        };
         document.getElementById('qa51-cerrar').onclick = function () {
             [].slice.call(document.querySelectorAll('.qa51-marca')).forEach(function (n) {
                 n.style.outline = '';

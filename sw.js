@@ -13,7 +13,7 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.18.6';
+const VERSION = '1.21.0';
 const CACHE = `panel-herramientas-v${VERSION}`;
 
 // Rutas relativas a propósito: en GitHub Pages la app vive en un subdirectorio
@@ -36,6 +36,8 @@ const APP_SHELL = [
     'assets/theme.js',
     'assets/pwa.js',
     'assets/scroll-pista.js',
+    // La evidencia imprimible que comparten las dos herramientas de QA.
+    'assets/evidencia-qa.js',
     'assets/icons/icon-192.png',
     'assets/icons/icon-512.png',
     'assets/icons/icon-maskable-512.png',

@@ -6,7 +6,7 @@
    nunca responde preguntas y nunca guarda cambios.
    ========================================================================== */
 
-window.VERIFICADOR_CF = async function (DATOS) {
+window.VERIFICADOR_CF = async function (DATOS, evidencia) {
     'use strict';
 
     var esperado = DATOS && DATOS.cuestionario;
@@ -75,6 +75,19 @@ window.VERIFICADOR_CF = async function (DATOS) {
             .replace(/(\S+)\s*<\s*latex\s*#([\s\S]*?)#\s*>/gi, '$1')
             .replace(/<\s*latex\s*#([\s\S]*?)#\s*>/gi, ' $1 ')
             .replace(/<\s*(?:termina\s+)?ecuaci[oó]n\s*>/gi, ' ')
+            /* Marcas del guion: TODO lo que producción escribe entre < > es una
+               instrucción de montaje, nunca contenido publicado. Se enumeraban
+               las conocidas y no alcanzó: en cinco guiones reales hay 24 marcas
+               distintas —`<Lista numerada>`, `<Tabla con encabezado centrado y
+               texto alineado a la izquierda>`, `<Texto regular centrado>`…— y
+               ninguna es contenido. Guardarraíles para no comerse un `a < b`:
+               sin saltos ni anidamiento, máximo 120 caracteres y con letra
+               dentro. Va al final, después de las reglas de `<Latex>`, que
+               borran también lo que hay en medio. Copia literal de la de
+               `script.js`: los dos lados tienen que borrar lo mismo. */
+            .replace(/<[^<>\n]{1,120}>/g, function (marca) {
+                return /\p{L}/u.test(marca) ? ' ' : marca;
+            })
             .replace(/\\sqrt\s*\{([^{}]+)\}/gi, '$1')
             .replace(/[_^]\{([^{}]+)\}/g, '$1')
             .replace(/\\cdot\b|\u00b7|\u22c5/gi, ' operadorproducto ')
@@ -95,9 +108,18 @@ window.VERIFICADOR_CF = async function (DATOS) {
         return limpiar(div.textContent);
     }
 
+    /* Las comillas tipogr\u00e1ficas se igualan aqu\u00ed a prop\u00f3sito, y no es una
+       tolerancia: `limpiar()` ya convierte \u201c \u201d \u2018 \u2019 en comillas rectas al leer
+       Moodle, mientras que el texto del Word llega tal cual desde el guion. Sin
+       esto, un `Hi, what\u2019s up?` id\u00e9ntico en los dos lados se reportaba como
+       error \u2014y el panel lo pintaba igual en \u201cEsperado\u201d y \u201cEn Moodle\u201d, porque
+       para mostrarlo vuelve a pasar por `limpiar()`\u2014. La regla es que la
+       herramienta no puede se\u00f1alar una diferencia que no sabe ense\u00f1ar. */
     function limpiarRetroalimentacion(s) {
         return String(s == null ? '' : s)
             .replace(/[\u00a0\u200b\u200c\u200d\u00ad\ufeff]/g, ' ')
+            .replace(/[\u201c\u201d\u00ab\u00bb]/g, '"')
+            .replace(/[\u2018\u2019]/g, "'")
             .replace(/\s+/g, ' ').trim().normalize('NFC');
     }
 
@@ -146,15 +168,63 @@ window.VERIFICADOR_CF = async function (DATOS) {
         return firmaContenidoExacto(a) === firmaContenidoExacto(b);
     }
 
-    function preguntasIguales(esperada, actual) {
-        if (esperada.tieneTabla || actual.tieneTabla) {
-            if (!esperada.tieneTabla || !actual.tieneTabla) return false;
-            if (!contenidosIguales(normalizarTextoPregunta(esperada.textoPrincipal), actual.textoPrincipal)) return false;
-            var tablaEsperada = tokensContenidoExacto(normalizarTextoPregunta(esperada.contenidoTabular)).sort();
-            var tablaActual = tokensContenidoExacto(normalizarTextoPregunta(actual.contenidoTabular)).sort();
-            return tablaEsperada.join('\u001f') === tablaActual.join('\u001f');
+    /* Tokens de una tabla, ya sin los números y letras de lista (1., 2., a),
+       b)…). Esa numeración es formato automático —de Word o de Moodle—, no
+       contenido, y `normalizarTextoPregunta` la quita mirando lo que va
+       DESPUÉS, así que depende del orden de recorrido: el Word va por columnas
+       (1. 2. 3. y luego a. b. c.) y Moodle por filas (1. a. 2. b.). Con eso, la
+       misma tabla daba distinto según de dónde se leyera —le pasó al reactivo
+       13 de CF4, que estaba bien—. Aquí se quitan por pares de tokens, que no
+       depende del orden, y se ordena para comparar como conjunto. */
+    function tokensDeTabla(s) {
+        var brutos = tokensContenidoExacto(normalizarTextoPregunta(s));
+        var salida = [];
+        for (var i = 0; i < brutos.length; i++) {
+            var siguiente = brutos[i + 1];
+            // Un solo dígito o una sola letra seguidos de "." o ")": enumeración.
+            if (/^(?:\p{N}{1,2}|\p{L})$/u.test(brutos[i]) && (siguiente === '.' || siguiente === ')')) {
+                i++;
+                continue;
+            }
+            salida.push(brutos[i]);
         }
-        return contenidosIguales(normalizarTextoPregunta(esperada.texto), actual.texto);
+        return salida.sort();
+    }
+
+    /* Qué parte de la pregunta cambió, o null si está bien. Antes esto solo
+       decía sí/no y el panel enseñaba la celda entera del Word contra el texto
+       ya normalizado de Moodle: en una pregunta con tabla eso son peras contra
+       manzanas y no se distingue "falta el enunciado" de "cambió una fila".
+       Pasó de verdad en CF3, donde Moodle se había comido la frase "Relaciona
+       cada instrucción con la imagen que la representa". */
+    function diferenciaDePregunta(esperada, actual) {
+        if (esperada.tieneTabla || actual.tieneTabla) {
+            if (!esperada.tieneTabla) {
+                return { parte: 'La pregunta trae una tabla que no está en el Word',
+                    esperado: esperada.texto, actual: actual.contenidoTabular };
+            }
+            if (!actual.tieneTabla) {
+                return { parte: 'Falta la tabla de la pregunta',
+                    esperado: esperada.contenidoTabular, actual: actual.texto };
+            }
+            if (!contenidosIguales(normalizarTextoPregunta(esperada.textoPrincipal), actual.textoPrincipal)) {
+                return { parte: 'Cambia el enunciado de la pregunta',
+                    esperado: esperada.textoPrincipal, actual: actual.textoPrincipal };
+            }
+            // Las tablas se comparan como conjunto: el recorrido tecnico es por
+            // columnas en Word y por filas en Moodle.
+            var tablaEsperada = tokensDeTabla(esperada.contenidoTabular);
+            var tablaActual = tokensDeTabla(actual.contenidoTabular);
+            if (tablaEsperada.join('') !== tablaActual.join('')) {
+                return { parte: 'Cambia la tabla de la pregunta',
+                    esperado: esperada.contenidoTabular, actual: actual.contenidoTabular };
+            }
+            return null;
+        }
+        if (!contenidosIguales(normalizarTextoPregunta(esperada.texto), actual.texto)) {
+            return { parte: 'Texto de la pregunta', esperado: esperada.texto, actual: actual.texto };
+        }
+        return null;
     }
 
     function firmaRetroalimentacion(s) {
@@ -185,6 +255,50 @@ window.VERIFICADOR_CF = async function (DATOS) {
         };
     }
 
+    /* Moodle nombra el comportamiento de las preguntas con una clase técnica en
+       el HTML (`immediatefeedback`), pero en su propia pantalla de ajustes lo
+       llama por su nombre. El informe tiene que hablar como la pantalla que hay
+       que ir a corregir, no como el HTML. */
+    var COMPORTAMIENTOS = {
+        deferredfeedback: 'Retroalimentación diferida',
+        deferredcbm: 'Retroalimentación diferida con CBM',
+        immediatefeedback: 'Retroalimentación inmediata',
+        immediatecbm: 'Retroalimentación inmediata con CBM',
+        interactive: 'Interactiva con varios intentos',
+        interactivecountback: 'Interactiva con varios intentos',
+        adaptive: 'Modo adaptativo',
+        adaptivenopenalty: 'Modo adaptativo (sin penalización)',
+        manualgraded: 'Calificación manual'
+    };
+
+    function nombreDeComportamiento(clases) {
+        var encontrado = '';
+        String(clases || '').split(/\s+/).forEach(function (c) {
+            if (COMPORTAMIENTOS[c]) encontrado = COMPORTAMIENTOS[c];
+        });
+        return encontrado;
+    }
+
+    // “A y B”, “1, 2 y 3”: un listado que se lee en voz alta sin tropezar.
+    function enumerar(lista) {
+        if (lista.length < 2) return lista.join('');
+        return lista.slice(0, -1).join(', ') + ' y ' + lista[lista.length - 1];
+    }
+
+    /* El motivo del hallazgo, en una píldora del color de su nivel y con el
+       título en grande al lado. Antes era una línea en negrita del mismo tamaño
+       que el resto: con quince hallazgos seguidos había que leerlos uno por uno
+       para saber de qué iba cada cual. Copia literal de la del QA de Actividad
+       y Rúbrica, para que los dos paneles se lean igual. */
+    function encabezadoDeHallazgo(h, color) {
+        return '<div style="display:flex;gap:7px;align-items:baseline;flex-wrap:wrap">'
+            + '<span style="flex-shrink:0;padding:2px 9px;border-radius:999px;background:' + color + ';'
+            + 'color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase">'
+            + esc(h.grupo) + '</span>'
+            + '<strong style="font-size:13.5px;color:' + color + '">' + esc(h.titulo) + '</strong>'
+            + '</div>';
+    }
+
     var hallazgos = [];
     function anotar(nivel, grupo, titulo, debe, actual, nodo) {
         hallazgos.push({ nivel: nivel, grupo: grupo, titulo: titulo,
@@ -208,8 +322,16 @@ window.VERIFICADOR_CF = async function (DATOS) {
             + 'background:#fff;color:#222;border:1px solid #ddd;border-radius:12px;padding:14px 16px;'
             + 'box-shadow:0 12px 44px rgba(0,0,0,.35);font:13px/1.5 system-ui,sans-serif';
         panel.innerHTML = '<strong style="font-size:15px">QA de Cuestionario · Moodle 5.1</strong>'
-            + '<div style="margin-top:9px;color:#555">Cotejando contenido y consultando la configuración…</div>';
+            + '<div style="margin-top:9px;color:#555">Cotejando contenido y consultando la configuración…</div>'
+            + '<div id="qacf-progreso" style="margin-top:6px;color:#888;font-size:12px"></div>';
         document.body.appendChild(panel);
+    }
+
+    // Las páginas de edición se piden de tres en tres y con 15 reactivos la
+    // espera se nota: sin este renglón parece que se colgó.
+    function progreso(texto) {
+        var n = document.getElementById('qacf-progreso');
+        if (n) n.textContent = texto;
     }
 
     function extraerPreguntas() {
@@ -305,6 +427,7 @@ window.VERIFICADOR_CF = async function (DATOS) {
 
         var usados = {};
         var parejas = [];
+        var otroComportamiento = [];
         for (var i = 0; i < esperado.preguntas.length; i++) {
             var ep = esperado.preguntas[i];
             var mejor = -1, indice = -1;
@@ -321,14 +444,15 @@ window.VERIFICADOR_CF = async function (DATOS) {
             usados[indice] = true;
             var ap = actuales[indice];
             parejas.push({ esperada: ep, actual: ap, indiceEsperado: i, indiceActual: indice });
-            if (!preguntasIguales(ep, ap)) {
-                anotar('error', 'Reactivos', 'Texto de la pregunta ' + (i + 1),
-                    ep.texto, ap.texto, ap.nodo);
+            var cambio = diferenciaDePregunta(ep, ap);
+            if (cambio) {
+                anotar('error', 'Reactivos', cambio.parte + ' ' + (i + 1),
+                    cambio.esperado, cambio.actual, ap.nodo);
             }
-            if (!ap.diferida) {
-                anotar('error', 'Configuración', 'La pregunta ' + (i + 1) + ' no usa retroalimentación diferida',
-                    'deferredfeedback', ap.nodo.className, ap.nodo);
-            }
+            // El comportamiento se ajusta UNA vez para todo el cuestionario: si
+            // está mal, lo está en las quince preguntas. Se junta al final en un
+            // solo hallazgo en lugar de repetir quince veces lo mismo.
+            if (!ap.diferida) otroComportamiento.push({ numero: i + 1, nodo: ap.nodo, clases: ap.nodo.className });
             if (ap.opciones.length !== esperado.perfil.opcionesPorPregunta) {
                 anotar('error', 'Respuestas', 'La pregunta ' + (i + 1) + ' tiene otra cantidad de opciones',
                     esperado.perfil.opcionesPorPregunta + ' opciones', ap.opciones.length + ' opciones', ap.nodo);
@@ -347,7 +471,14 @@ window.VERIFICADOR_CF = async function (DATOS) {
                     'Botones de opción', 'Control no visible en el HTML', ap.nodo);
             }
 
+            /* Las respuestas con imagen NO se dan por buenas ni por malas.
+               Comparar la huella del PNG que Word guarda contra el archivo que
+               Moodle sirve —reescalado, y a veces un SVG que el navegador pinta
+               distinto— nunca da idéntico, así que reportarlo como error era
+               marcar en rojo respuestas correctas. Se cuentan y se avisa una
+               sola vez por pregunta: esa comparación la hace el ojo. */
             var asignados = {};
+            var respuestasConImagen = 0;
             for (var j = 0; j < ap.opciones.length; j++) {
                 var mejorO = -1, indiceO = -1;
                 for (var k = 0; k < ep.opciones.length; k++) {
@@ -355,19 +486,72 @@ window.VERIFICADOR_CF = async function (DATOS) {
                     var so = await similitudOpcion(ep.opciones[k], ap.opciones[j]);
                     if (so > mejorO) { mejorO = so; indiceO = k; }
                 }
+                var conImagen = Boolean(ap.opciones[j].imagenes.length)
+                    || (indiceO >= 0 && Boolean(ep.opciones[indiceO].imagenes.length));
                 if (indiceO >= 0 && mejorO >= .56) {
                     asignados[indiceO] = true;
-                    var imagenExacta = !ep.opciones[indiceO].imagenes.length || mejorO === 1;
-                    if (!contenidosIguales(ep.opciones[indiceO].texto, ap.opciones[j].texto) || !imagenExacta) {
+                    if (conImagen) { respuestasConImagen++; continue; }
+                    if (!contenidosIguales(ep.opciones[indiceO].texto, ap.opciones[j].texto)) {
                         anotar('error', 'Respuestas', 'Cambia una respuesta de la pregunta ' + (i + 1),
-                            ep.opciones[indiceO].texto || 'Imagen del Word',
-                            ap.opciones[j].texto || 'Imagen de Moodle', ap.opciones[j].nodo);
+                            ep.opciones[indiceO].texto, ap.opciones[j].texto, ap.opciones[j].nodo);
                     }
+                } else if (conImagen) {
+                    respuestasConImagen++;
                 } else {
                     anotar('error', 'Respuestas', 'Opción distinta en la pregunta ' + (i + 1),
                         'Una de las cuatro opciones del Word', ap.opciones[j].texto || 'Imagen', ap.opciones[j].nodo);
                 }
             }
+            /* Un solo aviso por pregunta con TODAS sus imágenes, las del
+               enunciado y las de las respuestas. Las del enunciado se contaban
+               fuera y por eso preguntas como la 9 y la 10 —que llevan la imagen
+               arriba, no en las opciones— pasaban sin decir nada. */
+            var qtext = ap.nodo.querySelector('.qtext');
+            var imagenesEnMoodle = qtext ? qtext.querySelectorAll('img').length : 0;
+            var esperaEnunciado = Boolean(ep.imagenesEnunciado) || Boolean(ep.esperaFigura);
+            var imagenesEnGuion = ep.opciones.filter(function (o) { return o.imagenes.length; }).length;
+
+            var dice = [];
+            var pide = [];
+            if (esperaEnunciado || imagenesEnMoodle) {
+                pide.push('el enunciado');
+                dice.push(imagenesEnMoodle
+                    ? imagenesEnMoodle + (imagenesEnMoodle === 1 ? ' imagen' : ' imágenes') + ' en el enunciado'
+                    : 'NINGUNA imagen en el enunciado, y el guion sí la pide');
+            }
+            if (respuestasConImagen || imagenesEnGuion) {
+                pide.push('las respuestas');
+                dice.push(respuestasConImagen
+                    ? respuestasConImagen + (respuestasConImagen === 1 ? ' respuesta con imagen' : ' respuestas con imagen')
+                        + (imagenesEnGuion && respuestasConImagen !== imagenesEnGuion
+                            ? ' (el guion trae ' + imagenesEnGuion + ')' : '')
+                    : 'NINGUNA respuesta con imagen, y el guion trae ' + imagenesEnGuion);
+            }
+            if (dice.length) {
+                anotar('aviso', 'Imágenes',
+                    'La pregunta ' + (i + 1) + ' lleva imagen en ' + enumerar(pide),
+                    'El guion pone imagen en ' + enumerar(pide),
+                    dice.join(' · ') + '. Revísalas a ojo: que sean las del guion, '
+                        + 'que estén bien vinculadas y que no salga el ícono roto.', ap.nodo);
+            }
+        }
+        if (otroComportamiento.length) {
+            var nombres = [];
+            otroComportamiento.forEach(function (x) {
+                var n = nombreDeComportamiento(x.clases) || 'Otro comportamiento';
+                if (nombres.indexOf(n) < 0) nombres.push(n);
+            });
+            var cuantas = otroComportamiento.length === actuales.length
+                ? 'Las ' + actuales.length + ' preguntas están en «' + nombres.join('» y «') + '»'
+                : enumerar(otroComportamiento.map(function (x) { return String(x.numero); }))
+                    + (otroComportamiento.length === 1 ? ' está' : ' están')
+                    + ' en «' + nombres.join('» y «') + '»';
+            anotar('error', 'Configuración',
+                'Las preguntas no se revisan al final, sino al momento de responder',
+                'Comportamiento «Retroalimentación diferida»: el alumnado responde todo y hasta '
+                    + 'enviar ve si acertó',
+                cuantas + '. Se cambia en Editar ajustes → Comportamiento de las preguntas.',
+                otroComportamiento.map(function (x) { return x.nodo; }));
         }
         actuales.forEach(function (ap, i) {
             if (!usados[i]) anotar('error', 'Reactivos', 'Pregunta adicional que no está en el Word', '', ap.texto, ap.nodo);
@@ -375,16 +559,47 @@ window.VERIFICADOR_CF = async function (DATOS) {
         return { actuales: actuales, parejas: parejas };
     }
 
-    async function traerDocumento(url) {
+    var ESPERA = 15000;
+
+    async function traerDocumento(url, reintento) {
         var u = new URL(url, location.href);
         if (u.origin !== location.origin) throw new Error('el enlace pertenece a otro origen');
         var controlador = new AbortController();
-        var reloj = setTimeout(function () { controlador.abort(); }, 12000);
+        var reloj = setTimeout(function () { controlador.abort(); }, ESPERA);
         try {
             var respuesta = await fetch(u.href, { credentials: 'same-origin', signal: controlador.signal });
             if (!respuesta.ok) throw new Error('respuesta HTTP ' + respuesta.status);
             return new DOMParser().parseFromString(await respuesta.text(), 'text/html');
+        } catch (e) {
+            // El navegador aborta con “signal is aborted without reason”, que no
+            // le dice nada a quien revisa. Un reintento porque el sitio pudo
+            // estar ocupado justo en ese momento.
+            if (e.name === 'AbortError') {
+                if (!reintento) return traerDocumento(url, true);
+                throw new Error('Moodle no respondió en ' + (ESPERA / 1000) + ' s');
+            }
+            throw e;
         } finally { clearTimeout(reloj); }
+    }
+
+    /* Moodle abre la página de edición COMPLETA por cada pregunta y es cara.
+       Pedirlas todas de golpe con un Promise.all sobre los 15 reactivos satura
+       el límite de conexiones del navegador y el PHP del sitio: las últimas se
+       quedan encoladas mientras su reloj ya corre, y se abortan sin haber
+       llegado a empezar. De tres en tres cada petición estrena su espera. */
+    async function enTanda(lista, cuantas, tarea) {
+        var resultados = new Array(lista.length);
+        var siguiente = 0;
+        async function trabajador() {
+            while (siguiente < lista.length) {
+                var i = siguiente++;
+                resultados[i] = await tarea(lista[i], i);
+            }
+        }
+        var hilos = [];
+        for (var k = 0; k < Math.min(cuantas, lista.length); k++) hilos.push(trabajador());
+        await Promise.all(hilos);
+        return resultados;
     }
 
     function camposPorNombre(doc, prefijo) {
@@ -447,8 +662,16 @@ window.VERIFICADOR_CF = async function (DATOS) {
                 if (s > mejor) { mejor = s; indice = j; }
             });
             if (indice < 0 || mejor < .55) {
-                anotar('error', 'Configuración interna', 'No se encontró una opción del Word en la pregunta ' + numero,
-                    eo.texto || 'Respuesta con imagen', '', ap.nodo);
+                // Misma regla que arriba: una respuesta que es imagen no se
+                // puede emparejar por texto, así que no se declara error.
+                var soloImagen = eo.imagenes && eo.imagenes.length && !eo.texto;
+                anotar(soloImagen ? 'aviso' : 'error', 'Configuración interna',
+                    soloImagen
+                        ? 'No se pudo emparejar una respuesta con imagen de la pregunta ' + numero
+                        : 'No se encontró una opción del Word en la pregunta ' + numero,
+                    soloImagen ? 'Una respuesta del guion es una imagen' : eo.texto,
+                    soloImagen ? 'Revísala a ojo: que esté puesta y que apunte al archivo correcto' : '',
+                    ap.nodo);
                 return;
             }
             usadas[indice] = true;
@@ -565,10 +788,12 @@ window.VERIFICADOR_CF = async function (DATOS) {
             anotar('aviso', 'Configuración interna', 'No hay enlaces de edición en esta vista',
                 'Abrir la vista previa como docente', 'Solo se pudo revisar lo visible', null);
         } else {
-            var resultados = await Promise.all(enlaces.map(async function (p) {
+            var leidas = 0;
+            var resultados = await enTanda(enlaces, 3, async function (p) {
                 try { return await revisarPreguntaInterna(p); }
                 catch (e) { return { error: e.message, numero: p.indiceEsperado + 1 }; }
-            }));
+                finally { progreso('Leyendo la edición de las preguntas: ' + (++leidas) + ' de ' + enlaces.length); }
+            });
             var fallos = resultados.filter(function (r) { return r && r.error; });
             if (fallos.length) {
                 anotar('aviso', 'Configuración interna', 'No se pudieron leer ' + fallos.length + ' preguntas',
@@ -598,6 +823,50 @@ window.VERIFICADOR_CF = async function (DATOS) {
         }
     }
 
+    /* Arma la evidencia imprimible con el generador compartido
+       (`assets/evidencia-qa.js`), que llega serializado junto al verificador.
+       Los textos se le pasan ya resaltados por `diferencia()` para que el PDF
+       enseñe exactamente lo mismo que el panel. */
+    function generarEvidencia(resumen, estado, color) {
+        if (typeof evidencia !== 'function') {
+            alert('Este verificador se generó con una versión anterior de la herramienta. '
+                + 'Vuelve a copiarlo desde el panel para poder generar la evidencia.');
+            return;
+        }
+        evidencia({
+            tipo: 'Cuestionario formativo',
+            herramienta: 'QA de Cuestionario Formativo',
+            titulo: esperado.titulo || document.title || 'Cuestionario formativo',
+            subtitulo: 'Cotejo del cuestionario montado en Moodle contra el guion de producción',
+            clave: esperado.clave || 'evidencia',
+            estado: estado,
+            color: color,
+            resumen: resumen + '.',
+            etiquetaEsperado: 'Debe decir',
+            ficha: [
+                ['Guion revisado', esperado.archivo || '—'],
+                ['Reactivos', String(esperado.preguntas.length) + ' cotejados'],
+                ['Respuesta correcta', esperado.lectura
+                    ? 'Morado ' + esperado.lectura.marca : 'Resaltado morado del guion']
+            ],
+            textoTodoBien: 'El contenido, las respuestas correctas, las retroalimentaciones y la '
+                + 'configuración revisada coinciden con el guion.',
+            // Los que salieron al leer el Word, en el panel de la herramienta.
+            avisosDelGuion: esperado.avisos || [],
+            notaAlcance: 'Cubre el contenido visible, las respuestas correctas y la configuración que la '
+                + 'sesión permitió consultar; lo que no se pudo leer aparece como aviso. Las imágenes y el '
+                + 'puntaje total se revisan a ojo.',
+            hallazgos: hallazgos.map(function (x) {
+                var d = diferencia(x.esperado, x.actual);
+                return {
+                    nivel: x.nivel, grupo: x.grupo, titulo: x.titulo,
+                    esperadoHtml: x.esperado ? d.esperado : '',
+                    actualHtml: (x.esperado || x.actual) ? d.actual : ''
+                };
+            })
+        });
+    }
+
     function pintar(resumen) {
         limpiarMarcas();
         var errores = hallazgos.filter(function (h) { return h.nivel === 'error'; });
@@ -605,8 +874,14 @@ window.VERIFICADOR_CF = async function (DATOS) {
         var infos = hallazgos.filter(function (h) { return h.nivel === 'info'; });
         hallazgos.forEach(function (h) {
             if (!h.nodo || h.nivel === 'info') return;
-            h.nodo.style.outline = '3px solid ' + (h.nivel === 'error' ? '#c62828' : '#ef6c00');
-            h.nodo.classList.add('qacf-marca');
+            // Un hallazgo puede señalar varias preguntas a la vez: el
+            // comportamiento del cuestionario las afecta a todas.
+            var nodos = [].concat(h.nodo);
+            nodos.forEach(function (n) {
+                if (!n) return;
+                n.style.outline = '3px solid ' + (h.nivel === 'error' ? '#c62828' : '#ef6c00');
+                n.classList.add('qacf-marca');
+            });
         });
         var estado = errores.length ? 'CON ERRORES' : (avisos.length ? 'REVISAR AVISOS' : 'TODO CORRECTO');
         var color = errores.length ? '#c62828' : (avisos.length ? '#ef6c00' : '#2e7d32');
@@ -619,7 +894,10 @@ window.VERIFICADOR_CF = async function (DATOS) {
             + '<strong style="font-size:15px">QA de Cuestionario · Moodle 5.1</strong>'
             + '<button id="qacf-cerrar" style="border:0;background:#eee;border-radius:6px;padding:4px 10px;cursor:pointer">Cerrar</button></div>'
             + '<div style="background:' + color + ';color:#fff;padding:9px 11px;border-radius:8px;font-weight:700;margin-bottom:10px">'
-            + estado + '</div><div style="color:#555;margin-bottom:10px">' + esc(resumen) + '</div>';
+            + estado + '</div><div style="color:#555;margin-bottom:10px">' + esc(resumen) + '</div>'
+            + '<button id="qacf-evidencia" style="width:100%;border:1px solid ' + color + ';background:#fff;color:'
+            + color + ';border-radius:8px;padding:8px 10px;margin-bottom:10px;cursor:pointer;font:inherit;'
+            + 'font-weight:700">Generar evidencia (PDF)</button>';
 
         [['error', 'Errores', '#c62828', '#fff5f5'], ['aviso', 'Avisos', '#ef6c00', '#fff9ed'], ['info', 'Información', '#1565c0', '#f3f8ff']]
             .forEach(function (tipo) {
@@ -629,7 +907,7 @@ window.VERIFICADOR_CF = async function (DATOS) {
                 lista.forEach(function (h) {
                     var d = diferencia(h.esperado, h.actual);
                     html += '<div style="border-left:3px solid ' + tipo[2] + ';padding:7px 9px;margin:6px 0;background:' + tipo[3] + ';border-radius:0 6px 6px 0">'
-                        + '<strong>' + esc(h.grupo) + ' · ' + esc(h.titulo) + '</strong>';
+                        + encabezadoDeHallazgo(h, tipo[2]);
                     if (h.esperado || h.actual) {
                         html += '<div style="margin-top:4px;white-space:pre-wrap">'
                             + (h.esperado ? '<strong>Esperado:</strong> ' + d.esperado + '<br>' : '')
@@ -645,6 +923,9 @@ window.VERIFICADOR_CF = async function (DATOS) {
         panel.innerHTML = html;
         document.body.appendChild(panel);
         document.getElementById('qacf-cerrar').onclick = function () { limpiarMarcas(); };
+        document.getElementById('qacf-evidencia').onclick = function () {
+            generarEvidencia(resumen, estado, color);
+        };
         var primero = document.querySelector('.qacf-marca');
         if (primero) primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return { errores: errores.length, avisos: avisos.length, informacion: infos.length };

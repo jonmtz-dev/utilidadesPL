@@ -71,6 +71,35 @@
         return firma(sinNumeroDePregunta(enunciado)) !== firma(actual.texto);
     }
 
+    /* Marcas del guion: TODO lo que producción escribe entre < > es una
+       instrucción de montaje, nunca contenido publicado —así lo dice el
+       catálogo en tools/guion-a-pagina/README.md: «cualquier otra se guarda
+       como indicación, no se publica»—.
+
+       Se enumeraban las conocidas (`<Figura>`, `<Tabla>`…) y no alcanzó: cada
+       quien las redacta a su manera. En cinco guiones reales hay 24 marcas
+       distintas —`<Texto centrado>`, `<Texto regular centrado>`, `<Lista
+       numerada>`, `<Tabla con encabezado centrado y texto alineado a la
+       izquierda>`, `<h2>`…— y NINGUNA es contenido. Perseguir la lista era
+       perder siempre, así que se borra cualquier `<…>`.
+
+       Los guardarraíles para no comerse un `a < b` del enunciado: sin saltos de
+       línea ni corchetes anidados, como mucho 120 caracteres (la más larga de
+       verdad mide 62) y con al menos una letra dentro. Un `menor que (<)` no
+       tiene cierre y no se toca. */
+    const MARCAS_DEL_GUION = /<[^<>\n]{1,120}>/g;
+
+    function sinMarcasDelGuion(s) {
+        return String(s).replace(MARCAS_DEL_GUION, function (marca) {
+            return /\p{L}/u.test(marca) ? ' ' : marca;
+        });
+    }
+
+    // Solo las que anuncian una imagen: `<Lista numerada>` no lleva imagen, y
+    // el aviso de “revísala a ojo” sería mentira.
+    const MARCAS_DE_IMAGEN =
+        /<\s*(?:(?:termina|terminan|termino)\s+)?(?:figuras?|im[aá]gen(?:es)?)\s*>/i;
+
     function normalizarNotacion(s) {
         return String(s == null ? '' : s)
             // Cuando el guion trae símbolo visible + código alternativo, el
@@ -80,6 +109,12 @@
             .replace(/(\S+)\s*<\s*latex\s*#([\s\S]*?)#\s*>/gi, '$1')
             .replace(/<\s*latex\s*#([\s\S]*?)#\s*>/gi, ' $1 ')
             .replace(/<\s*(?:termina\s+)?ecuaci[oó]n\s*>/gi, ' ')
+            // Las marcas del guion se van al final, después de las de fórmulas:
+            // `<Latex>…<Termino Latex>` borra también lo de en medio y tiene
+            // que correr antes de que la regla general se lleve los extremos.
+            .replace(MARCAS_DEL_GUION, function (marca) {
+                return /\p{L}/u.test(marca) ? ' ' : marca;
+            })
             .replace(/\\sqrt\s*\{([^{}]+)\}/gi, '$1')
             .replace(/[_^]\{([^{}]+)\}/g, '$1')
             .replace(/\\cdot\b|\u00b7|\u22c5/gi, ' operadorproducto ')
@@ -159,6 +194,13 @@
         }) || null;
     }
 
+    /* El morado marca la respuesta correcta, pero los guiones no lo ponen en el
+       mismo sitio: unos pintan el texto de la respuesta (columna Respuestas) y
+       otros la palabra “Correcta.” de la retroalimentación. Se miran las dos
+       celdas. En los cuatro guiones revisados cada uno usa una sola de las dos
+       formas, nunca las dos ni contradiciéndose, así que aceptar ambas no
+       afloja nada: la comprobación cruzada contra la palabra “Correcta.” sigue
+       en pie y salta si el morado cae en una “Incorrecta.”. */
     function resaltadoMagenta(celda) {
         return [...celda.getElementsByTagNameNS(W_NS, 'r')].some(run => {
             // Word puede dejar runs vacíos con el resaltado anterior. Solo
@@ -258,6 +300,8 @@
         // lectura sale mal, lo primero que hay que ver es cómo se agruparon las
         // filas.
         const formas = { combinada: 0, vacia: 0, repetida: 0 };
+        // En cuál de las dos celdas apareció el morado, para poder decirlo.
+        const marcas = { respuesta: 0, retroalimentacion: 0 };
         let filasLeidas = 0;
         let actual = null;
         for (const fila of filasDirectas(tabla).slice(1)) {
@@ -274,6 +318,12 @@
                     textoPrincipal: partes.textoPrincipal,
                     contenidoTabular: partes.contenidoTabular,
                     tieneTabla: partes.tieneTabla,
+                    // El enunciado también puede llevar imagen, y de dos formas:
+                    // incrustada en la celda o anunciada con la marca <Figura>
+                    // para que producción la coloque. Las dos significan “aquí
+                    // va una imagen” y las dos hay que revisarlas a ojo.
+                    imagenesEnunciado: idsImagenes(celdas[0]).length,
+                    esperaFigura: MARCAS_DE_IMAGEN.test(crudo),
                     opciones: []
                 };
                 preguntas.push(actual);
@@ -284,7 +334,11 @@
             }
             if (!actual) continue;
             const retroalimentacion = textoNodo(celdas[2]);
-            const correctaPorColor = resaltadoMagenta(celdas[1]);
+            const moradoEnRespuesta = resaltadoMagenta(celdas[1]);
+            const moradoEnRetro = resaltadoMagenta(celdas[2]);
+            if (moradoEnRespuesta) marcas.respuesta++;
+            if (moradoEnRetro) marcas.retroalimentacion++;
+            const correctaPorColor = moradoEnRespuesta || moradoEnRetro;
             const correctaPorRetro = /^correcta\b/i.test(limpiar(retroalimentacion));
             actual.opciones.push({
                 texto: sinLetraDeOpcion(textoNodo(celdas[1])),
@@ -370,6 +424,26 @@
         if (formas.vacia) formasLeidas.push('celda vacía');
         if (formas.repetida) formasLeidas.push('enunciado repetido');
 
+        // Las marcas se borran para comparar, pero anuncian una imagen que la
+        // herramienta NO sabe cotejar en el enunciado: hay que mirarla a ojo.
+        const conMarca = preguntas
+            .map((p, i) => (MARCAS_DE_IMAGEN.test(p.texto + ' ' + p.contenidoTabular) ? i + 1 : 0))
+            .filter(Boolean);
+        if (conMarca.length) {
+            avisos.push(`Revisa a ojo la imagen de ${conMarca.length === 1 ? 'el reactivo' : 'los reactivos'} `
+                + `${enumerar(conMarca.map(String))}: el guion la anuncia con una marca `
+                + `(<Figura>) y eso no se puede cotejar solo.`);
+        }
+
+        const donde = [];
+        if (marcas.respuesta) donde.push('sobre la respuesta');
+        if (marcas.retroalimentacion) donde.push('sobre la retroalimentación');
+        // Las dos a la vez no se han visto; si pasa, mejor saberlo que suponerlo.
+        if (donde.length > 1) {
+            avisos.push('El morado de la respuesta correcta aparece unas veces sobre la respuesta '
+                + 'y otras sobre la retroalimentación.');
+        }
+
         const todo = [...doc.getElementsByTagNameNS(W_NS, 'p')]
             .map(textoNodo).filter(Boolean).join('\n');
         const intentos = todo.match(/Intentos\s+permitidos\s*:\s*(\d+)/i);
@@ -379,13 +453,23 @@
 
         return {
             archivo: file.name,
+            clave: claveDeEvidencia(file.name),
             titulo: valorDespuesDeEtiqueta(doc, 'Título del recurso:'),
             instruccion: instruccionCruda.replace(/^\s*Instrucciones\s*:\s*/i, ''),
             preguntas,
             avisos,
             lectura: {
                 filas: filasLeidas,
-                formato: formasLeidas.join(' + ') || 'una fila por reactivo'
+                formato: formasLeidas.join(' + ') || 'una fila por reactivo',
+                marca: donde.join(' y ') || 'sin morado en el guion',
+                // Cuáles se ignoraron, para que borrarlas no sea magia
+                // invisible: si una era contenido de verdad, se ve aquí. Solo
+                // las de los reactivos, que son las que afectan al cotejo.
+                marcasIgnoradas: [...new Set(preguntas
+                    .map(p => [p.texto, p.contenidoTabular,
+                        ...p.opciones.map(o => o.texto + ' ' + o.retroalimentacion)].join(' '))
+                    .join(' ')
+                    .match(MARCAS_DEL_GUION) || [])].filter(m => /\p{L}/u.test(m)).sort()
             },
             perfil: {
                 minimoReactivos: 5,
@@ -456,11 +540,36 @@
         });
     }
 
+    /* La clave con que producción nombra el guion: `SM1S4-CF4` dentro de
+       `01S.03_PR_SM1S4-CF4_Comunicacion….docx`. Se calcula UNA vez, aquí, y
+       viaja en los datos: da nombre al PDF de la evidencia y también al
+       marcador, para que al arrastrarlo a la barra el favorito se llame igual
+       que el archivo que va a producir.
+
+       El separador cambia según quién nombre el archivo (`SM1S4-CF4`,
+       `SM2S1_CF1`): se acepta cualquiera y siempre sale con guion. Sin clave se
+       usa el nombre del archivo saneado, antes que inventar una. */
+    function claveDeEvidencia(nombre) {
+        const texto = String(nombre || '');
+        const clave = texto.match(/SM\s*(\d+)\s*S\s*(\d+)\s*[-_ ]?\s*CF\s*(\d+)/i);
+        if (clave) return `SM${clave[1]}S${clave[2]}-CF${clave[3]}`;
+        const base = texto.replace(/\.[a-z0-9]+$/i, '').trim();
+        if (base) return base.replace(/[\\/:*?"<>|\s]+/g, '_');
+        return new Date().toISOString().slice(0, 10);
+    }
+
     const escapar = (s) => String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+    /* El generador de evidencia vive en `assets/evidencia-qa.js` y lo comparten
+       las dos herramientas de QA, así que viaja serializado junto al
+       verificador y se le pasa como argumento. No se cuelga de `window` para no
+       dejar rastro en la página de Moodle. */
     function codigoVerificador() {
-        return 'void (' + window.VERIFICADOR_CF.toString() + ')(' + JSON.stringify(datos) + ');';
+        return 'void (function () {\n'
+            + 'var evidencia = ' + window.EVIDENCIA_QA.toString() + ';\n'
+            + '(' + window.VERIFICADOR_CF.toString() + ')(' + JSON.stringify(datos) + ', evidencia);\n'
+            + '}());';
     }
 
     function dibujar() {
@@ -478,6 +587,9 @@
         const codigo = codigoVerificador();
         $('#codigo').value = codigo;
         $('#marcador').setAttribute('href', 'javascript:' + encodeURIComponent(codigo));
+        // El texto del enlace es el nombre que toma el favorito al arrastrarlo
+        // a la barra: el mismo del PDF, así el marcador dice de qué guion es.
+        $('#marcador-nombre').textContent = 'QA_' + datos.cuestionario.clave;
         dibujarRevision();
     }
 
@@ -494,6 +606,7 @@
             <div class="resumen-dato"><span>Título</span><span>${escapar(q.titulo || '—')}</span></div>
             <div class="resumen-dato"><span>Reactivos</span><span>${q.preguntas.length}</span></div>
             <div class="resumen-dato"><span>Lectura del Word</span><span>${q.lectura.filas} filas · ${escapar(q.lectura.formato)}</span></div>
+            <div class="resumen-dato"><span>Respuesta correcta</span><span>morado ${escapar(q.lectura.marca)}</span></div>
             <div class="resumen-dato"><span>Correctas identificadas</span><span>${correctas} de ${q.preguntas.length}</span></div>
             <div class="resumen-dato"><span>Imágenes en respuestas</span><span>${imagenes}</span></div>
             <div class="resumen-dato"><span>Perfil</span><span>${q.perfil.intentos} intentos · calificación más alta · respuestas barajables</span></div>
@@ -538,7 +651,11 @@
             <p class="check-nota">Tabla <strong>Pregunta · Respuestas · Retroalimentación</strong> de
             ${q.lectura.filas} filas, agrupadas por <strong>${escapar(q.lectura.formato)}</strong>:
             ${q.preguntas.length} reactivos ${escapar(reparto)}.
+            La respuesta correcta se tomó del <strong>morado ${escapar(q.lectura.marca)}</strong>.
             Los puntajes no vienen en el guion: se leen de Moodle y se informan al final.</p>
+            ${q.lectura.marcasIgnoradas.length ? `<p class="check-nota"><strong>Marcas de producción
+            ignoradas</strong> (son instrucciones de montaje, no contenido; en Moodle no deben aparecer):
+            ${q.lectura.marcasIgnoradas.map(m => `<code>${escapar(m)}</code>`).join(' ')}</p>` : ''}
         </div>
         <div class="check-bloque">
             <h3><i class="ph ph-sliders-horizontal"></i> Configuración solicitada</h3>

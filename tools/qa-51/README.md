@@ -131,6 +131,81 @@ o sobra contenido, cambia un puntaje, falta un criterio, falta el enlace),
   sobrante. **Dos errores inventados por adelantarse.** Primero se resuelve todo
   lo exacto; lo que queda sin pareja se busca por parecido en una pasada aparte.
 
+### Por dónde empieza el guion (la trampa más cara)
+
+Lo que se publica empieza después de la hoja de control, y hay **dos** formas de
+abrir sección:
+
+- con la marca `<h1>`/`<h2>`, o
+- con la **barra de título**: una tabla de **una sola celda**. Esa forma la
+  distingue de la hoja de control, cuyas fichas son siempre tablas de dos o más
+  columnas.
+
+Manda **la que aparezca primero**. Entrar solo por la marca de encabezado
+reventaba con los guiones mixtos: la `AA1` de regularización abre sus cuatro
+secciones con barra de título sin marcar y trae un único `<h2>` justo antes de
+*Evidencia de aprendizaje*, en el bloque 36 de 40. El lector arrancaba ahí y se
+quedaba con **4 textos de 29**; en Moodle, la actividad entera salía como
+«Sobra · Texto que no está en el guion» —23 avisos sobre un montaje correcto—.
+
+Ojo con el filtro de la hoja de control: sirve para decidir **dónde empieza**,
+no para clasificar dentro del cuerpo. `Propósito(s) formativo(s)` es a la vez un
+campo de la ficha editorial y un título real de la actividad; excluirlo también
+en el cuerpo lo convertía en una «tabla de contenido» que Moodle nunca iba a
+tener, y salía «Falta la tabla 1».
+
+El resumen dice siempre por dónde entró. **Si un guion reporta un número de
+textos sospechosamente bajo, eso es lo primero que hay que mirar.**
+
+---
+
+## La evidencia imprimible
+
+El panel de resultados trae un botón **Generar evidencia (PDF)**: abre una
+ventana con el informe maquetado y la manda a imprimir, para guardarla con
+*Guardar como PDF*. No hay librería —un generador de PDF no cabe en un
+bookmarklet y Moodle bloquearía el script externo—, así que el PDF lo produce el
+navegador.
+
+El documento lo arma **`assets/evidencia-qa.js`**, compartido con el *QA de
+Cuestionario Formativo*: es el mismo informe con otros datos. Se serializa
+dentro del bookmarklet, viaja junto al verificador y se le pasa como argumento;
+recibe los textos **ya resaltados** por la `diferencia()` de este verificador,
+así que el PDF enseña exactamente lo mismo que el panel. Aquí la columna
+izquierda se llama **«En el Word»**, no «Debe decir», porque eso es literalmente
+lo que dice el guion.
+
+Sirve para los dos modos: en la pantalla de la actividad sale la ficha con los
+textos del guion y el código; en la de la rúbrica, los criterios y el puntaje.
+
+### El nombre del archivo (y el del marcador)
+
+El `<title>` de la ventana es el nombre con que se guarda el PDF, y sale de la
+clave del Word. **El marcador lleva ese mismo nombre**: al arrastrarlo a la
+barra, el navegador usa el texto del enlace como nombre del favorito, así que
+queda `QA_SM1S1_AA1` en vez de un genérico «Verificar en Moodle» —con varios
+guardados a la vez, se distinguen—.
+
+La clave se calcula **una sola vez**, en `script.js`, y viaja dentro de los
+datos del verificador: el nombre del marcador y el del PDF salen del mismo sitio
+y no pueden desincronizarse.
+
+| Word | PDF |
+|---|---|
+| `01S.03_PR_SM1S1-AA1_La_tecnologia_en_tu_entorno.docx` | `QA_SM1S1_AA1` |
+| `01S.03_PR_SM2S3_AA3_….docx` | `QA_SM2S3_AA3` |
+| `01S.03_PR_SM02S03_AA03_….docx` | `QA_SM2S3_AA3` |
+| `AA5_sin_clave.docx` | `QA_AA5_sin_clave` |
+
+El separador que traiga el archivo da igual (`SM1S1-AA1`, `SM1S1_AA1`,
+`SM1S1AA1`) y los ceros a la izquierda se quitan.
+
+**Solo esta forma**, a propósito. Los guiones de módulo (`M17_AI3`,
+`M17_S3_AI5_Rubrica`) son de Moodle 3.11 y esta herramienta es de 5.1:
+reconocerlos le pondría un nombre creíble a una evidencia hecha con la
+herramienta equivocada, y eso es justo lo que no debe pasar desapercibido. Sin
+clave se usa el nombre del archivo saneado —y ahí se nota—; el `QA_` va siempre.
+
 ---
 
 ## Pruebas mínimas
