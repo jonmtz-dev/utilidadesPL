@@ -4,16 +4,97 @@
 .zona-simple { grid-template-columns: minmax(0, 1fr); }
 .zona-simple .dropzone { min-height: 150px; }
 
+/* Los avisos del guion son la razón de ser de la herramienta: si uno se pierde,
+   el error se descubre hasta Moodle. Van en un bloque propio, uno por renglón y
+   con la cuenta por delante —pegados en un párrafo, a partir del tercero ya no
+   los lee nadie—. */
 .resumen-alerta {
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
-    margin-top: 9px;
-    padding: 9px 10px;
+    margin-top: 11px;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+    border-left-width: 4px;
     border-radius: 8px;
-    background: color-mix(in srgb, var(--warning) 14%, transparent);
-    color: var(--text-primary);
+    background: color-mix(in srgb, var(--warning) 13%, transparent);
+    color: var(--text-main);
     font-size: 12px;
+}
+
+.resumen-alerta-titulo {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    margin-bottom: 7px;
+    color: var(--warning);
+    font-size: 12.5px;
+    font-weight: 700;
+}
+
+.resumen-alerta-titulo i { font-size: 15px; }
+
+.resumen-alerta-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    line-height: 1.45;
+}
+
+.resumen-alerta-lista li {
+    position: relative;
+    padding-left: 13px;
+}
+
+/* El punto va como pseudoelemento y no como viñeta para que herede el ámbar
+   sin depender del marcador del navegador. */
+.resumen-alerta-lista li::before {
+    content: '';
+    position: absolute;
+    top: .5em;
+    left: 2px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--warning);
+}
+
+/* Sin avisos también se dice: así el ámbar significa algo cuando aparece. */
+.resumen-limpio {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    margin-top: 11px;
+    padding: 9px 11px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--success) 12%, transparent);
+    color: var(--success);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.resumen-limpio i { font-size: 15px; }
+
+/* Un reactivo que se leyó raro (otro número de opciones, ninguna correcta) no
+   puede pasar desapercibido en la lista: casi siempre significa que dos filas
+   del Word se agruparon donde no debían. */
+.qa-linea--alerta {
+    border-left: 3px solid var(--warning);
+    margin-left: -9px;
+    padding-left: 6px;
+}
+
+.qa-linea--alerta .qa-etiqueta { color: var(--warning); }
+
+.qa-pega {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--warning) 18%, transparent);
+    color: var(--warning);
+    font-size: 10.5px;
+    font-weight: 700;
 }
 
 .qa-opciones {

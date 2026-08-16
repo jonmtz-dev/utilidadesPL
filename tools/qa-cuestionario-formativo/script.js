@@ -33,6 +33,44 @@
         return limpiar(s).replace(/^\s*(?:pregunta\s+)?\d{1,3}\s*[.)\-–—]{1,3}(?=\s|[\p{L}¿¡])\s*/iu, '').trim();
     }
 
+    // El número editorial del reactivo, cuando el guion lo escribe. Es la única
+    // señal que distingue dos reactivos con el MISMO enunciado, cosa que pasa
+    // de verdad: en “Primeros pasos a la Cultura digital” la 5 y la 6 son
+    // idénticas palabra por palabra.
+    function numeroDePregunta(s) {
+        const m = limpiar(s).match(/^\s*(?:pregunta\s+)?(\d{1,3})\s*[.)\-–—]{1,3}(?=\s|[\p{L}¿¡])/iu);
+        return m ? Number(m[1]) : null;
+    }
+
+    // Word marca las celdas combinadas verticalmente: la fila donde empieza la
+    // combinación lleva <w:vMerge w:val="restart"> y las siguientes un
+    // <w:vMerge> sin valor. Se lee del `tcPr` propio de la celda, no de uno de
+    // una tabla anidada dentro de ella.
+    function continuaCombinacion(celda) {
+        const hijoDirecto = (nodo, nombre) => [...nodo.childNodes].find(n =>
+            n.nodeType === 1 && n.namespaceURI === W_NS && n.localName === nombre);
+        const propiedades = hijoDirecto(celda, 'tcPr');
+        const combinacion = propiedades && hijoDirecto(propiedades, 'vMerge');
+        if (!combinacion) return false;
+        return !/^restart$/i.test(combinacion.getAttributeNS(W_NS, 'val') || '');
+    }
+
+    /* Cada reactivo ocupa varias filas y los guiones lo escriben de tres formas:
+       con la celda Pregunta combinada verticalmente (el enunciado solo en la
+       primera fila), dejando vacías las celdas de continuación, o repitiendo el
+       mismo enunciado en las cuatro filas. Decidir solo por “el texto cambió”
+       cubría las tres, pero fusionaba dos reactivos consecutivos con el mismo
+       enunciado: por eso el Word de Cultura digital se leía con 14 reactivos y
+       las respuestas de la 6 acababan colgando de la 5. */
+    function abreReactivo(celda, enunciado, actual) {
+        if (continuaCombinacion(celda)) return false;   // Word ya dijo que sigue
+        if (!enunciado) return false;                   // fila sin enunciado
+        if (!actual) return true;
+        const numero = numeroDePregunta(enunciado);
+        if (numero !== null && actual.numero !== null) return numero !== actual.numero;
+        return firma(sinNumeroDePregunta(enunciado)) !== firma(actual.texto);
+    }
+
     function normalizarNotacion(s) {
         return String(s == null ? '' : s)
             // Cuando el guion trae símbolo visible + código alternativo, el
@@ -54,6 +92,12 @@
     function firma(s) {
         return limpiar(normalizarNotacion(s)).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .toLocaleLowerCase('es-MX').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    }
+
+    // \u201cA y B\u201d, \u201cA, B y C\u201d: los avisos se leen de corrido y un \u201cA y B y C\u201d chirr\u00eda.
+    function enumerar(lista) {
+        if (lista.length < 2) return lista.join('');
+        return lista.slice(0, -1).join(', ') + ' y ' + lista[lista.length - 1];
     }
 
     function textoNodo(nodo) {
@@ -210,21 +254,33 @@
         if (!tabla) throw new Error('No se encontró la tabla “Pregunta · Respuestas · Retroalimentación”.');
 
         const preguntas = [];
+        // Cómo venía escrito el Word, para poder enseñarlo en el resumen: si la
+        // lectura sale mal, lo primero que hay que ver es cómo se agruparon las
+        // filas.
+        const formas = { combinada: 0, vacia: 0, repetida: 0 };
+        let filasLeidas = 0;
         let actual = null;
         for (const fila of filasDirectas(tabla).slice(1)) {
             const celdas = celdasDirectas(fila, tabla);
             if (celdas.length < 3) continue;
-            const pregunta = sinNumeroDePregunta(textoNodo(celdas[0]));
-            if (pregunta && (!actual || firma(pregunta) !== firma(actual.texto))) {
+            filasLeidas++;
+            const crudo = textoNodo(celdas[0]);
+            const pregunta = sinNumeroDePregunta(crudo);
+            if (abreReactivo(celdas[0], crudo, actual)) {
                 const partes = partesDePregunta(celdas[0], tabla);
                 actual = {
                     texto: pregunta,
+                    numero: numeroDePregunta(crudo),
                     textoPrincipal: partes.textoPrincipal,
                     contenidoTabular: partes.contenidoTabular,
                     tieneTabla: partes.tieneTabla,
                     opciones: []
                 };
                 preguntas.push(actual);
+            } else if (actual) {
+                if (continuaCombinacion(celdas[0])) formas.combinada++;
+                else if (!pregunta) formas.vacia++;
+                else formas.repetida++;
             }
             if (!actual) continue;
             const retroalimentacion = textoNodo(celdas[2]);
@@ -250,10 +306,69 @@
                     avisos.push(`Pregunta ${i + 1}, opción ${String.fromCharCode(65 + j)}: el morado y “Correcta/Incorrecta” no coinciden.`);
                 }
             });
+            // Una celda en blanco se lee sin protestar y en Moodle aparece como
+            // una opción vacía. Una respuesta puede no tener texto —las hay solo
+            // con imagen—, pero entonces tiene que traer la imagen.
+            p.opciones.forEach((o, j) => {
+                const letra = String.fromCharCode(65 + j);
+                if (!o.texto && !o.imagenes.length) {
+                    avisos.push(`Pregunta ${i + 1}, opción ${letra}: la celda de respuesta está vacía.`);
+                }
+                if (!limpiar(o.retroalimentacion)) {
+                    avisos.push(`Pregunta ${i + 1}, opción ${letra}: no tiene retroalimentación.`);
+                }
+            });
+            // Dos opciones iguales dentro del mismo reactivo: el mismo descuido
+            // que dos reactivos gemelos, una celda más abajo. El verificador las
+            // emparejaría con la misma respuesta de Moodle y el error saldría
+            // donde no es.
+            const porOpcion = new Map();
+            p.opciones.forEach((o, j) => {
+                const clave = o.texto ? firma(o.texto)
+                    : (o.imagenes.length ? 'imagen:' + o.imagenes.map(im => im.nombre).join('|') : '');
+                if (!clave) return;   // la vacía ya se avisó arriba
+                if (!porOpcion.has(clave)) porOpcion.set(clave, []);
+                porOpcion.get(clave).push(String.fromCharCode(65 + j));
+            });
+            porOpcion.forEach(letras => {
+                if (letras.length > 1) {
+                    avisos.push(`Pregunta ${i + 1}: las opciones ${enumerar(letras)} son idénticas.`);
+                }
+            });
         });
         if (preguntas.length < 5 || preguntas.length > 10) {
             avisos.push(`El guion tiene ${preguntas.length} reactivos; sus indicaciones permiten de 5 a 10.`);
         }
+
+        // Dos reactivos con el mismo enunciado se leen bien —los separa el
+        // número—, pero casi siempre son un descuido del guion: hay que verlo
+        // aquí y no descubrirlo en Moodle.
+        const porEnunciado = new Map();
+        preguntas.forEach((p, i) => {
+            const clave = firma(p.texto);
+            if (!porEnunciado.has(clave)) porEnunciado.set(clave, []);
+            porEnunciado.get(clave).push(i + 1);
+        });
+        porEnunciado.forEach(lista => {
+            if (lista.length > 1) {
+                avisos.push(`Los reactivos ${enumerar(lista.map(String))} tienen el mismo enunciado en el guion.`);
+            }
+        });
+        // La numeración del Word tiene que ir 1, 2, 3… Si salta o se repite, o
+        // el guion está mal numerado o una fila se agrupó donde no debía.
+        const numerados = preguntas.filter(p => p.numero !== null);
+        if (numerados.length === preguntas.length) {
+            const desfase = preguntas.filter((p, i) => p.numero !== i + 1);
+            if (desfase.length) {
+                avisos.push(`La numeración del guion no es correlativa: se leyó `
+                    + preguntas.map(p => p.numero).join(', ') + '.');
+            }
+        }
+
+        const formasLeidas = [];
+        if (formas.combinada) formasLeidas.push('celda combinada');
+        if (formas.vacia) formasLeidas.push('celda vacía');
+        if (formas.repetida) formasLeidas.push('enunciado repetido');
 
         const todo = [...doc.getElementsByTagNameNS(W_NS, 'p')]
             .map(textoNodo).filter(Boolean).join('\n');
@@ -268,6 +383,10 @@
             instruccion: instruccionCruda.replace(/^\s*Instrucciones\s*:\s*/i, ''),
             preguntas,
             avisos,
+            lectura: {
+                filas: filasLeidas,
+                formato: formasLeidas.join(' + ') || 'una fila por reactivo'
+            },
             perfil: {
                 minimoReactivos: 5,
                 maximoReactivos: 10,
@@ -374,17 +493,54 @@
             <div class="resumen-dato"><span>Archivo</span><span><code>${escapar(nombreArchivo)}</code></span></div>
             <div class="resumen-dato"><span>Título</span><span>${escapar(q.titulo || '—')}</span></div>
             <div class="resumen-dato"><span>Reactivos</span><span>${q.preguntas.length}</span></div>
+            <div class="resumen-dato"><span>Lectura del Word</span><span>${q.lectura.filas} filas · ${escapar(q.lectura.formato)}</span></div>
             <div class="resumen-dato"><span>Correctas identificadas</span><span>${correctas} de ${q.preguntas.length}</span></div>
             <div class="resumen-dato"><span>Imágenes en respuestas</span><span>${imagenes}</span></div>
             <div class="resumen-dato"><span>Perfil</span><span>${q.perfil.intentos} intentos · calificación más alta · respuestas barajables</span></div>
-            ${q.avisos.length ? `<div class="resumen-alerta"><i class="ph ph-warning-circle"></i><span>${escapar(q.avisos.join(' '))}</span></div>` : ''}
+            ${q.avisos.length ? `<div class="resumen-alerta">
+                <p class="resumen-alerta-titulo">
+                    <i class="ph-fill ph-warning"></i>
+                    ${q.avisos.length} ${q.avisos.length === 1 ? 'aviso del guion' : 'avisos del guion'}
+                </p>
+                <ul class="resumen-alerta-lista">
+                    ${q.avisos.map(a => `<li>${escapar(a)}</li>`).join('')}
+                </ul>
+            </div>` : `<div class="resumen-limpio">
+                <i class="ph-fill ph-check-circle"></i> El guion se leyó sin avisos.
+            </div>`}
         </div>`;
         $('#btn-quitar').addEventListener('click', quitar);
     }
 
+    // Qué le pasa a un reactivo tal como se leyó del Word. Vacío = está bien.
+    // El objetivo es que una lectura torcida (dos reactivos fusionados, una
+    // correcta sin morado) se vea aquí antes de ir a Moodle.
+    function pegasDelReactivo(p) {
+        const pegas = [];
+        const correctas = p.opciones.filter(o => o.correcta).length;
+        if (p.opciones.length !== 4) pegas.push(`${p.opciones.length} opciones`);
+        if (correctas !== 1) pegas.push(correctas ? `${correctas} correctas` : 'sin correcta');
+        if (p.opciones.some(o => !o.texto && !o.imagenes.length)) pegas.push('opción vacía');
+        if (p.opciones.some(o => !limpiar(o.retroalimentacion))) pegas.push('sin retroalimentación');
+        const claves = p.opciones.map(o => firma(o.texto)).filter(Boolean);
+        if (new Set(claves).size !== claves.length) pegas.push('opciones repetidas');
+        return pegas;
+    }
+
     function dibujarRevision() {
         const q = datos.cuestionario;
+        const tamanos = [...new Set(q.preguntas.map(p => p.opciones.length))].sort((a, b) => a - b);
+        const reparto = tamanos.length === 1
+            ? `de ${tamanos[0]} opciones cada uno`
+            : `con ${tamanos.join(', ')} opciones según el reactivo`;
         $('#revisar-lista').innerHTML = `<div class="check-bloque">
+            <h3><i class="ph ph-file-magnifying-glass"></i> Cómo se leyó el Word</h3>
+            <p class="check-nota">Tabla <strong>Pregunta · Respuestas · Retroalimentación</strong> de
+            ${q.lectura.filas} filas, agrupadas por <strong>${escapar(q.lectura.formato)}</strong>:
+            ${q.preguntas.length} reactivos ${escapar(reparto)}.
+            Los puntajes no vienen en el guion: se leen de Moodle y se informan al final.</p>
+        </div>
+        <div class="check-bloque">
             <h3><i class="ph ph-sliders-horizontal"></i> Configuración solicitada</h3>
             <p class="check-nota">${q.perfil.intentos} intentos · calificación más alta · retroalimentación diferida ·
             mostrar correcta/incorrecta · ocultar la respuesta correcta · respuestas barajables ·
@@ -393,14 +549,22 @@
         </div>
         <div class="check-bloque">
             <h3><i class="ph ph-list-numbers"></i> Reactivos (${q.preguntas.length})</h3>
-            <div class="qa-lista-textos">${q.preguntas.map((p, i) => `
-                <div class="qa-linea"><span class="qa-etiqueta">Pregunta ${i + 1}</span>
+            <div class="qa-lista-textos">${q.preguntas.map((p, i) => {
+                const pegas = pegasDelReactivo(p);
+                // El número del Word solo se enseña cuando no coincide con la
+                // posición: si el guion salta un número, aquí se ve.
+                const numero = p.numero !== null && p.numero !== i + 1 ? ` · Word ${p.numero}` : '';
+                return `
+                <div class="qa-linea${pegas.length ? ' qa-linea--alerta' : ''}">
+                    <span class="qa-etiqueta">Pregunta ${i + 1}${numero}</span>
                     <span class="qa-texto">${escapar(p.texto.slice(0, 180))}${p.texto.length > 180 ? '…' : ''}
+                    ${pegas.length ? `<span class="qa-pega">${escapar(pegas.join(' · '))}</span>` : ''}
                     <span class="qa-opciones">${p.opciones.map((o, j) => `
                         <span class="qa-opcion ${o.correcta ? 'qa-opcion--correcta' : ''}"
                               title="${escapar(o.texto || (o.imagenes.length ? 'Respuesta con imagen' : 'Sin texto'))}">
                             ${String.fromCharCode(65 + j)}${o.correcta ? ' ✓' : ''} · ${escapar(o.texto || (o.imagenes.length ? 'Imagen' : '—'))}
-                        </span>`).join('')}</span></span></div>`).join('')}
+                        </span>`).join('')}</span></span></div>`;
+            }).join('')}
             </div>
         </div>`;
     }
