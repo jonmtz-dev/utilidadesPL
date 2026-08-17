@@ -106,7 +106,18 @@
             // segundo es una duplicación editorial y Moodle solo muestra uno.
             .replace(/<\s*latex\s*>([\s\S]*?)<\s*termino\s+latex\s*>/gi, ' ')
             .replace(/<\s*cod\s+lat\s*>[\s\S]*?<\s*termina\s+cod\s+lat\s*>/gi, ' ')
-            .replace(/(\S+)\s*<\s*latex\s*#([\s\S]*?)#\s*>/gi, '$1')
+            /* El guion escribe el símbolo visible y a su lado el código para
+               quien monta: `∧<Latex#\wedge #>`. El código sobra al comparar,
+               porque en Moodle solo queda el símbolo.
+
+               El espacio del final NO es decorativo: el guion no es constante
+               con el espaciado —`∧<Latex#\wedge #> (1)` no lleva espacio antes
+               de la marca y `⇒ <Latex#\Rightarrow #>(3)` no lo lleva después—.
+               Al borrar la marca sin dejar nada, el segundo quedaba «⇒(3)»
+               contra el «⇒ (3)» de Moodle y se reportaba una retroalimentación
+               cambiada que estaba idéntica. `limpiar()` junta los espacios
+               sobrantes, así que las dos formas acaban igual. */
+            .replace(/(\S+)\s*<\s*latex\s*#([\s\S]*?)#\s*>/gi, '$1 ')
             .replace(/<\s*latex\s*#([\s\S]*?)#\s*>/gi, ' $1 ')
             .replace(/<\s*(?:termina\s+)?ecuaci[oó]n\s*>/gi, ' ')
             // Las marcas del guion se van al final, después de las de fórmulas:
@@ -115,7 +126,14 @@
             .replace(MARCAS_DEL_GUION, function (marca) {
                 return /\p{L}/u.test(marca) ? ' ' : marca;
             })
-            .replace(/\\sqrt\s*\{([^{}]+)\}/gi, '$1')
+            /* La raíz se escribe de tres formas —`\sqrt{2}` en el código,
+               `√(2)` y `√2` en la página— y las tres son la misma. Se llevan a
+               una forma interna común para que ninguna combinación de las dos
+               puntas se reporte como diferencia. Antes se borraba el radical y
+               quedaba «2», que casaba con cualquier 2 suelto. */
+            .replace(/\\sqrt\s*\{([^{}]+)\}/gi, ' raizde$1 ')
+            .replace(/√\s*\(\s*([^()]*?)\s*\)/g, ' raizde$1 ')
+            .replace(/√\s*(\S+)/g, ' raizde$1 ')
             .replace(/[_^]\{([^{}]+)\}/g, '$1')
             .replace(/\\cdot\b|\u00b7|\u22c5/gi, ' operadorproducto ')
             .replace(/\\_/g, ' marcadorvacio ')
@@ -135,6 +153,49 @@
         return lista.slice(0, -1).join(', ') + ' y ' + lista[lista.length - 1];
     }
 
+    /* Ecuaciones nativas de Word (OMML). Word no las guarda como texto: la
+       estructura ESTÁ en el XML y el símbolo no. Al leer solo los `m:t`, una
+       raíz cuadrada de 2 se aplanaba a «2» y una fracción 3/1 a «31»: números
+       que no significan nada y que nunca iban a casar con el «√(2)» y el «3/1»
+       que se ven en Moodle.
+
+       Solo se reconstruyen las dos que pierden información en el guion de
+       verdad —el radical y la fracción—. El subíndice (`MgCl2`) y el resto ya
+       se leían bien concatenando, y tocarlos sería arreglar lo que no falla. */
+    function textoDeMath(nodo) {
+        if (!nodo) return '';
+        const partes = [];
+        [...nodo.childNodes].forEach(h => {
+            if (h.nodeType !== 1) return;
+            if (h.namespaceURI === MATH_NS && h.localName === 't') {
+                partes.push(h.textContent || '');
+                return;
+            }
+            partes.push(textoDeMath(h));
+        });
+        return partes.join('');
+    }
+
+    function hijoMath(nodo, nombre) {
+        return [...nodo.childNodes].find(h => h.nodeType === 1
+            && h.namespaceURI === MATH_NS && h.localName === nombre) || null;
+    }
+
+    /** `√(2)` y `3/1` si el nodo es un radical o una fracción; si no, ''. */
+    function formulaDeMath(h) {
+        if (h.namespaceURI !== MATH_NS) return '';
+        if (h.localName === 'rad') {
+            const dentro = textoDeMath(hijoMath(h, 'e'));
+            return dentro ? '√(' + dentro + ')' : '';
+        }
+        if (h.localName === 'f') {
+            const arriba = textoDeMath(hijoMath(h, 'num'));
+            const abajo = textoDeMath(hijoMath(h, 'den'));
+            return arriba && abajo ? arriba + '/' + abajo : '';
+        }
+        return '';
+    }
+
     function textoNodo(nodo) {
         if (!nodo) return '';
         const partes = [];
@@ -145,6 +206,8 @@
                     partes.push(h.textContent || '');
                     return;
                 }
+                const formula = formulaDeMath(h);
+                if (formula) { partes.push(formula); return; }
                 if (h.namespaceURI === W_NS && (h.localName === 'br' || h.localName === 'tab')) {
                     partes.push(h.localName === 'br' ? '\n' : ' ');
                     return;
@@ -287,11 +350,109 @@
         return p ? textoNodo(p) : '';
     }
 
+    /* ------------------------------------------------------ Fórmulas del guion
+       Un reactivo "pide fórmula" cuando el guion pone LaTeX para él, y los
+       guiones lo hacen de CUATRO maneras distintas —una por autor—:
+
+         CF1  marca en el cuerpo, junto al símbolo:  ∧<Latex#\wedge #>
+         CF2  marca en el cuerpo + ecuación nativa de Word (OMML)
+         CF3  SOLO en un comentario de Word:         7^{2}, \sqrt{324}
+         CF4  comentario con otra sintaxis:          <Lat#10^{-2} #>  + OMML
+
+       Se reconocen las cuatro. Lo que se hace con eso está en el verificador:
+       si el guion pide fórmula, Moodle tiene que renderizarla (MathJax), no
+       dejarla como texto plano. */
+    const LATEX_EN_TEXTO = /<\s*(?:latex|lat|cod\s+lat)\b/i;
+    const COMANDOS_LATEX = ['frac', 'sqrt', 'wedge', 'vee', 'Rightarrow', 'Leftrightarrow',
+        'rightarrow', 'leftrightarrow', 'cdot', 'times', 'div', 'pi', 'alpha', 'beta',
+        'gamma', 'theta', 'leq', 'geq', 'neq', 'approx', 'sum', 'prod', 'int', 'infty'];
+    const LATEX_EN_COMENTARIO = new RegExp(
+        '\\\\(?:' + COMANDOS_LATEX.join('|') + ')\\b' + '|\\^\\{|_\\{|\\^-?\\d|\\$\\$'
+        + '|<\\s*(?:latex|lat|cod\\s+lat)\\b', 'i');
+
+    /* El código que hay que pegar en Moodle, sacado tal cual del guion. Cada
+       autor lo encierra distinto, y las tres formas conviven en el mismo Word:
+         <Latex#\wedge #>            <Lat#10^{-2} #>
+         <Latex>P \wedge Q<Termino Latex>
+         <Cod Lat> 2 \cdot \_ \cdot 5
+       Sirve para poder decir «escríbelo así» en vez de solo «falta LaTeX». */
+    const FORMAS_DE_MARCA = [
+        /<\s*(?:latex|lat)\s*#([^#]*?)#\s*>/gi,
+        /<\s*latex\s*>([\s\S]*?)<\s*t[eé]rmino\s+latex\s*>/gi,
+        /<\s*cod\s+lat\s*>([^<\n]*)/gi
+    ];
+
+    function codigosLatexDeTexto(texto) {
+        const codigos = [];
+        FORMAS_DE_MARCA.forEach(re => {
+            re.lastIndex = 0;
+            let m;
+            while ((m = re.exec(texto))) {
+                const codigo = (m[1] || '').replace(/\s+/g, ' ').trim();
+                if (codigo && codigos.indexOf(codigo) < 0) codigos.push(codigo);
+            }
+        });
+        return codigos;
+    }
+
+    /* En los comentarios el código viene con etiqueta delante —«Código LaTeX:»,
+       «Código Látex:», «Códigio Látex:»— y a veces con el resultado pegado
+       antes del código («Código LáTex:44=16<Lat#…#>»). Se quita la etiqueta, se
+       intentan las marcas y, si el comentario es el código pelado (el CF3
+       escribe `7^{2}` a secas), se toma completo. */
+    function codigosLatexDeComentario(texto) {
+        const limpio = String(texto || '').replace(/^\s*c[oó]dig?[oi]?\s*l[aá]?te?x?\s*:?/i, '').trim();
+        const marcados = codigosLatexDeTexto(limpio);
+        if (marcados.length) return marcados;
+        if (!limpio || limpio.length > 120) return [];
+        return LATEX_EN_COMENTARIO.test(limpio) ? [limpio.replace(/\s+/g, ' ')] : [];
+    }
+
+    /** Ecuación nativa de Word dentro de la celda. */
+    function tieneEcuacionDeWord(celda) {
+        return celda.getElementsByTagNameNS(MATH_NS, 'oMath').length > 0;
+    }
+
+    /* Nota sobre el delimitador, que es la confusión más común del montaje:
+       `\( … \)` deja la fórmula dentro de la frase y `$$ … $$` la manda sola y
+       centrada a su propio renglón.
+
+       La sugerencia SIEMPRE es `\( … \)`, a propósito. Se intentó deducirlo del
+       Word y no se puede: el guion parte la marca a un párrafo aparte
+       —«1. P ∧ Q» en uno y «<Latex>P \wedge Q<Termino Latex>» en el siguiente—,
+       así que «el párrafo solo tiene la fórmula» no significa que vaya sola en
+       Moodle. Con esa regla el CF1 salía mitad en línea y mitad en bloque,
+       siendo las cuatro filas de la misma tabla. Adivinar mal es peor que no
+       adivinar: `\( … \)` nunca rompe el renglón, es lo que hace el único
+       montaje bien hecho de los revisados (CF3) y el aviso explica cuándo
+       cambiarlo por `$$ … $$`. */
+
+    /* El comentario del CF3 se ancla a una celda VACÍA: `ancla` sale en blanco y
+       no hay texto con el que emparejarlo. Por eso se busca por posición —el
+       `w:id` del comentario aparece dentro de la propia celda— y no por texto. */
+    function idsDeComentarioEnCelda(celda) {
+        const ids = [];
+        ['commentRangeStart', 'commentRangeEnd', 'commentReference'].forEach(etiqueta => {
+            for (const n of [...celda.getElementsByTagNameNS(W_NS, etiqueta)]) {
+                const id = n.getAttributeNS(W_NS, 'id');
+                if (id !== null && ids.indexOf(id) < 0) ids.push(id);
+            }
+        });
+        return ids;
+    }
+
     async function construirCuestionario(file) {
-        const [doc, imagenesDocx] = await Promise.all([
+        const [doc, imagenesDocx, comentarios] = await Promise.all([
             abrirDocumentoDocx(file),
-            leerImagenesDeDocx(file)
+            leerImagenesDeDocx(file),
+            leerComentariosDeDocx(file).catch(() => [])
         ]);
+        // Comentarios que llevan LaTeX: son los que anuncian una fórmula. Se
+        // guardan por `w:id` para localizarlos por posición dentro de la tabla.
+        const latexPorId = new Map();
+        comentarios.forEach(c => {
+            if (LATEX_EN_COMENTARIO.test(c.texto)) latexPorId.set(c.id, codigosLatexDeComentario(c.texto));
+        });
         const tabla = buscarTablaPreguntas(doc);
         if (!tabla) throw new Error('No se encontró la tabla “Pregunta · Respuestas · Retroalimentación”.');
 
@@ -315,6 +476,12 @@
                 actual = {
                     texto: pregunta,
                     numero: numeroDePregunta(crudo),
+                    // Se completa fila por fila: la fórmula puede estar en el
+                    // enunciado, en una respuesta o en una retroalimentación.
+                    pideFormula: false,
+                    pideFormulaRetro: false,
+                    // Los códigos LaTeX del guion, para sugerir qué pegar.
+                    formulas: [],
                     textoPrincipal: partes.textoPrincipal,
                     contenidoTabular: partes.contenidoTabular,
                     tieneTabla: partes.tieneTabla,
@@ -333,6 +500,42 @@
                 else formas.repetida++;
             }
             if (!actual) continue;
+            // ¿Esta fila pide fórmula? Marca en el texto o ecuación de Word, en
+            // cualquiera de las tres celdas.
+            /* ¿Qué celdas de esta fila piden fórmula? Se separan a propósito:
+               la retroalimentación NO se ve en la vista previa del cuestionario
+               —solo aparece al responder—, así que exigirla ahí sería marcar un
+               error que nadie puede comprobar. Enunciado y respuesta sí se ven. */
+            const pide = (celda, guardarCodigo) => {
+                if (!celda) return false;
+                const crudo = textoNodo(celda);
+                const codigos = codigosLatexDeTexto(crudo);
+                idsDeComentarioEnCelda(celda).forEach(id => {
+                    (latexPorId.get(id) || []).forEach(c => {
+                        if (codigos.indexOf(c) < 0) codigos.push(c);
+                    });
+                });
+                if (!codigos.length && !LATEX_EN_TEXTO.test(crudo) && !tieneEcuacionDeWord(celda)
+                    && !idsDeComentarioEnCelda(celda).some(id => latexPorId.has(id))) return false;
+                /* Se guarda el código para poder decir «escríbelo así»; sin
+                   código —solo una ecuación de Word— basta con saber que va.
+                   Solo de las celdas visibles: el código de la retroalimentación
+                   no se puede cotejar y confundiría la sugerencia. */
+                if (guardarCodigo) {
+                    codigos.forEach(c => {
+                        if (actual.formulas.length < 6 && actual.formulas.indexOf(c) < 0) {
+                            actual.formulas.push(c);
+                        }
+                    });
+                }
+                return true;
+            };
+            // El orden importa: `||` corta, y las dos celdas visibles tienen
+            // que aportar su código aunque la primera ya haya dicho que sí.
+            const enEnunciado = pide(celdas[0], true);
+            const enRespuesta = pide(celdas[1], true);
+            if (enEnunciado || enRespuesta) actual.pideFormula = true;
+            if (pide(celdas[2], false)) actual.pideFormulaRetro = true;
             const retroalimentacion = textoNodo(celdas[2]);
             const moradoEnRespuesta = resaltadoMagenta(celdas[1]);
             const moradoEnRetro = resaltadoMagenta(celdas[2]);
@@ -430,9 +633,21 @@
             .map((p, i) => (MARCAS_DE_IMAGEN.test(p.texto + ' ' + p.contenidoTabular) ? i + 1 : 0))
             .filter(Boolean);
         if (conMarca.length) {
-            avisos.push(`Revisa a ojo la imagen de ${conMarca.length === 1 ? 'el reactivo' : 'los reactivos'} `
+            avisos.push(`Revisa a ojo la imagen ${conMarca.length === 1 ? 'del reactivo' : 'de los reactivos'} `
                 + `${enumerar(conMarca.map(String))}: el guion la anuncia con una marca `
                 + `(<Figura>) y eso no se puede cotejar solo.`);
+        }
+
+        /* El texto se compara por el símbolo visible, que es lo único que llega
+           a Moodle: el código `<Latex#\wedge #>` es una nota para quien monta.
+           Pero la nota sí obliga: ese reactivo va con la fórmula renderizada,
+           no con el carácter suelto. Quién lo comprueba es el verificador, ya
+           dentro de Moodle; aquí solo se anuncia. */
+        const conFormula = preguntas.map((p, i) => (p.pideFormula ? i + 1 : 0)).filter(Boolean);
+        if (conFormula.length) {
+            avisos.push(`El guion pide fórmula en ${conFormula.length === 1 ? 'el reactivo' : 'los reactivos'} `
+                + `${enumerar(conFormula.map(String))}: dentro de Moodle se comprobará que estén `
+                + `montadas como LaTeX —\\( … \\) en la frase, $$ … $$ si van solas— y no como texto.`);
         }
 
         const donde = [];

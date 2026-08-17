@@ -72,7 +72,12 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
         return String(s == null ? '' : s)
             .replace(/<\s*latex\s*>([\s\S]*?)<\s*termino\s+latex\s*>/gi, ' ')
             .replace(/<\s*cod\s+lat\s*>[\s\S]*?<\s*termina\s+cod\s+lat\s*>/gi, ' ')
-            .replace(/(\S+)\s*<\s*latex\s*#([\s\S]*?)#\s*>/gi, '$1')
+            /* El espacio del final no es decorativo: el guion no es constante
+               con el espaciado alrededor de la marca (`∧<Latex#\wedge #> (1)`
+               contra `⇒ <Latex#\Rightarrow #>(3)`) y borrarla sin dejar nada
+               pegaba el símbolo al paréntesis. `limpiar()` junta los sobrantes.
+               Copia literal de la de `script.js`. */
+            .replace(/(\S+)\s*<\s*latex\s*#([\s\S]*?)#\s*>/gi, '$1 ')
             .replace(/<\s*latex\s*#([\s\S]*?)#\s*>/gi, ' $1 ')
             .replace(/<\s*(?:termina\s+)?ecuaci[oó]n\s*>/gi, ' ')
             /* Marcas del guion: TODO lo que producción escribe entre < > es una
@@ -88,7 +93,13 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
             .replace(/<[^<>\n]{1,120}>/g, function (marca) {
                 return /\p{L}/u.test(marca) ? ' ' : marca;
             })
-            .replace(/\\sqrt\s*\{([^{}]+)\}/gi, '$1')
+            /* La raíz se escribe de tres formas —`\sqrt{2}`, `√(2)` y `√2`— y
+               las tres son la misma. Se llevan a una forma interna común para
+               que ninguna combinación entre el Word y la página se reporte como
+               diferencia. Copia literal de la de `script.js`. */
+            .replace(/\\sqrt\s*\{([^{}]+)\}/gi, ' raizde$1 ')
+            .replace(/√\s*\(\s*([^()]*?)\s*\)/g, ' raizde$1 ')
+            .replace(/√\s*(\S+)/g, ' raizde$1 ')
             .replace(/[_^]\{([^{}]+)\}/g, '$1')
             .replace(/\\cdot\b|\u00b7|\u22c5/gi, ' operadorproducto ')
             .replace(/\\_/g, ' marcadorvacio ')
@@ -299,6 +310,179 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
             + '</div>';
     }
 
+    /* ------------------------------------------------------------- Fórmulas
+       Lo que SÍ se puede afirmar de una fórmula sin inventar nada.
+
+       Si el guion escribió la fórmula en LaTeX, en Moodle tiene que quedar
+       RENDERIZADA por el filtro de matemáticas, no como texto. Tres defectos
+       distintos, tres reglas:
+
+         1. El guion pide fórmula y en la página no hay nada de matemáticas:
+            se montó como texto plano o como `<sup>`.  → error
+         2. El LaTeX se ve CRUDO: el delimitador sin renderizar, un comando
+            suelto o la marca del guion pegada tal cual.  → error
+         3. La fórmula sí se renderizó, pero en modo bloque (`$$…$$`) en medio
+            de una frase: MathJax la baja de renglón y la centra.  → aviso
+
+       Los dos delimitadores NO son intercambiables, y es la confusión más
+       común del montaje:
+         \( … \)   en línea, dentro de la frase — no rompe el renglón
+         $$ … $$   en bloque, fórmula sola y centrada — sí rompe el renglón */
+    var LATEX_CRUDO = /\$\$[\s\S]{1,200}?\$\$|\\\(|\\\[|<\s*latex\b[^>]*>|<\s*cod\s+lat\b[^>]*>|\\(?:wedge|vee|Rightarrow|Leftrightarrow|leftrightarrow|rightarrow|frac|sqrt|cdot|times|div|pi|alpha|beta|gamma|theta|leq|geq|neq|approx|sum|prod|int|infty)\b/i;
+
+    /* ¿Moodle renderizó la fórmula? Cuando el filtro de matemáticas hace su
+       trabajo, la página deja huella: el envoltorio del filtro, el contenedor
+       de MathJax, el MathML de accesibilidad o la imagen del filtro TeX. Si el
+       guion pide fórmula y no hay ninguna de esas huellas, la fórmula se montó
+       como texto —o como `<sup>`— y no como LaTeX. */
+    function tieneMatematicasRenderizadas(nodo) {
+        if (!nodo) return false;
+        if (nodo.querySelector('.filter_mathjaxloader_equation, mjx-container, .MathJax,'
+                + ' mjx-assistive-mml, math, img.texrender, img.Xtexrender, [data-mathml]')) {
+            return true;
+        }
+        // Sin filtro activo, el delimitador se queda a la vista: también cuenta
+        // como "hay fórmula", aunque mal montada; de eso avisa otra regla.
+        return /\$\$[\s\S]{1,200}?\$\$|\\\(|\\\[/.test(nodo.textContent || '');
+    }
+
+    /* La fórmula que el guion pone en la RETROALIMENTACIÓN no se puede cotejar:
+       la vista previa no la muestra hasta que alguien responde. Se avisa para
+       que se revise a mano, nunca se marca como error —sería un falso positivo
+       garantizado—. Solo se avisa si además la parte visible no trae fórmula;
+       si ya la trae, el montaje evidentemente entendió la convención. */
+    function revisarFormulasDeRetro(parejas) {
+        var reactivos = [];
+        var nodos = [];
+        parejas.forEach(function (p) {
+            if (!p.actual || !p.esperada) return;
+            if (!p.esperada.pideFormulaRetro || p.esperada.pideFormula) return;
+            if (tieneMatematicasRenderizadas(p.actual.nodo)) return;
+            reactivos.push(String(p.indiceEsperado + 1));
+            nodos.push(p.actual.nodo);
+        });
+        if (!reactivos.length) return;
+        anotar('aviso', 'Fórmulas',
+            'El guion pide fórmula en la retroalimentación de '
+                + (reactivos.length === 1 ? 'la pregunta ' : 'las preguntas ') + enumerar(reactivos),
+            'La fórmula de la retroalimentación también va en LaTeX, entre \\( y \\)',
+            'No se puede comprobar desde aquí: la retroalimentación no se ve '
+                + 'hasta responder. Ábrela y confirma que la fórmula se dibuje.',
+            nodos);
+    }
+
+    function revisarFormulasSinMontar(actuales, parejas) {
+        parejas.forEach(function (p) {
+            if (!p.actual || !p.esperada || !p.esperada.pideFormula) return;
+            if (tieneMatematicasRenderizadas(p.actual.nodo)) return;
+            anotar('error', 'Fórmulas',
+                'La pregunta ' + (p.indiceEsperado + 1) + ' no montó la fórmula como LaTeX',
+                comoEscribirla(p.esperada.formulas),
+                'La fórmula está puesta como texto normal (caracteres sueltos, '
+                    + '«sub», «sup» o símbolos), no como ecuación.',
+                p.actual.nodo);
+        });
+    }
+
+    /* La sugerencia concreta: el código del guion ya envuelto en su
+       delimitador, listo para pegar en el editor de Moodle. Si el guion no dejó
+       código —solo una ecuación de Word— se explica la regla y ya.
+
+       Siempre `\( … \)`: es el que deja la fórmula dentro de la frase y no
+       rompe el renglón, y es lo que hace el único montaje bien hecho de los
+       revisados. `$$ … $$` se menciona como la excepción a mano, porque cuál de
+       los dos toca no se puede deducir del Word (ver el README). */
+    var REGLA_DELIMITADOR = 'Solo si quieres la fórmula sola y centrada en su '
+        + 'propio renglón, cámbialo por $$ … $$';
+
+    function comoEscribirla(formulas) {
+        var lista = (formulas || []).slice(0, 4);
+        if (!lista.length) {
+            return 'La fórmula va en LaTeX, entre \\( y \\). ' + REGLA_DELIMITADOR;
+        }
+        var escritas = lista.map(function (codigo) { return '\\(' + codigo + '\\)'; });
+        var sobran = (formulas.length > lista.length)
+            ? ' (y ' + (formulas.length - lista.length) + ' más del mismo reactivo)' : '';
+        return 'Escríbelo así en Moodle: ' + escritas.join('   ') + sobran
+            + ' · ' + REGLA_DELIMITADOR;
+    }
+
+    /* Lo que la herramienta NO puede afirmar, dicho en el panel y no escondido
+       en el README: cuál de los dos delimitadores toca en cada fórmula. El
+       guion parte la marca a un párrafo aparte, así que su maquetado no dice si
+       la fórmula va dentro de la frase o sola en su renglón. Se sugiere siempre
+       `\( … \)` —el que no rompe el renglón— y se avisa para que se mire.
+
+       Solo se avisa de los reactivos donde la fórmula SÍ está renderizada: si
+       falta, ya hay un error arriba y el aviso sobraría. */
+    function avisarDelDelimitador(parejas) {
+        var reactivos = [];
+        var nodos = [];
+        parejas.forEach(function (p) {
+            if (!p.actual || !p.esperada || !p.esperada.pideFormula) return;
+            if (!tieneMatematicasRenderizadas(p.actual.nodo)) return;
+            reactivos.push(String(p.indiceEsperado + 1));
+            nodos.push(p.actual.nodo);
+        });
+        if (!reactivos.length) return;
+        anotar('aviso', 'Fórmulas',
+            'Revisa a ojo cómo cae la fórmula en '
+                + (reactivos.length === 1 ? 'la pregunta ' : 'las preguntas ') + enumerar(reactivos),
+            'La fórmula dentro de la frase con \\( … \\); sola y centrada con $$ … $$',
+            'La fórmula sí se dibuja, pero cuál de los dos delimitadores toca no '
+                + 'se puede deducir del guion. Mira que no baje de renglón donde '
+                + 'debería ir en la frase, ni al revés.',
+            nodos);
+    }
+
+    /* Modo bloque donde debería ir en línea. `$$…$$` le dice a MathJax que la
+       fórmula va sola: la baja de renglón y la centra. Si a los lados hay texto
+       en el mismo párrafo, el autor quería `\( … \)`. Se pide texto de VERDAD a
+       ambos lados —no solo espacios— para no marcar la fórmula que sí va sola. */
+    function revisarFormulasEnBloque(actuales) {
+        actuales.forEach(function (ap, i) {
+            if (!ap.nodo) return;
+            var sueltas = [];
+            var cajas = ap.nodo.querySelectorAll('mjx-container[display="true"],'
+                + ' mjx-container[jax][display], math[display="block"]');
+            [].forEach.call(cajas, function (caja) {
+                if (caja.getAttribute('display') === 'false') return;
+                if (caja.localName === 'math' && caja.closest('mjx-assistive-mml')) return;
+                var parrafo = caja.closest('p, li, td, div');
+                if (!parrafo) return;
+                var alrededor = (parrafo.textContent || '')
+                    .replace(caja.textContent || '', '').replace(/\s+/g, '');
+                if (alrededor.length > 3) sueltas.push(caja);
+            });
+            if (!sueltas.length) return;
+            anotar('aviso', 'Fórmulas',
+                'La pregunta ' + (i + 1) + ' baja la fórmula de renglón',
+                'Una fórmula dentro de la frase va entre \\( y \\), que la deja en línea',
+                'Está entre $$ y $$, que es el modo bloque: MathJax la manda '
+                    + 'sola a un renglón aparte y la centra.',
+                sueltas[0]);
+        });
+    }
+
+    function revisarFormulasCrudas(actuales) {
+        actuales.forEach(function (ap, i) {
+            var partes = [ap.texto].concat(ap.opciones.map(function (o) { return o.texto; }));
+            var encontrado = '';
+            partes.forEach(function (t) {
+                if (encontrado) return;
+                var m = String(t || '').match(LATEX_CRUDO);
+                if (m) encontrado = m[0];
+            });
+            if (!encontrado) return;
+            anotar('error', 'Fórmulas',
+                'La pregunta ' + (i + 1) + ' muestra código LaTeX sin convertir',
+                'El símbolo ya convertido, como en el resto del cuestionario',
+                'En la página se lee «' + encontrado + '». O falta el filtro de '
+                    + 'fórmulas, o se pegó el código del guion en vez del símbolo.',
+                ap.nodo);
+        });
+    }
+
     var hallazgos = [];
     function anotar(nivel, grupo, titulo, debe, actual, nodo) {
         hallazgos.push({ nivel: nivel, grupo: grupo, titulo: titulo,
@@ -479,9 +663,29 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
                sola vez por pregunta: esa comparación la hace el ojo. */
             var asignados = {};
             var respuestasConImagen = 0;
+            /* PRIMERO las que son idénticas, y solo después las parecidas. Dos
+               opciones con los mismos elementos en otro orden —«6, 2, 3» y
+               «6, 3, 2»— tienen la misma firma, así que para el parecido valen
+               lo mismo y el emparejador voraz las cruzaba: reportaba dos
+               respuestas cambiadas donde las dos estaban bien puestas. */
+            var emparejado = {};
+            for (var j0 = 0; j0 < ap.opciones.length; j0++) {
+                // Solo con texto: dos respuestas que son imagen tienen las dos
+                // el texto vacío y «vacío = vacío» no las empareja, las revuelve.
+                if (!limpiar(ap.opciones[j0].texto)) continue;
+                for (var k0 = 0; k0 < ep.opciones.length; k0++) {
+                    if (asignados[k0]) continue;
+                    if (!limpiar(ep.opciones[k0].texto)) continue;
+                    if (!contenidosIguales(ep.opciones[k0].texto, ap.opciones[j0].texto)) continue;
+                    asignados[k0] = true;
+                    emparejado[j0] = k0;
+                    break;
+                }
+            }
             for (var j = 0; j < ap.opciones.length; j++) {
                 var mejorO = -1, indiceO = -1;
-                for (var k = 0; k < ep.opciones.length; k++) {
+                if (emparejado[j] !== undefined) { mejorO = 1; indiceO = emparejado[j]; }
+                else for (var k = 0; k < ep.opciones.length; k++) {
                     if (asignados[k]) continue;
                     var so = await similitudOpcion(ep.opciones[k], ap.opciones[j]);
                     if (so > mejorO) { mejorO = so; indiceO = k; }
@@ -490,6 +694,7 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
                     || (indiceO >= 0 && Boolean(ep.opciones[indiceO].imagenes.length));
                 if (indiceO >= 0 && mejorO >= .56) {
                     asignados[indiceO] = true;
+                    if (emparejado[j] !== undefined) { continue; }   // idéntica: nada que reportar
                     if (conImagen) { respuestasConImagen++; continue; }
                     if (!contenidosIguales(ep.opciones[indiceO].texto, ap.opciones[j].texto)) {
                         anotar('error', 'Respuestas', 'Cambia una respuesta de la pregunta ' + (i + 1),
@@ -535,6 +740,11 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
                         + 'que estén bien vinculadas y que no salga el ícono roto.', ap.nodo);
             }
         }
+        revisarFormulasCrudas(actuales);
+        revisarFormulasSinMontar(actuales, parejas);
+        revisarFormulasDeRetro(parejas);
+        avisarDelDelimitador(parejas);
+        revisarFormulasEnBloque(actuales);
         if (otroComportamiento.length) {
             var nombres = [];
             otroComportamiento.forEach(function (x) {

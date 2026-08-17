@@ -175,7 +175,13 @@ async function leerParrafosDeDocx(file) {
  * a una palabra del texto ("rúbrica"): NO es un enlace real, es una nota. No es
  * contenido publicable, pero el montaje no debe olvidarlo. Se entrega el texto
  * de la nota junto con la palabra que señala.
- *   [{ autor, texto, ancla }]
+ *   [{ id, autor, texto, ancla }]
+ *
+ * `id` es el del propio Word (`w:id`): permite localizar el comentario en el
+ * documento (`w:commentRangeStart` / `w:commentReference`) cuando el ancla
+ * viene vacía. Pasa de verdad: en los guiones de cuestionario, el LaTeX se
+ * comenta sobre una celda vacía y `ancla` sale en blanco, así que la única
+ * forma de saber a qué reactivo pertenece es la posición, no el texto.
  */
 async function leerComentariosDeDocx(file) {
     const archivos = await leerZip(await file.arrayBuffer());
@@ -214,7 +220,7 @@ async function leerComentariosDeDocx(file) {
 
     return [...porId.entries()]
         .filter(([, c]) => c.texto)
-        .map(([id, c]) => ({ ...c, ancla: (anclas.get(id) || '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim() }));
+        .map(([id, c]) => ({ id, ...c, ancla: (anclas.get(id) || '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim() }));
 }
 
 /**

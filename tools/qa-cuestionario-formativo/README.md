@@ -175,6 +175,117 @@ es que la herramienta no puede señalar una diferencia que no sabe enseñar.
 Los puntajes son informativos hasta que exista una regla institucional de total.
 El verificador no responde, no envía formularios y no guarda cambios.
 
+## Las fórmulas
+
+El guion escribe el **símbolo visible** y a su lado el código para quien monta:
+`∧<Latex#\wedge #>`, `π<Latex#\pi #>`. El código es una nota de producción: se
+borra del texto antes de comparar, pero **no es decorativo** — dice que ese
+reactivo va con fórmula renderizada en Moodle, no con el carácter suelto.
+
+### Los cuatro dialectos del guion
+
+Cada autor lo anuncia distinto y hay que reconocer los cuatro; están medidos
+sobre guiones reales:
+
+| Guion | Cómo anuncia la fórmula |
+|---|---|
+| CF1 `SM2S1` | marca en el cuerpo, junto al símbolo: `∧<Latex#\wedge #>` |
+| CF2 `SM2S2` | marca en el cuerpo **+** ecuación nativa de Word (OMML) |
+| CF3 `SM2S3` | **solo** en un comentario de Word: `7^{2}`, `\sqrt{324}` |
+| CF4 `SM2S1` | comentario con otra sintaxis: `<Lat#10^{-2} #>` **+** OMML |
+
+Por eso `pideFormula` se enciende con tres señales: la marca en el texto
+(`LATEX_EN_TEXTO`), `w:oMath` dentro de la celda (`tieneEcuacionDeWord`) o un
+comentario con LaTeX anclado a la celda (`LATEX_EN_COMENTARIO`).
+
+**El comentario se localiza por posición, no por texto.** En el CF3 el autor
+comenta sobre una celda **vacía**: el `ancla` que devuelve `leerComentariosDeDocx`
+sale en blanco y no hay con qué emparejarlo. Se busca el `w:id` del comentario
+dentro de la propia celda (`idsDeComentarioEnCelda`), que para eso
+`assets/docx.js` ahora devuelve también el `id`. Emparejar por texto daba cero
+detecciones en el CF3 y falsos positivos en los otros.
+
+### Los dos delimitadores NO son intercambiables
+
+Es la confusión más común del montaje:
+
+| Delimitador | Modo | Efecto |
+|---|---|---|
+| `\( … \)` | en línea | va dentro de la frase, **no** rompe el renglón |
+| `$$ … $$` | bloque | fórmula sola y centrada, **sí** rompe el renglón |
+
+El único montaje bien hecho de los cuatro revisados (CF3) usa `\( … \)`: sus 20
+fórmulas salen con `mjx-container` **sin** `display="true"`. Un `$$I$$` en medio
+de una pregunta se ve centrado en su propio renglón, que no es lo que pide el
+guion.
+
+**La sugerencia siempre es `\( … \)`, a propósito.** Se intentó deducir del Word
+cuál de los dos tocaba y no se puede: el guion parte la marca a un párrafo
+aparte —«1. P ∧ Q» en uno y `<Latex>P \wedge Q<Termino Latex>` en el siguiente—,
+así que «el párrafo solo tiene la fórmula» no significa que en Moodle vaya sola.
+Con esa regla el CF1 salía mitad en línea y mitad en bloque siendo las cuatro
+filas de la misma tabla. Adivinar mal es peor que no adivinar: `\( … \)` nunca
+rompe el renglón y el mensaje remata con «solo si la quieres sola y centrada,
+cámbialo por `$$ … $$`».
+
+Y lo que no se puede afirmar **se dice en el panel, no se calla**: los reactivos
+cuya fórmula sí se dibuja salen en un aviso de «revisa a ojo cómo cae la
+fórmula» (`avisarDelDelimitador`). Solo esos: si la fórmula falta, ya hay un
+error arriba y el aviso sobraría. La regla de toda la herramienta es que un
+punto ciego se declara; si no, quien lee el informe cree que está revisado.
+
+### El error trae el código listo para pegar
+
+No dice «falta LaTeX» y ya: saca del guion el código real y lo entrega envuelto.
+`codigosLatexDeTexto` entiende las tres formas que conviven en el mismo Word
+—`<Latex#\wedge #>`, `<Latex>…<Termino Latex>`, `<Cod Lat> …`— y
+`codigosLatexDeComentario` les quita la etiqueta de delante («Código LaTeX:»,
+«Código Látex:», «Códigio Látex:»; sí, con las erratas) o toma el comentario
+entero cuando es el código pelado, como en el CF3. Solo se guarda el de las
+celdas visibles: el de la retroalimentación confundiría la sugerencia.
+
+Sale así en el panel:
+
+> **La pregunta 8 no montó la fórmula como LaTeX**
+> Escríbelo así en Moodle: `\(10^2\)` `\(10^3\)` `\(10^{-2}\)` `\(10^{-1}\)` ·
+> Solo si quieres la fórmula sola y centrada en su propio renglón, cámbialo por
+> `$$ … $$`
+
+Si el guion no dejó código —solo una ecuación nativa de Word, como el reactivo 9
+del CF2— se explica la regla sin inventar el código.
+
+### Las tres reglas
+
+1. **Error** — el guion pide fórmula y en la pregunta no hay nada de
+   matemáticas (`tieneMatematicasRenderizadas`: ni `.filter_mathjaxloader_equation`,
+   ni `mjx-container`, ni `math`, ni `img.texrender`). Se montó como texto
+   plano, `<sub>` o `<sup>`.
+2. **Error** — el LaTeX se quedó **crudo a la vista**: `$$…$$` sin renderizar,
+   un `\(`, un comando suelto (`\wedge`, `\frac{`, `\sqrt`) o la marca del guion
+   pegada tal cual (`LATEX_CRUDO`). Probado contra ocho textos reales de los
+   montajes (cero disparos) y cinco montajes rotos a propósito (los cinco
+   detectados).
+3. **Aviso** — la fórmula sí se renderizó, pero en bloque en medio de una frase
+   (`revisarFormulasEnBloque`). Se exige texto de verdad a ambos lados dentro
+   del mismo párrafo, para no marcar la fórmula que sí va sola.
+
+### La retroalimentación se avisa, nunca se marca como error
+
+`pideFormula` (enunciado y respuestas) y `pideFormulaRetro` van **separados a
+propósito**. La retroalimentación no se ve en la vista previa hasta que alguien
+responde, así que exigir ahí la fórmula es un falso positivo garantizado: el
+CF3 lo demostró marcando su pregunta 4, cuyo `\frac` solo existe en la celda de
+retroalimentación. Ahora sale como aviso de «ábrela y confírmalo a mano».
+
+### El espaciado alrededor de la marca
+
+El guion no es constante: `∧<Latex#\wedge #> (1)` no lleva espacio antes de la
+marca y `⇒ <Latex#\Rightarrow #>(3)` no lo lleva después. Al borrar la marca sin
+dejar nada en su lugar, el segundo quedaba `⇒(3)` contra el `⇒ (3)` de Moodle y
+se reportaba una retroalimentación cambiada **que estaba idéntica**. La
+sustitución deja un espacio y `limpiar()` junta los sobrantes, así que las dos
+formas acaban igual.
+
 ## La evidencia imprimible
 
 El panel de resultados trae un botón **Generar evidencia (PDF)**: abre una
