@@ -228,6 +228,29 @@ filas de la misma tabla. Adivinar mal es peor que no adivinar: `\( … \)` nunca
 rompe el renglón y el mensaje remata con «solo si la quieres sola y centrada,
 cámbialo por `$$ … $$`».
 
+### La fórmula que en el Word es una imagen
+
+Falso positivo cazado en el CF3, reactivos 8 y 9. El guion escribe «¿Cuál es el
+producto de ___ en términos de potencias?» y la fórmula **no está en el texto de
+la celda**: es una imagen incrustada, y el código LaTeX vive en un comentario al
+margen (`3^{2}\cdot 3^{3}`). Moodle la monta bien, con MathJax. Pero al comparar
+cadenas, el lado de Moodle traía «3²·3³» de más y salía **«Texto de la pregunta»
+como error**, con el montaje correcto.
+
+`textoSinMatematicas()` aparta la fórmula del lado de Moodle y vuelve a comparar;
+si con eso cuadra, no hay diferencia de texto que reportar. Dos trampas:
+
+- **Son dos selectores, no uno.** `.filter_mathjaxloader_equation` es el
+  envoltorio que Moodle le pone al **párrafo completo** cuando detecta que lleva
+  matemáticas, no a la fórmula. Sirve para *detectar* que hay fórmula; borrarlo
+  se lleva la frase entera y deja el texto en blanco —que es exactamente lo que
+  pasó en el primer intento—. La fórmula es el `mjx-container`.
+- **Apartar no es cotejar.** Cotejarla exigiría traducir el MathML de MathJax al
+  LaTeX del comentario, y una traducción a medias devolvería el falso positivo
+  por la puerta de atrás. Así que no se coteja y **se dice**:
+  `avisarDeFormulaNoCotejada` saca el aviso con el código del comentario
+  delante, para que verificarlo a ojo sea mirar dos líneas.
+
 Y lo que no se puede afirmar **se dice en el panel, no se calla**: los reactivos
 cuya fórmula sí se dibuja salen en un aviso de «revisa a ojo cómo cae la
 fórmula» (`avisarDelDelimitador`). Solo esos: si la fórmula falta, ya hay un

@@ -53,6 +53,38 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
         return limpiar(partes.join(''));
     }
 
+    /* Dos selectores y NO uno, aunque tiente juntarlos: `filter_mathjaxloader_
+       equation` es el envoltorio que Moodle le pone al párrafo COMPLETO cuando
+       detecta que lleva matemáticas, no a la fórmula. Sirve para saber que hay
+       fórmula; borrarlo se lleva la frase entera y deja el texto en blanco.
+       La fórmula de verdad es el `mjx-container` de MathJax. */
+    var SELECTOR_MATEMATICAS = '.filter_mathjaxloader_equation, mjx-container, .MathJax,'
+        + ' mjx-assistive-mml, math, img.texrender, img.Xtexrender, [data-mathml]';
+    var SELECTOR_FORMULA = 'mjx-container, mjx-assistive-mml, math, img.texrender,'
+        + ' img.Xtexrender, [data-mathml]';
+
+    /* El texto de Moodle SIN las fórmulas dibujadas.
+
+       Existe por un falso positivo del CF3: el guion escribe «¿Cuál es el
+       producto de ___ en términos de potencias?» y la fórmula no está en el
+       texto de la celda —es una imagen incrustada, y el código LaTeX vive en un
+       comentario al margen—. Moodle sí la monta, bien, con MathJax. Al comparar
+       cadenas, el lado de Moodle traía «3²·3³» de más y salía «Texto de la
+       pregunta» como error, cuando el montaje era correcto.
+
+       Nótese que aquí no se compara la fórmula: se aparta. Cotejarla exigiría
+       traducir el MathML de MathJax al LaTeX del comentario, y una traducción a
+       medias devolvería el falso positivo por la puerta de atrás. Lo que no se
+       coteja se dice: sale el aviso de `avisarDeFormulaNoCotejada`. */
+    function textoSinMatematicas(nodo) {
+        if (!nodo) return '';
+        var copia = nodo.cloneNode(true);
+        [].slice.call(copia.querySelectorAll(SELECTOR_FORMULA)).forEach(function (m) {
+            if (m.parentNode) m.parentNode.removeChild(m);
+        });
+        return normalizarTextoPregunta(textoEstructurado(copia));
+    }
+
     function partesDePregunta(nodo) {
         if (!nodo) return { textoPrincipal: '', contenidoTabular: '', tieneTabla: false };
         var copia = nodo.cloneNode(true);
@@ -232,7 +264,12 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
             }
             return null;
         }
-        if (!contenidosIguales(normalizarTextoPregunta(esperada.texto), actual.texto)) {
+        var esperado = normalizarTextoPregunta(esperada.texto);
+        if (!contenidosIguales(esperado, actual.texto)) {
+            /* Antes de acusar: si lo único que sobra en Moodle es la fórmula
+               dibujada, el guion la traía como imagen o solo en el comentario y
+               no hay tal diferencia de texto. Ver `textoSinMatematicas`. */
+            if (esperada.pideFormula && contenidosIguales(esperado, actual.textoSinMath)) return null;
             return { parte: 'Texto de la pregunta', esperado: esperada.texto, actual: actual.texto };
         }
         return null;
@@ -337,10 +374,7 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
        como texto —o como `<sup>`— y no como LaTeX. */
     function tieneMatematicasRenderizadas(nodo) {
         if (!nodo) return false;
-        if (nodo.querySelector('.filter_mathjaxloader_equation, mjx-container, .MathJax,'
-                + ' mjx-assistive-mml, math, img.texrender, img.Xtexrender, [data-mathml]')) {
-            return true;
-        }
+        if (nodo.querySelector(SELECTOR_MATEMATICAS)) return true;
         // Sin filtro activo, el delimitador se queda a la vista: también cuenta
         // como "hay fórmula", aunque mal montada; de eso avisa otra regla.
         return /\$\$[\s\S]{1,200}?\$\$|\\\(|\\\[/.test(nodo.textContent || '');
@@ -433,6 +467,29 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
                 + 'se puede deducir del guion. Mira que no baje de renglón donde '
                 + 'debería ir en la frase, ni al revés.',
             nodos);
+    }
+
+    /* El otro punto ciego, y el más importante de declarar: cuando el guion
+       trae la fórmula como imagen o solo en el comentario, apartamos la fórmula
+       para no acusar de un cambio de texto que no existe —y al apartarla,
+       nadie comprobó que diga lo que debe decir—. Aquí se avisa, y con el
+       código del comentario delante para que cotejarlo sea mirar dos líneas. */
+    function avisarDeFormulaNoCotejada(parejas) {
+        parejas.forEach(function (p) {
+            if (!p.actual || !p.esperada || !p.esperada.pideFormula) return;
+            if (!tieneMatematicasRenderizadas(p.actual.nodo)) return;
+            // Solo si de verdad la apartamos: con la fórmula puesta el cotejo
+            // completo ya cuadraba y no hay nada que declarar.
+            if (contenidosIguales(normalizarTextoPregunta(p.esperada.texto), p.actual.texto)) return;
+            var codigos = p.esperada.formulas || [];
+            anotar('aviso', 'Fórmulas',
+                'La fórmula de la pregunta ' + (p.indiceEsperado + 1) + ' no se pudo cotejar',
+                codigos.length ? codigos.join('   ·   ') : 'El guion la trae como imagen',
+                'En el Word la fórmula es una imagen o un comentario al margen, no texto, '
+                    + 'así que solo se comprobó que en Moodle esté montada como LaTeX. '
+                    + 'Que diga exactamente lo que debe decir hay que verlo a ojo.',
+                p.actual.nodo);
+        });
     }
 
     /* Modo bloque donde debería ir en línea. `$$…$$` le dice a MathJax que la
@@ -535,6 +592,7 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
             });
             return {
                 texto: normalizarTextoPregunta(textoEstructurado(qtext)),
+                textoSinMath: textoSinMatematicas(qtext),
                 textoPrincipal: partes.textoPrincipal,
                 contenidoTabular: partes.contenidoTabular,
                 tieneTabla: partes.tieneTabla,
@@ -743,6 +801,7 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
         revisarFormulasCrudas(actuales);
         revisarFormulasSinMontar(actuales, parejas);
         revisarFormulasDeRetro(parejas);
+        avisarDeFormulaNoCotejada(parejas);
         avisarDelDelimitador(parejas);
         revisarFormulasEnBloque(actuales);
         if (otroComportamiento.length) {
