@@ -53,10 +53,61 @@
         return { texto: texto.replace(/\*/g, '').trim(), negritas, cursivas };
     }
 
-    function agregarTexto(lista, etiqueta, marcado) {
+    function agregarTexto(lista, etiqueta, marcado, marcador) {
         const d = desmarcar(marcado);
         if (!d.texto) return;
-        lista.push({ etiqueta, texto: d.texto, negritas: d.negritas, cursivas: d.cursivas });
+        lista.push({
+            etiqueta, texto: d.texto, negritas: d.negritas, cursivas: d.cursivas,
+            // Qué marcador le toca según el Word: `{ tipo, nivel, numero }`.
+            // Solo lo llevan los puntos de lista.
+            marcador: marcador || null
+        });
+    }
+
+    /* La numeración REAL del Word, la que Word dibuja y no está en el texto.
+       Cada `numId` lleva su propia cuenta por nivel, y al volver a un nivel
+       superior se reinician los de abajo —igual que hace Word—.
+
+       Hace falta porque el guion numera 1…7, mete unas viñetas y SIGUE en 8,
+       mientras que al montar cada `<ol>` de Moodle vuelve a empezar en 1 si
+       nadie le pone `start`. Como el número del Word no está en el texto y el
+       de Moodle lo dibuja el CSS, el cotejo de texto no puede verlo: los dos
+       lados se leen idénticos y la actividad salía "TODO CORRECTO" con la
+       numeración rota. */
+    function cuentaDeListas() {
+        const cuenta = new Map();
+        return (bloque) => {
+            if (!bloque.lista) return null;
+            const nivel = Number(bloque.nivelLista) || 0;
+            const clave = bloque.idLista + ':' + nivel;
+            cuenta.set(clave, (cuenta.get(clave) || 0) + 1);
+            // Al avanzar un nivel, los de abajo vuelven a empezar.
+            [...cuenta.keys()].forEach(k => {
+                const [id, n] = k.split(':');
+                if (id === String(bloque.idLista) && Number(n) > nivel) cuenta.delete(k);
+            });
+            return {
+                tipo: bloque.tipoLista || 'ordenada',
+                nivel,
+                numero: cuenta.get(clave)
+            };
+        };
+    }
+
+    /* Cómo se llama el marcador al escribirlo en un reporte: «8», «b», «iii». */
+    function marcadorLegible(m) {
+        if (!m) return '';
+        if (m.tipo === 'vinetas') return 'viñeta';
+        if (m.tipo === 'letras') return String.fromCharCode(96 + m.numero);
+        if (m.tipo === 'romana') return romano(m.numero);
+        return String(m.numero);
+    }
+
+    function romano(n) {
+        const tabla = [[10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']];
+        let salida = '';
+        tabla.forEach(([valor, letra]) => { while (n >= valor) { salida += letra; n -= valor; } });
+        return salida;
     }
 
     /** La marca de un bloque de párrafo (`<h1>`, `<Figura>`), o '' si no lo es. */
@@ -153,6 +204,7 @@
         let punto = 0;
         let tituloTablaPendiente = '';
         let enlaceRubrica = null;
+        const contarLista = cuentaDeListas();
 
         cuerpo.forEach(bloque => {
             if (bloque.tipo === 'tabla') {
@@ -238,7 +290,14 @@
             if (enCentrado) { agregarTexto(textos, 'Texto centrado', crudo); return; }
             if (enLista || bloque.lista) {
                 punto++;
-                agregarTexto(textos, 'Punto ' + punto, crudo);
+                const marcador = contarLista(bloque);
+                // La etiqueta usa el marcador de verdad cuando el Word lo trae
+                // («Punto 8», «Inciso b»); si no, la cuenta corrida de siempre.
+                const etiqueta = marcador
+                    ? (marcador.tipo === 'vinetas' ? 'Viñeta'
+                        : (marcador.tipo === 'ordenada' ? 'Punto ' : 'Inciso ') + marcadorLegible(marcador))
+                    : 'Punto ' + punto;
+                agregarTexto(textos, etiqueta, crudo, marcador);
             } else {
                 agregarTexto(textos, 'Párrafo', crudo);
             }

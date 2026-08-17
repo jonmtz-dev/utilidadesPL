@@ -157,6 +157,37 @@ tener, y salía «Falta la tabla 1».
 El resumen dice siempre por dónde entró. **Si un guion reporta un número de
 textos sospechosamente bajo, eso es lo primero que hay que mirar.**
 
+### El marcador de las listas (lo que el texto no puede ver)
+
+El número de un punto **no está en el texto de ninguno de los dos lados**: en el
+Word lo guarda `numbering.xml` y en Moodle lo dibuja el CSS a partir de `start`,
+del `value` del `<li>` y de la posición. Así que un cotejo de texto los ve
+idénticos aunque la numeración esté rota, y la actividad salía **TODO CORRECTO**
+con este montaje:
+
+| Guion | Moodle | |
+|---|---|---|
+| 1 … 7 | 1 … 7 | ✓ |
+| viñetas | viñetas | ✓ |
+| **8, 9, 10** | 1, 2, 3 | ✗ el `<ol>` reinicia |
+| **11, 12** | 1, 2 | ✗ el `<ol>` reinicia |
+| **a … j** | 1 … 10 | ✗ cambió el tipo de marcador |
+
+Ahora se comparan las dos cosas, y se reportan aparte porque son fallas
+distintas: el **tipo** de marcador (números donde el guion pide incisos) y la
+**secuencia** (volver a 1 cuando el guion sigue en 8). El mensaje dice el
+`start="N"` que le falta al `<ol>`.
+
+Del lado del Word la cuenta se lleva por `numId` y nivel, reiniciando los niveles
+de abajo al avanzar el de arriba —igual que Word—, y el tipo sale de
+`tipoLista` (`ordenada`, `letras`, `romana`, `vinetas`), que `leerBloquesDeDocx`
+ya entregaba. La etiqueta del reporte usa ese marcador real: «Punto 8»,
+«Inciso b», «Viñeta», en vez de la cuenta corrida de antes, que contaba las
+viñetas como puntos numerados.
+
+Si el texto no quedó dentro de un `<li>`, no se compara: no hay marcador que
+cotejar y suponerlo sería inventar un error.
+
 ---
 
 ## La evidencia imprimible

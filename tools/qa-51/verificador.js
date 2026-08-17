@@ -156,6 +156,90 @@ window.VERIFICADOR_QA = function (DATOS, evidencia) {
         });
     }
 
+    /* ------------------------------------------------ Marcadores de lista
+       El número que Moodle DIBUJA, que no está en el texto: lo pone el CSS a
+       partir de `start`, del `value` del <li> y de su posición. Por eso una
+       numeración rota —cada <ol> reiniciando en 1 cuando el guion sigue en 8—
+       es invisible para el cotejo de texto y la actividad salía "TODO
+       CORRECTO". */
+    function marcadorEnMoodle(nodo) {
+        var li = nodo && nodo.closest ? nodo.closest('li') : null;
+        if (!li) return null;
+        var lista = li.parentElement;
+        if (!lista) return null;
+        if (lista.tagName === 'UL') return { tipo: 'vinetas', numero: 0 };
+        if (lista.tagName !== 'OL') return null;
+
+        var estilo = String(lista.getAttribute('type')
+            || getComputedStyle(lista).listStyleType || '').toLowerCase();
+        var tipo = 'ordenada';
+        if (estilo === 'a' || estilo === 'lower-alpha' || estilo === 'lower-latin') tipo = 'letras';
+        else if (estilo === 'i' || estilo === 'lower-roman') tipo = 'romana';
+        else if (estilo === 'disc' || estilo === 'circle' || estilo === 'square') tipo = 'vinetas';
+
+        var hermanos = [].slice.call(lista.children).filter(function (n) { return n.tagName === 'LI'; });
+        var i = hermanos.indexOf(li);
+        if (i < 0) return null;
+        // Un `value` propio manda sobre la posición; si no, `start` + posición.
+        var propio = li.getAttribute('value');
+        var numero = propio ? Number(propio) : (Number(lista.getAttribute('start') || 1) + i);
+        return { tipo: tipo, numero: numero };
+    }
+
+    function romano(n) {
+        var tabla = [[10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']];
+        var salida = '';
+        tabla.forEach(function (par) {
+            while (n >= par[0]) { salida += par[1]; n -= par[0]; }
+        });
+        return salida;
+    }
+
+    function marcadorLegible(m) {
+        if (!m) return '';
+        if (m.tipo === 'vinetas') return 'viñeta';
+        if (m.tipo === 'letras') return String.fromCharCode(96 + m.numero);
+        if (m.tipo === 'romana') return romano(m.numero);
+        return String(m.numero);
+    }
+
+    var NOMBRE_DE_LISTA = {
+        vinetas: 'viñetas', ordenada: 'números', letras: 'letras (a, b, c…)',
+        romana: 'números romanos'
+    };
+
+    /* Compara el marcador que pide el guion con el que Moodle dibuja. Son dos
+       fallas distintas y se reportan aparte: cambiar el TIPO de lista (números
+       donde el guion pide incisos) y romper la SECUENCIA (volver a 1 cuando el
+       guion sigue en 8, porque al <ol> le falta `start`). */
+    function revisarMarcador(item, nodo) {
+        var quiere = item.marcador;
+        if (!quiere) return;
+        var hay = marcadorEnMoodle(nodo.n);
+        if (!hay) return;   // no quedó dentro de una lista: no hay qué comparar
+
+        if (hay.tipo !== quiere.tipo) {
+            anotar('error', 'Listas',
+                'La lista de «' + item.etiqueta + '» usa otro marcador',
+                'Lista con ' + (NOMBRE_DE_LISTA[quiere.tipo] || quiere.tipo)
+                    + ' — en el guion es «' + marcadorLegible(quiere) + '»',
+                'Lista con ' + (NOMBRE_DE_LISTA[hay.tipo] || hay.tipo)
+                    + ' — en Moodle sale «' + marcadorLegible(hay) + '»', nodo.n);
+            return;
+        }
+        if (quiere.tipo === 'vinetas') return;   // las viñetas no llevan cuenta
+        if (hay.numero !== quiere.numero) {
+            anotar('error', 'Listas',
+                'La numeración de «' + item.etiqueta + '» no continúa',
+                'Debe ser «' + marcadorLegible(quiere) + '», como en el guion',
+                'En Moodle sale «' + marcadorLegible(hay) + '»'
+                    + (hay.numero < quiere.numero
+                        ? '. La lista vuelve a empezar: al <ol> le falta start="'
+                            + quiere.numero + '".' : '.'),
+                nodo.n);
+        }
+    }
+
     /* El motivo del hallazgo, en una píldora del color de su nivel y con el
        título en grande al lado. Antes era una sola línea en negrita del mismo
        tamaño que el resto del bloque: con quince hallazgos seguidos había que
@@ -291,6 +375,7 @@ window.VERIFICADOR_QA = function (DATOS, evidencia) {
                 correctos++;
             }
             revisarFormato(item, r.nodo);
+            revisarMarcador(item, r.nodo);
         });
 
         /* Segunda pasada: lo que no apareció, ¿está con una palabra cambiada?
@@ -306,6 +391,7 @@ window.VERIFICADOR_QA = function (DATOS, evidencia) {
             anotar('aviso', 'Textos', item.etiqueta + ' — cambia una palabra al montar',
                 item.texto, casi.t, casi.n);
             revisarFormato(item, casi);
+            revisarMarcador(item, casi);
         });
 
         /* Negritas y cursivas: el Word marca las corridas, el montaje las
