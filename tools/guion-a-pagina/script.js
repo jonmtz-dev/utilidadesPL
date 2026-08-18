@@ -247,11 +247,15 @@ document.addEventListener('click', function (e) {
             /* Sustituir el srcdoc recarga el documento y lo deja hasta arriba.
                Con la barra flotante eso se nota de más: mueves un bloque a media
                página y la previa salta al principio. Se guarda y se repone. */
-            const antes = frame.contentDocument && frame.contentDocument.scrollingElement;
+            const docAntes = frame.contentDocument;
+            const antes = docAntes && docAntes.scrollingElement;
             const desplazado = antes ? antes.scrollTop : 0;
+            const abiertos = estadoAbierto(docAntes);
             frame.srcdoc = documentoPrevia(generarHTML(true));
             frame.addEventListener('load', () => {
-                const ahora = frame.contentDocument && frame.contentDocument.scrollingElement;
+                const doc = frame.contentDocument;
+                const ahora = doc && doc.scrollingElement;
+                reponerAbierto(doc, abiertos);
                 if (ahora && desplazado) ahora.scrollTop = desplazado;
                 conectarPrevia();
             }, { once: true });
@@ -300,6 +304,61 @@ document.addEventListener('click', function (e) {
            colocar() no lo encuentra y se esconde. */
         if (bqBarra) colocarBarra(doc.querySelector(`[data-bq="${bqBarra}"]`));
         señalarEnPrevia(seleccion);
+    }
+
+    /* ---------------------------------------------------------------------
+       Que la previa no se cierre sola al editar
+
+       Cambiar cualquier campo regenera el `srcdoc`, y eso recarga el documento
+       entero: el acordeón que tenías abierto se cierra y la pestaña vuelve a la
+       primera. Con la previa a un lado eso obliga a re-abrir el apartado
+       después de CADA clic, que es justo lo contrario de una vista previa.
+
+       Se guarda qué estaba abierto y se repone tras la recarga. Va por id, que
+       es estable: `reiniciarIds()` numera igual mientras la estructura no
+       cambie. Si un apartado desaparece, su id simplemente no se encuentra y no
+       pasa nada.
+       --------------------------------------------------------------------- */
+
+    function estadoAbierto(doc) {
+        if (!doc || !doc.body) return null;
+        return {
+            paneles: [...doc.querySelectorAll('.accordion-collapse.show')].map(e => e.id),
+            pestanas: [...doc.querySelectorAll('.tab-pane.active')].map(e => e.id),
+            botones: [...doc.querySelectorAll('.nav-link.active')].map(e => e.getAttribute('data-bs-target'))
+        };
+    }
+
+    function reponerAbierto(doc, estado) {
+        if (!doc || !estado) return;
+        estado.paneles.forEach(id => {
+            const panel = id && doc.getElementById(id);
+            if (!panel) return;
+            panel.classList.add('show');
+            const boton = doc.querySelector(`[data-bs-target="#${id}"]`);
+            if (boton) {
+                boton.classList.remove('collapsed');
+                boton.setAttribute('aria-expanded', 'true');
+            }
+        });
+        /* Las pestañas se reponen en bloque: activar una sin apagar la que el
+           HTML trae activa por omisión dejaría dos encendidas a la vez. */
+        if (estado.pestanas.length) {
+            estado.pestanas.forEach(id => {
+                const panel = id && doc.getElementById(id);
+                if (!panel) return;
+                const grupo = panel.parentElement;
+                if (grupo) grupo.querySelectorAll(':scope > .tab-pane').forEach(p => p.classList.remove('active', 'show'));
+                panel.classList.add('active', 'show');
+            });
+            estado.botones.forEach(sel => {
+                const boton = sel && doc.querySelector(`[data-bs-target="${sel}"]`);
+                if (!boton) return;
+                const barra = boton.closest('.nav');
+                if (barra) barra.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
+                boton.classList.add('active');
+            });
+        }
     }
 
     /* ---------------------------------------------------------------------

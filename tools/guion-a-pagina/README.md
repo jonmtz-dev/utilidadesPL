@@ -39,6 +39,44 @@ Y en los dos casos:
    vuelve tarjetas de verdad.
 4. Copias el HTML y sigues la pestaña **Antes de subir**.
 
+### Los modales NO se tiran
+
+Un `.modal` entra como bloque `crudo`. Antes se descartaba con un
+`return null` y un comentario que decía que se recogía *"aparte, con el bloque
+que lo dispara"* — **y ese aparte nunca se implementó**. Resultado: los botones
+con ventana llegaban sin su ventana y en la herramienta no abrían nada. Como
+`crudo` conserva el `id`, el botón vuelve a encontrarla.
+
+Los únicos que sobran son los que ya viajan **dentro** de una marca `{{ }}`: si
+además entraran como bloque, la página acabaría con la ventana dos veces. Se
+apuntan en `modalesAbsorbidos` y se filtran **al final**, no antes: hasta que no
+se recorrió la página no se sabe cuáles quedaron absorbidos, y el modal puede
+venir escrito antes que el párrafo que lo dispara.
+
+> Cuidado con los `return null` de `leerNodo()`: ahí es donde el contenido
+> desaparece sin dejar rastro. Hoy solo queda uno —los modales absorbidos— y se
+> resuelve por filtrado, con la lista a la vista.
+
+### La palabra con ventana se reconstruye entera
+
+`aMarcas()` reconoce el disparador (`a[data-bs-toggle="modal"]`), va a buscar su
+modal por el `data-bs-target` y recompone la marca completa
+`{{palabra|Título|Explicación}}`.
+
+Sin eso caía a los casos genéricos y salía **`==**palabra**==`**: el resaltado se
+conservaba y **la ventana se perdía en silencio**. Es el peor tipo de fallo —la
+página se ve casi igual y el contenido ya no está—, y le pasaba a cualquier
+página traída de Moodle.
+
+Y si la ventana lleva **bloques** en vez de texto (una tabla), la marca no la
+sabe llevar: `conVentanaCompleja()` lo detecta y manda el nodo entero a `crudo`,
+antes que publicarlo a medias.
+
+> Se descubrió preparando la edición directa sobre la vista previa. Esa función
+> **no se agregó** —se descartó por el riesgo de romper estilos al convertir de
+> vuelta lo que escriba el navegador—, pero el fallo que destapó era del
+> importador y se quedó arreglado.
+
 ### El espacio en blanco del archivo NO son saltos de línea
 
 `aMarcas()` colapsa cualquier racha de espacios de los nodos de texto
@@ -345,6 +383,28 @@ ser fiel.
 > pestaña, o la ventana emergente— se cerraba **en el mismo clic con que se
 > abría** y la previa parecía estar muerta. Abrir o seleccionar un bloque no
 > cambia el HTML: no hay nada que refrescar allá.
+
+### La previa no se cierra sola al editar
+
+Cambiar un campo regenera el `srcdoc`, y eso **recarga el documento entero**: el
+acordeón abierto se cierra y la pestaña vuelve a la primera. Con la previa al
+lado, eso obliga a volver a abrir el apartado después de CADA clic — lo contrario
+de una vista previa.
+
+`estadoAbierto()` anota qué paneles y pestañas estaban abiertos antes de
+regenerar, y `reponerAbierto()` los repone tras el `load`. Va por **id**, que es
+estable porque `reiniciarIds()` numera igual mientras la estructura no cambie; si
+un apartado desaparece, su id no se encuentra y no pasa nada.
+
+Dos detalles:
+
+- Al reponer un panel hay que quitarle `collapsed` a su botón y poner
+  `aria-expanded="true"`, o queda abierto pero con la flecha al revés.
+- Las pestañas se reponen **en bloque**, apagando primero las hermanas: activar
+  una sin apagar la que el HTML trae activa por omisión deja dos encendidas.
+
+> Se repone junto con el scroll, que ya se conservaba. Los dos resuelven lo
+> mismo: que editar no te mueva de donde estabas mirando.
 
 ### La barra flotante de la previa
 
@@ -740,6 +800,25 @@ Antes esto se escribía a mano en las plantillas
 > 01S.05 sin cambiarles nada —para que lo ya montado se vea igual al migrarlo—.
 > Mientras no estén en la hoja, la previa las trae en su subconjunto; cuando
 > estén, la hoja real gana por orden de carga y quedan sincronizadas solas.
+
+### La tabla tiene DOS encabezados y son distintos
+
+Se confunden con facilidad —se confundieron en uso real—, así que los campos lo
+dicen en la etiqueta:
+
+| Campo | Etiqueta | Qué produce | Dónde se ve |
+|---|---|---|---|
+| `titulo` | *Título gris, ARRIBA de la tabla* | `.container-fluid.bg-neutral-claro-50` con `p.text-muted.my-2.text-center` | Banda **gris**, **fuera** de la tabla |
+| `banda` | *Banda de color, DENTRO del encabezado* | `<tr><th colspan="N">` dentro del `<thead>` | Renglón **de color**, ya dentro |
+
+El "Tabla 1. …" que llevan casi todas las tablas del equipo es el **primero**.
+Escribirlo en el segundo lo saca de color y dentro de la tabla, que no es donde va.
+
+> ⚠️ **El importador tiene que leer los dos.** El título gris es *hermano* del
+> `<table>`, no parte de él: `leerTabla()` reclama el nodo entero, así que lo que
+> ese lector no lea **desaparece**. Sin buscarlo a propósito, traer una tabla de
+> Moodle perdía su "Tabla 1. …" sin avisar. Es el riesgo de todo lector que
+> reclama un subárbol completo — vale para los que se agreguen después.
 
 ### La banda de la tabla
 

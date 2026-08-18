@@ -39,12 +39,68 @@
             else if (et === 'em' || et === 'i') salida += `*${dentro}*`;
             else if (et === 'br') salida += '\n';
             else if (et === 'mark') salida += `==${dentro}==`;
+            /* La palabra que abre una ventana. SIN esto se caía a los casos de
+               abajo y salía `==**palabra**==`: el resaltado se conservaba y la
+               ventana **se perdía en silencio**, tanto al importar como al
+               editar en la previa. Se recompone la marca `{{ }}` completa
+               yendo a buscar el modal por su `data-bs-target`. */
+            else if (et === 'a' && hijo.getAttribute('data-bs-toggle') === 'modal') {
+                salida += marcaDeVentana(hijo);
+            }
             else if (et === 'a' && hijo.hasAttribute('href')) salida += `[${dentro}](${hijo.getAttribute('href')})`;
             else salida += dentro;
         });
         // El espacio pegado a un salto real (de un <br>) sobra al escribirlo
         // como marca: ahí manda el salto.
         return salida.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').trim();
+    }
+
+    /** El texto pelado de un nodo, con los espacios colapsados. */
+    function textoLlano(nodo) {
+        return nodo ? String(nodo.textContent || '').replace(/\s+/g, ' ').trim() : '';
+    }
+
+    /** El modal que dispara un enlace, buscado por su data-bs-target. */
+    function ventanaDe(enlace) {
+        const sel = enlace.getAttribute('data-bs-target') || '';
+        if (!sel.startsWith('#')) return null;
+        return enlace.ownerDocument.getElementById(sel.slice(1));
+    }
+
+    /**
+     * ¿El contenido de esa ventana cabe en la marca `{{ }}`?
+     * Solo si son párrafos: una ventana con una tabla dentro necesita bloques,
+     * y eso la marca de texto no lo sabe llevar. Cuando no cabe, el nodo entero
+     * se va a `crudo` (ver `leerTexto`) en vez de publicarse a medias.
+     */
+    function ventanaSimple(modal) {
+        const cuerpo = modal && modal.querySelector('.modal-body');
+        if (!cuerpo) return false;
+        return [...cuerpo.children].every(h => h.tagName.toLowerCase() === 'p');
+    }
+
+    /* Modales que YA se metieron dentro de una marca `{{ }}`. Su elemento
+       original sobra: si además entrara como bloque, la página acabaría con la
+       ventana dos veces. Se vacía en cada importación. */
+    let modalesAbsorbidos = new Set();
+
+    /** Reconstruye `{{palabra|Título|Explicación}}` desde el enlace y su modal. */
+    function marcaDeVentana(enlace) {
+        const palabra = textoLlano(enlace);
+        const modal = ventanaDe(enlace);
+        if (!modal) return palabra;
+        if (modal.id) modalesAbsorbidos.add(modal.id);
+        const titulo = textoLlano(modal.querySelector('.modal-title')) || palabra;
+        const cuerpo = textoLlano(modal.querySelector('.modal-body'));
+        // Sin cuerpo se escribe la marca de dos segmentos, que es la que se
+        // llena con bloques; con cuerpo, la de tres.
+        return cuerpo ? `{{${palabra}|${titulo}|${cuerpo}}}` : `{{${palabra}|${titulo}}}`;
+    }
+
+    /** ¿Hay aquí alguna ventana que la marca de texto no sepa representar? */
+    function conVentanaCompleja(el) {
+        return [...el.querySelectorAll('a[data-bs-toggle="modal"]')]
+            .some(a => !ventanaSimple(ventanaDe(a)));
     }
 
     /** Los párrafos de un contenedor, separados por línea en blanco. */
@@ -83,6 +139,9 @@
         // no se puede prometer que salga igual, y entonces va crudo.
         const hijos = [...col.children];
         if (!hijos.length || !hijos.every(h => h.tagName.toLowerCase() === 'p')) return null;
+        // Una ventana con tabla dentro no cabe en la marca de texto: el nodo
+        // entero se va a crudo antes que publicarse a medias.
+        if (conVentanaCompleja(col)) return null;
         return { tipo: 'texto', texto: parrafosDe(col), destacado: false, centrado: false };
     }
 
@@ -106,8 +165,16 @@
         const filas = [...tabla.querySelectorAll(':scope > tbody > tr')].map(tr =>
             [...tr.children].map(aMarcas));
 
+        /* El título gris que va ARRIBA de la tabla, fuera de ella: la banda
+           `.container-fluid.bg-neutral-claro-50` con su `p.text-muted`. Es
+           hermano del <table>, así que sin buscarlo aquí se perdía al importar
+           —el nodo entero lo reclama este lector y lo que no lea, desaparece—.
+           No confundir con `banda`, que es el <th colspan> DENTRO del thead. */
+        const bandaGris = el.querySelector('.bg-neutral-claro-50 p, .bg-neutral-claro-50');
+        const titulo = bandaGris ? aMarcas(bandaGris) : '';
+
         return {
-            tipo: 'tabla', banda, encabezados, filas, titulo: '',
+            tipo: 'tabla', banda, encabezados, filas, titulo,
             tarjetas: tabla.classList.contains('tabla-responsive-cards'),
             colorear: false,
             encabezadoColor: [...filaTitulos.children].some(t => /bg-primary-\d/.test(t.className))
@@ -152,8 +219,16 @@
     function leerNodo(el, leerHijos) {
         const et = el.tagName.toLowerCase();
         if (et === 'hr') return { tipo: 'separador' };
-        // Los modales se recogen aparte, con el bloque que los dispara.
-        if (el.classList.contains('modal')) return null;
+
+        /* Un modal entra como `crudo`, no se tira. Antes se descartaba aquí con
+           un comentario que decía que se recogía "aparte" — y ese aparte nunca
+           existió: los botones con ventana llegaban sin su ventana, así que en
+           la herramienta no abrían nada. Como `crudo` conserva el `id`, el
+           botón lo sigue encontrando.
+
+           Los que SÍ sobran son los que ya se metieron dentro de una marca
+           `{{ }}`; esos se descartan al final, cuando ya se sabe cuáles fueron. */
+        if (el.classList.contains('modal')) return crudo(el);
 
         const lectores = [
             () => leerAcordeon(el, leerHijos),
@@ -222,7 +297,21 @@
            No se puede callar: se cuenta y se avisa. */
         const conEstilo = [...raiz.querySelectorAll('[style]')].length;
 
-        const bloques = leerHijos(raiz);
+        modalesAbsorbidos = new Set();
+        let bloques = leerHijos(raiz);
+
+        /* Fuera los modales que ya viajan dentro de una marca `{{ }}`. Se filtra
+           DESPUÉS de leer todo, no antes: hasta que no se recorrió la página no
+           se sabe cuáles quedaron absorbidos, y el modal puede venir escrito
+           antes que el párrafo que lo dispara. */
+        const sobra = b => b.tipo === 'crudo' &&
+            [...modalesAbsorbidos].some(id => new RegExp(`id="${id}"`).test(b.html));
+        const limpiar = lista => (lista || []).filter(b => !sobra(b)).map(b => {
+            if (b.hijos) b.hijos = limpiar(b.hijos);
+            (b.items || []).forEach(it => { if (it.hijos) it.hijos = limpiar(it.hijos); });
+            return b;
+        });
+        bloques = limpiar(bloques);
 
         /* El primer h1 es el título de la página, que en la herramienta vive
            arriba y no como bloque. Se saca junto con el <hr> que lo sigue —lo

@@ -738,11 +738,15 @@ const COMPONENTES = {
         }),
         resumen: b => `${(b.filas || []).length} filas × ${(b.encabezados || []).length} columnas`,
         campos: [
-            { k: 'titulo', tipo: 'texto', etiqueta: 'Encabezado de la tabla (opcional)', marcador: 'Tabla 1. Aportaciones' },
             {
-                k: 'banda', tipo: 'texto', etiqueta: 'Banda sobre los encabezados (opcional)',
+                k: 'titulo', tipo: 'texto', etiqueta: 'Título gris, ARRIBA de la tabla (opcional)',
+                marcador: 'Tabla 1. Aportaciones',
+                ayuda: 'La banda gris que va fuera de la tabla, con el texto en gris claro. Es la que llevan casi todas las tablas del equipo: "Tabla 1. …".'
+            },
+            {
+                k: 'banda', tipo: 'texto', etiqueta: 'Banda de color, DENTRO del encabezado (opcional)',
                 marcador: 'Contenido de Aprendizaje 1',
-                ayuda: 'El renglón que cruza todas las columnas, arriba de los títulos. Casi todas las tablas del equipo lo llevan; déjalo vacío si esta no.'
+                ayuda: 'El renglón de COLOR que cruza todas las columnas, ya dentro de la tabla y encima de los títulos. No es el gris de arriba: ese es el campo anterior.'
             },
             { k: 'rejilla', tipo: 'rejilla', etiqueta: 'Contenido' },
             {
