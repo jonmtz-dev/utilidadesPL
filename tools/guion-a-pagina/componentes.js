@@ -60,11 +60,39 @@ function nuevoId(prefijo) { return `${prefijo}${++_secuencia}`; }
    igual que en la página de referencia. */
 let _modales = [];
 function encolarModal(html) { _modales.push(html); }
+
+/* Bloques que usará la ventana de un `{{palabra|Título}}` sin tercer segmento.
+   Existe porque el contenido de esa ventana no cabe en una línea de texto: la
+   "Tabla 1" de la presentación es una tabla entera. El componente lo enciende
+   alrededor de su propio marcas() y lo apaga al salir; fuera de ahí es null y
+   la marca de dos segmentos deja la ventana vacía. */
+let _bloquesDeVentana = null;
+function conVentanaDeBloques(bloques, hacer) {
+    const previo = _bloquesDeVentana;
+    _bloquesDeVentana = bloques || null;
+    try { return hacer(); } finally { _bloquesDeVentana = previo; }
+}
+
+/* Dentro de una ventana ancha, una tabla usa TODO el ancho (`col-12`) en vez
+   del `col-10 mx-auto` con que se publica suelta en la página. En la página ese
+   margen le da aire; dentro de un `modal-xl` con cinco columnas se come el 20%
+   del espacio y las celdas parten cada palabra en un renglón. Cotejado con la
+   "Presentación Semana 1" montada, que ahí usa `col-12`. */
+let _anchoCompleto = false;
+function conAnchoCompleto(hacer) {
+    const previo = _anchoCompleto;
+    _anchoCompleto = true;
+    try { return hacer(); } finally { _anchoCompleto = previo; }
+}
 function vaciarModales(n) {
     if (!_modales.length) return '';
-    const salida = _modales.map(f => f(n)).join('\n');
+    // La cola se vacía ANTES de armar el HTML, no después: una ventana cuyo
+    // contenido son bloques (la Tabla 1 de la presentación) vuelve a entrar a
+    // htmlDeBloques mientras se arma, y con el reseteo al final ese reingreso
+    // encontraba la misma cola llena y se quedaba dando vueltas.
+    const pendientes = _modales;
     _modales = [];
-    return salida;
+    return pendientes.map(f => f(n)).join('\n');
 }
 
 /**
@@ -75,7 +103,9 @@ function vaciarModales(n) {
  *   *cursivas*               -> <em>
  *   ==resaltado==            -> <mark class="bg-resalte-20">
  *   [texto](url)             -> <a target="_blank">
- *   {{palabra|título|texto}} -> botón que abre una ventana emergente
+ *   {{palabra|título|texto}} -> la palabra resaltada abre una ventana con ese texto
+ *   {{palabra|título}}       -> la palabra resaltada abre la ventana que el
+ *                               bloque trae armada con bloques (una tabla, p. ej.)
  *
  * El texto se escapa ANTES de aplicar marcas: lo que pega el usuario no puede
  * inyectar etiquetas.
@@ -84,21 +114,51 @@ function marcas(texto) {
     let t = escapar(texto);
 
     // La ventana emergente primero: su contenido no debe volver a partirse.
-    t = t.replace(/\{\{([^|{}]+)\|([^|{}]*)\|([^{}]+)\}\}/g, (_, palabra, titulo, cuerpo) => {
+    t = t.replace(/\{\{([^|{}]+)\|([^|{}]*)(?:\|([^{}]+))?\}\}/g, (_, palabra, titulo, cuerpo) => {
         const id = nuevoId('modal');
-        encolarModal(n => modalBootstrap(id, titulo.trim() || palabra.trim(),
-            `${ind(n + 1)}<p>${escapar(cuerpo.trim())}</p>`, n));
-        return `<button class="btn btn-sm text-tooltip bg-resalte-10 p-1 align-baseline" type="button" ` +
-            `data-bs-toggle="modal" data-bs-target="#${id}">${palabra.trim()}</button>`;
+        const suelto = String(cuerpo || '').trim();
+        // El closure tiene que quedarse con los bloques AHORA: la cola de
+        // modales se vacía más tarde, cuando el contexto del bloque ya se apagó.
+        const bloques = suelto ? null : _bloquesDeVentana;
+        encolarModal(n => suelto
+            // Ya viene escapado por el escapar() de arriba; volver a escaparlo
+            // convertía un "&" pegado del Word en "&amp;amp;".
+            ? modalBootstrap(id, titulo.trim() || palabra.trim(), `${ind(n + 1)}<p>${suelto}</p>`, n)
+            : modalBootstrap(id, titulo.trim() || palabra.trim(),
+                conAnchoCompleto(() => htmlDeBloques(bloques, n + 4)) || `${ind(n + 1)}<p></p>`, n, { ancha: true }));
+        // NO es un botón suelto. En las páginas ya publicadas —la "Presentación
+        // Semana 1" y el recurso de licencias libres— el disparador es la
+        // palabra resaltada con el iconito de interactividad, que lo pinta el
+        // ::after de `.interactivo` de la hoja del tema.
+        return `<a class="text-decoration-none" type="button" data-bs-toggle="modal" data-bs-target="#${id}">` +
+            `<mark class="${RESALTE_VENTANA} border-0"><strong class="interactivo">${palabra.trim()}</strong></mark></a>`;
     });
 
     t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, txt, url) =>
         `<a href="${ligaSegura(url)}" target="_blank" class="nomediaplugin">${txt}</a>`);
     t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    /* Resalte por CATEGORÍA: `==verde:texto==`. No es la escala de intensidad
+       de `bg-resalte-10…40` —esa dice "esto pesa más"— sino un código de
+       colores: en los ejercicios de gramática cada color marca una parte de la
+       oración, y llegan a salir cuatro en un mismo renglón. Por eso las clases
+       son neutras al aula: si siguieran la paleta, el mismo ejercicio cambiaría
+       de código entre M01 y M02 y el alumno que lleva dos módulos se perdería.
+       Antes esto se escribía a mano con `style="background-color:#cee4da"`. */
+    t = t.replace(/==([a-zñ]+):([^=]+)==/gi, (todo, color, txt) => {
+        const clase = MARCAS_COLOR[color.toLowerCase()];
+        return clase ? `<mark class="${clase} border-0">${txt}</mark>` : todo;
+    });
     t = t.replace(/==([^=]+)==/g, '<mark class="bg-resalte-20">$1</mark>');
     return t;
 }
+
+/* Los seis colores del código gramatical. El nombre es lo que teclea el
+   compañero; la clase vive en la hoja de Moodle (bg-marca-1…6). */
+const MARCAS_COLOR = {
+    morado: 'bg-marca-1', azul: 'bg-marca-2', verde: 'bg-marca-3',
+    naranja: 'bg-marca-4', rosa: 'bg-marca-5', gris: 'bg-marca-6'
+};
 
 /** Párrafos: una línea en blanco separa uno de otro; un salto simple es <br>. */
 function parrafos(texto, n) {
@@ -110,17 +170,28 @@ function parrafos(texto, n) {
    Piezas compartidas
    ------------------------------------------------------------------------- */
 
-/** Modal de Bootstrap, tal cual lo trae la página de referencia. */
-function modalBootstrap(id, titulo, contenidoHtml, n) {
+/**
+ * Modal de Bootstrap, tal cual lo trae la página de referencia.
+ *
+ * `ops.ancha` es la variante de la "Presentación Semana 1", cuya ventana lleva
+ * una tabla de cinco columnas: ahí el montaje usa `modal-dialog-centered
+ * modal-xl`, `rounded-lg`, un `h3` de título y `border-top` en el cuerpo. Va
+ * como opción y no como cambio: las ventanas de las tarjetas y de los tooltips
+ * ya están cotejadas con `modal-lg` y no hay por qué moverlas.
+ */
+function modalBootstrap(id, titulo, contenidoHtml, n, ops) {
+    const ancha = Boolean(ops && ops.ancha);
     return [
         `${ind(n)}<div id="${id}" class="modal fade" tabindex="-1" aria-labelledby="${id}Label" aria-hidden="true">`,
-        `${ind(n + 1)}<div class="modal-dialog modal-lg">`,
-        `${ind(n + 2)}<div class="modal-content">`,
+        `${ind(n + 1)}<div class="modal-dialog ${ancha ? 'modal-dialog-centered modal-xl' : 'modal-lg'}">`,
+        `${ind(n + 2)}<div class="modal-content${ancha ? ' rounded-lg' : ''}">`,
         `${ind(n + 3)}<div class="modal-header">`,
-        `${ind(n + 4)}<h1 id="${id}Label" class="modal-title fs-4">${marcas(titulo)}</h1>`,
+        ancha
+            ? `${ind(n + 4)}<h3 id="${id}Label" class="modal-title">${marcas(titulo)}</h3>`
+            : `${ind(n + 4)}<h1 id="${id}Label" class="modal-title fs-4">${marcas(titulo)}</h1>`,
         `${ind(n + 4)}<button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Cerrar"></button>`,
         `${ind(n + 3)}</div>`,
-        `${ind(n + 3)}<div class="modal-body">`,
+        `${ind(n + 3)}<div class="modal-body${ancha ? ' border-top' : ''}">`,
         contenidoHtml,
         `${ind(n + 3)}</div>`,
         `${ind(n + 2)}</div>`,
@@ -151,6 +222,18 @@ const CAMPO_ALINEACION = {
     ]
 };
 
+/* Clases de columna por cantidad, copiadas de los "Bloque con contenido de N"
+   de la plantilla de pestañas. NO es una cuenta de 12/N: el de 6 y el de 12
+   comparten los cortes de tableta (`col-sm-6 col-md-4`) y solo se separan en
+   `lg`. Calcularlo habría dado una rejilla parecida pero distinta. */
+const REJILLA = {
+    '2': 'col-12 col-lg-6 mb-2',
+    '3': 'col-12 col-sm-6 col-lg-4 mb-2',
+    '4': 'col-12 col-sm-6 col-lg-3 mb-2',
+    '6': 'col-12 col-sm-6 col-md-4 col-lg-2 mb-2',
+    '12': 'col-12 col-sm-6 col-md-4 col-lg-1 mb-2'
+};
+
 /** Botón que dispara un modal (el "Mesopotámica ▸" de las tarjetas). */
 function botonModal(id, etiqueta) {
     return `<button class="btn btn-secondary btn-sm rounded-4 border border-4 border-secondary-10 flecha_btn" ` +
@@ -162,6 +245,23 @@ function botonModal(id, etiqueta) {
    la previa: el HTML que se copia a Moodle nunca lleva el atributo. */
 let MARCAR_BLOQUES = false;
 function marcarBloques(activo) { MARCAR_BLOQUES = activo; }
+
+/* Intensidad del resaltado de la palabra que abre una ventana. Va por PÁGINA y
+   no por palabra a propósito: en las dos páginas ya publicadas cada una usa un
+   nivel y lo usa parejo en todo el recurso —la presentación el pálido, el de
+   licencias libres el fuerte—. Mezclarlos dentro de una misma página le quitaría
+   el sentido, que es "esto se puede tocar". */
+let RESALTE_VENTANA = 'bg-resalte-30';
+function resalteDeVentana(clase) { RESALTE_VENTANA = clase || 'bg-resalte-30'; }
+
+/* Los cuatro niveles, para el selector. Salen de la paleta del aula, así que el
+   tono real cambia con el módulo; aquí solo se elige la intensidad. */
+const NIVELES_RESALTE = [
+    { v: 'bg-resalte-10', etiqueta: 'Muy suave', muestra: '#fff4d6' },
+    { v: 'bg-resalte-20', etiqueta: 'Suave', muestra: '#ffe499' },
+    { v: 'bg-resalte-30', etiqueta: 'Fuerte', muestra: '#ffd140' },
+    { v: 'bg-resalte-40', etiqueta: 'Muy fuerte', muestra: '#cc9c23' }
+];
 
 /**
  * HTML de una lista de bloques (recursivo: acordeones, modales, pestañas).
@@ -205,7 +305,14 @@ const MINI = {
     separador: '<rect x="1" y="14" width="38" height="3" rx="1.5" opacity=".5"/>',
     /* Sin <text>: el glifo de un SVG cuenta como texto del botón y el nombre de
        la pieza salía "1 2 Pasos" en la paleta y en las plantillas. */
-    pasos: '<rect x="1" y="3" width="38" height="26" rx="4" opacity=".22"/><rect x="5" y="8" width="5" height="5" rx="1.5" opacity=".9"/><rect x="5" y="19" width="5" height="5" rx="1.5" opacity=".9"/><rect x="13" y="8.5" width="22" height="4" rx="2" opacity=".6"/><rect x="13" y="19.5" width="18" height="4" rx="2" opacity=".6"/>'
+    pasos: '<rect x="1" y="3" width="38" height="26" rx="4" opacity=".22"/><rect x="5" y="8" width="5" height="5" rx="1.5" opacity=".9"/><rect x="5" y="19" width="5" height="5" rx="1.5" opacity=".9"/><rect x="13" y="8.5" width="22" height="4" rx="2" opacity=".6"/><rect x="13" y="19.5" width="18" height="4" rx="2" opacity=".6"/>',
+    conversacion: '<rect x="1" y="4" width="22" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2" opacity=".9"/><rect x="5" y="8" width="13" height="2.4" rx="1.2" opacity=".55"/><rect x="5" y="12.5" width="9" height="2.4" rx="1.2" opacity=".55"/><rect x="26" y="12" width="13" height="14" rx="2" opacity=".35"/>',
+    crudo: '<rect x="1" y="6" width="38" height="20" rx="3" opacity=".22"/><path d="M12 11l-4 5 4 5M28 11l4 5-4 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/><path d="M22 10l-4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".5"/>',
+    envolvente: '<rect x="2" y="5" width="36" height="7" rx="2" opacity=".85"/><rect x="2" y="12" width="36" height="15" rx="2" opacity=".25"/><rect x="6" y="16" width="28" height="2.6" rx="1.3" opacity=".5"/><rect x="6" y="21" width="20" height="2.6" rx="1.3" opacity=".5"/>',
+    columnas: '<rect x="1" y="5" width="11" height="22" rx="2" opacity=".75"/><rect x="14.5" y="5" width="11" height="22" rx="2" opacity=".5"/><rect x="28" y="5" width="11" height="22" rx="2" opacity=".3"/>',
+    escribir: '<rect x="1" y="8" width="13" height="3" rx="1.5" opacity=".6"/><rect x="16" y="5" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".9"/><rect x="1" y="21" width="9" height="3" rx="1.5" opacity=".6"/><rect x="12" y="18" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".9"/>',
+    /* Título con su barra a la izquierda y, al lado, el recuadro con su banda. */
+    presentacion: '<rect x="1" y="5" width="2.5" height="9" rx="1.25" opacity=".9"/><rect x="6" y="6" width="16" height="4" rx="2" opacity=".85"/><rect x="1" y="17" width="21" height="2.6" rx="1.3" opacity=".45"/><rect x="1" y="22" width="17" height="2.6" rx="1.3" opacity=".45"/><rect x="26" y="5" width="13" height="4.5" rx="1.5" opacity=".8"/><rect x="26" y="11" width="13" height="16" rx="1.5" opacity=".25"/>'
 };
 
 /* -------------------------------------------------------------------------
@@ -213,6 +320,109 @@ const MINI = {
    ------------------------------------------------------------------------- */
 
 const COMPONENTES = {
+
+    /* ---- Presentación de la semana ----
+       El encabezado que abre toda página de presentación: a la izquierda el
+       antetítulo ("Presentación de la Semana 1"), el título grande y los
+       párrafos; a la derecha el recuadro gris de los contenidos de aprendizaje,
+       con su banda de color arriba. Copiado nodo por nodo de la página
+       "Presentación Semana 1" ya publicada.
+
+       No es un título + un texto + una tarjeta sueltos: las dos columnas son
+       del MISMO `.row.bloque`, y esa es justamente la parte que a mano sale
+       mal. Por eso va como una pieza y no como tres.
+
+       Ojo: trae su propio h1. Si se usa este bloque, el campo "Título de la
+       página" de la barra de arriba va vacío, o la página sale con dos. */
+    presentacion: {
+        nombre: 'Presentación',
+        ayuda: 'Título a la izquierda y recuadro de contenidos a la derecha',
+        icono: 'layout',
+        mini: MINI.presentacion,
+        nuevo: () => ({
+            antetitulo: 'Presentación de la Semana 1',
+            titulo: 'Título de la semana',
+            texto: 'Durante esta semana iniciarás tu recorrido por el submódulo; para ello, tendrás a tu disposición recursos que te permitirán…\n\nComo parte de tu proceso de aprendizaje, desarrollarás…',
+            tarjeta: true,
+            tituloTarjeta: 'Contenidos de aprendizaje',
+            textoTarjeta: 'Cada submódulo cuenta con contenidos de aprendizaje donde se abordan los contenidos formativos que te permitirán la realización de tus actividades de aprendizaje, así como de cuestionarios formativos y socioemocionales. Comprender cómo se organizan para tus lecturas semanales te permitirá avanzar con mayor claridad.\n\nPuedes consultar la {{Tabla 1|Tabla 1. Distribución de contenidos de aprendizaje}} para verificar cómo se encuentran distribuidos según su alcance formativo.\n\nHaz clic en **[contenido de aprendizaje](@@PLUGINFILE@@/contenido.pdf)** para ir a tu lectura.',
+            // La ventana de la "Tabla 1" llega armada: es la misma en todas las
+            // presentaciones y montarla desde cero era lo más tardado.
+            hijos: [Object.assign({ tipo: 'tabla', abierto: false }, COMPONENTES.tabla.nuevo(), {
+                titulo: '',
+                banda: 'Contenido de Aprendizaje 1',
+                encabezados: ['Semana', 'Nombre', 'Propósito formativo', 'Contenidos formativos', 'Contenido del ámbito de formación socioemocional'],
+                filas: [['1', '', '', '', ''], ['2', '', '', '', '']],
+                colorear: true, encabezadoColor: true
+            })]
+        }),
+        resumen: b => b.titulo,
+        campos: [
+            {
+                k: 'antetitulo', tipo: 'texto', etiqueta: 'Antetítulo',
+                marcador: 'Presentación de la Semana 1'
+            },
+            {
+                k: 'titulo', tipo: 'texto', etiqueta: 'Título de la semana',
+                ayuda: 'El grande, con la barra de color. Deja vacío el "Título de la página" de arriba para no repetirlo.'
+            },
+            { k: 'texto', tipo: 'rico', etiqueta: 'Párrafos de la izquierda', filas: 6 },
+            { k: 'tarjeta', tipo: 'check', etiqueta: 'Recuadro de contenidos a la derecha' },
+            {
+                k: 'tituloTarjeta', tipo: 'texto', etiqueta: 'Título del recuadro',
+                marcador: 'Contenidos de aprendizaje', siOculta: b => !b.tarjeta
+            },
+            {
+                k: 'textoTarjeta', tipo: 'rico', etiqueta: 'Texto del recuadro', filas: 7,
+                siOculta: b => !b.tarjeta,
+                ayuda: 'Sale en letra chica. La marca {{Tabla 1|Título de la ventana}} —sin tercer segmento— convierte esa palabra en el resaltado que abre la ventana de abajo.'
+            },
+            {
+                k: 'hijos', tipo: 'hijos', etiqueta: 'Contenido de la ventana (la Tabla 1)',
+                siOculta: b => !b.tarjeta
+            }
+        ],
+        html: (b, n) => {
+            const partes = [
+                `${ind(n)}<div class="row bloque">`,
+                `${ind(n + 1)}<div class="col-12 col-lg-8">`,
+                `${ind(n + 2)}<div class="tituloUnidad">`
+            ];
+            if ((b.antetitulo || '').trim()) {
+                partes.push(`${ind(n + 3)}<h5 class="mb-3">${marcas(b.antetitulo)}</h5>`);
+            }
+            partes.push(
+                `${ind(n + 3)}<h1 class="text-primary">${marcas(b.titulo || '')}</h1>`,
+                `${ind(n + 2)}</div>`,
+                // El <hr> va DENTRO de la columna, debajo del título: es lo que
+                // separa el encabezado de los párrafos en la página publicada.
+                `${ind(n + 2)}<hr>`,
+                ...parrafos(b.texto, n + 2),
+                `${ind(n + 1)}</div>`
+            );
+
+            if (b.tarjeta) {
+                // El texto del recuadro se arma con la ventana del bloque
+                // encendida: ahí es donde un {{Tabla 1|…}} de dos segmentos
+                // encuentra los bloques con los que llenarla.
+                const cuerpo = conVentanaDeBloques(b.hijos, () =>
+                    String(b.textoTarjeta || '').split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
+                        .map(p => `${ind(n + 4)}<p><small>${marcas(p).replace(/\n/g, '<br>')}</small></p>`));
+                partes.push(
+                    `${ind(n + 1)}<div class="col-lg-4 d-flex align-items-center">`,
+                    `${ind(n + 2)}<div class="card-body">`,
+                    `${ind(n + 3)}<div class="card-header bg-primary-10 p-2 col-8"><span class="mx-3"><small><strong>${marcas(b.tituloTarjeta || '')}</strong></small></span></div>`,
+                    `${ind(n + 3)}<div class="card-text bg-neutral-claro-50 p-4">`,
+                    ...cuerpo,
+                    `${ind(n + 3)}</div>`,
+                    `${ind(n + 2)}</div>`,
+                    `${ind(n + 1)}</div>`
+                );
+            }
+            partes.push(`${ind(n)}</div>`);
+            return partes.join('\n');
+        }
+    },
 
     /* ---- Título ---- */
     titulo: {
@@ -524,11 +734,16 @@ const COMPONENTES = {
         nuevo: () => ({
             encabezados: ['Columna 1', 'Columna 2'],
             filas: [['', ''], ['', '']],
-            colorear: false, tarjetas: true, titulo: '', encabezadoColor: false
+            colorear: false, tarjetas: true, titulo: '', encabezadoColor: false, banda: ''
         }),
         resumen: b => `${(b.filas || []).length} filas × ${(b.encabezados || []).length} columnas`,
         campos: [
             { k: 'titulo', tipo: 'texto', etiqueta: 'Encabezado de la tabla (opcional)', marcador: 'Tabla 1. Aportaciones' },
+            {
+                k: 'banda', tipo: 'texto', etiqueta: 'Banda sobre los encabezados (opcional)',
+                marcador: 'Contenido de Aprendizaje 1',
+                ayuda: 'El renglón que cruza todas las columnas, arriba de los títulos. Casi todas las tablas del equipo lo llevan; déjalo vacío si esta no.'
+            },
             { k: 'rejilla', tipo: 'rejilla', etiqueta: 'Contenido' },
             {
                 k: 'tarjetas', tipo: 'check',
@@ -553,7 +768,7 @@ const COMPONENTES = {
             // partían cada palabra en un renglón).
             const partes = [
                 `${ind(n)}<div class="row bloque mt-3">`,
-                `${ind(n + 1)}<div class="col-10 mx-auto">`,
+                `${ind(n + 1)}<div class="${_anchoCompleto ? 'col-12' : 'col-10 mx-auto'}">`,
                 `${ind(n + 2)}<div class="table-responsive">`
             ];
             // El encabezado de la tabla es una banda gris con el texto centrado,
@@ -566,8 +781,18 @@ const COMPONENTES = {
             }
             partes.push(
                 `${ind(n + 3)}<table class="${clases.join(' ')}">`,
-                `${ind(n + 4)}<thead class="thead bg-primary-20">`,
-                `${ind(n + 5)}<tr>`);
+                `${ind(n + 4)}<thead class="thead bg-primary-20">`);
+            /* La banda que cruza todas las columnas ("Contenido de Aprendizaje 1").
+               Va en su propio <tr> con un solo <th colspan>, tal cual el montaje.
+               Lleva el color SIEMPRE, sin depender de la casilla de abajo: en la
+               página publicada la banda se ve de color y los títulos no. */
+            if ((b.banda || '').trim()) {
+                partes.push(
+                    `${ind(n + 5)}<tr>`,
+                    `${ind(n + 6)}<th class="text-center bg-primary-20" colspan="${enc.length}">${marcas(b.banda)}</th>`,
+                    `${ind(n + 5)}</tr>`);
+            }
+            partes.push(`${ind(n + 5)}<tr>`);
             /* El bg-primary-20 del <thead> viene del montaje real y se queda, pero
                ahí NO se ve: Bootstrap pinta el fondo en cada celda y la tapa. Para
                que el encabezado salga de color hay que repetir la clase en los
@@ -781,15 +1006,37 @@ const COMPONENTES = {
         ayuda: 'YouTube incrustado en 16:9',
         icono: 'youtube-logo',
         mini: MINI.video,
-        nuevo: () => ({ url: '', titulo: 'Video' }),
+        nuevo: () => ({ url: '', titulo: 'Video', texto: '' }),
         resumen: b => b.url || 'sin URL',
         campos: [
             { k: 'url', tipo: 'url', etiqueta: 'Liga de YouTube', marcador: 'https://www.youtube.com/watch?v=...' },
-            { k: 'titulo', tipo: 'texto', etiqueta: 'Título (accesibilidad)' }
+            { k: 'titulo', tipo: 'texto', etiqueta: 'Título (accesibilidad)' },
+            {
+                k: 'texto', tipo: 'rico', etiqueta: 'Texto al lado (opcional)', filas: 4,
+                ayuda: 'Si escribes algo aquí, el video se pasa a la mitad derecha y el texto ocupa la izquierda. Vacío, el video va centrado como siempre.'
+            }
         ],
         html: (b, n) => {
             const id = idDeYoutube(b.url || '');
             if (!id) return '';
+
+            /* Con texto, la plantilla usa DOS columnas de mitad y mitad y el
+               iframe lleva `frame-video`. Va como opción y no como cambio: sin
+               texto sale el video centrado de siempre. */
+            if ((b.texto || '').trim()) {
+                return [
+                    `${ind(n)}<div class="row bloque">`,
+                    `${ind(n + 1)}<div class="col-12 col-md-12 col-lg-6">`,
+                    ...parrafos(b.texto, n + 2),
+                    `${ind(n + 1)}</div>`,
+                    `${ind(n + 1)}<div class="col-12 col-md-12 col-lg-6 d-flex align-items-center">`,
+                    `${ind(n + 2)}<div class="ratio ratio-16x9">`,
+                    `${ind(n + 3)}<iframe src="https://www.youtube.com/embed/${id}" class="frame-video" title="${escapar(b.titulo || 'Video')}" allowfullscreen></iframe>`,
+                    `${ind(n + 2)}</div>`,
+                    `${ind(n + 1)}</div>`,
+                    `${ind(n)}</div>`
+                ].join('\n');
+            }
             return [
                 `${ind(n)}<div class="row bloque justify-content-center">`,
                 `${ind(n + 1)}<div class="col-12 col-md-8 mx-auto">`,
@@ -799,6 +1046,230 @@ const COMPONENTES = {
                 `${ind(n + 1)}</div>`,
                 `${ind(n)}</div>`
             ].join('\n');
+        }
+    },
+
+    /* ---- Texto con envolvente ----
+       La caja de color de las plantillas 01S.05. Dos formas, que en el montaje
+       son markup distinto y no una variante de la misma caja:
+
+       - CON título: `.card` con su banda `.card-header` de color arriba.
+       - SIN título: `.card-body` centrado, sin banda, más angosto (`col-lg-8`).
+
+       Por eso el título no es solo un campo opcional: cambia el envoltorio. */
+    envolvente: {
+        nombre: 'Caja de color',
+        ayuda: 'Texto dentro de una caja, con o sin banda de título',
+        icono: 'square',
+        mini: MINI.envolvente,
+        nuevo: () => ({ titulo: 'Título', texto: '', color: 'primary-30', fondo: 'primary-10' }),
+        resumen: b => b.titulo || (b.texto || '').replace(/\s+/g, ' ') || 'caja',
+        campos: [
+            {
+                k: 'titulo', tipo: 'texto', etiqueta: 'Título de la banda',
+                ayuda: 'Si lo dejas vacío, la caja sale sin banda y centrada, que es la otra forma que publica el equipo.'
+            },
+            { k: 'texto', tipo: 'rico', etiqueta: 'Texto', filas: 4 },
+            {
+                k: 'color', tipo: 'opciones', etiqueta: 'Color de la banda', siOculta: b => !(b.titulo || '').trim(),
+                ops: [
+                    { v: 'primary-30', etiqueta: 'Principal' },
+                    { v: 'primary', etiqueta: 'Principal fuerte' },
+                    { v: 'secondary-20', etiqueta: 'Secundario' }
+                ]
+            },
+            {
+                k: 'fondo', tipo: 'opciones', etiqueta: 'Fondo de la caja', ops: [
+                    { v: 'primary-10', etiqueta: 'Principal claro' },
+                    { v: 'secondary-20', etiqueta: 'Secundario' },
+                    { v: 'neutral-claro-50', etiqueta: 'Gris' }
+                ]
+            }
+        ],
+        html: (b, n) => {
+            const cuerpo = parrafos(b.texto, n + 4);
+            if (!cuerpo.length && !(b.titulo || '').trim()) return '';
+            const titulo = (b.titulo || '').trim();
+
+            // Sin banda: la caja centrada de "Bloques de texto con envolvente
+            // simple". No lleva .card ni .card-header.
+            if (!titulo) {
+                return [
+                    `${ind(n)}<div class="row bloque">`,
+                    `${ind(n + 1)}<div class="col-12">`,
+                    `${ind(n + 2)}<div class="card-body col-sm-12 col-lg-8 p-4 mx-auto text-center bg-${b.fondo || 'primary-10'} rounded-2">`,
+                    `${ind(n + 3)}<div class="card-text">`,
+                    ...parrafos(b.texto, n + 4),
+                    `${ind(n + 3)}</div>`,
+                    `${ind(n + 2)}</div>`,
+                    `${ind(n + 1)}</div>`,
+                    `${ind(n)}</div>`
+                ].join('\n');
+            }
+            // Con banda. El .card-body lleva el fondo y el .rounded-1 de adentro
+            // es lo que separa el texto de la orilla, como en la plantilla.
+            const claseTitulo = b.color === 'primary' ? 'bg-primary text-primary-10' : `bg-${b.color || 'primary-30'}`;
+            return [
+                `${ind(n)}<div class="row bloque">`,
+                `${ind(n + 1)}<div class="col-12 d-flex align-items-center">`,
+                `${ind(n + 2)}<div class="card mx-auto p-0">`,
+                `${ind(n + 3)}<div class="card-header notas-tabla ${claseTitulo}">${marcas(titulo)}</div>`,
+                `${ind(n + 3)}<div class="card-body bg-${b.fondo || 'primary-10'} px-3">`,
+                `${ind(n + 4)}<div class="rounded-1 rounded-top p-3">`,
+                ...parrafos(b.texto, n + 5),
+                `${ind(n + 4)}</div>`,
+                `${ind(n + 3)}</div>`,
+                `${ind(n + 2)}</div>`,
+                `${ind(n + 1)}</div>`,
+                `${ind(n)}</div>`
+            ].join('\n');
+        }
+    },
+
+    /* ---- Rejilla de columnas ----
+       Los "Bloque con contenido de N" de la plantilla de pestañas. Cada N trae
+       SU cadena de clases, copiada tal cual: no es `12/N` calculado, porque los
+       cortes de tableta no siguen esa cuenta (el de 6 y el de 12 comparten
+       `col-sm-6 col-md-4` y solo se separan en `lg`). */
+    columnas: {
+        nombre: 'Columnas',
+        ayuda: 'Reparte cualquier contenido en 2, 3, 4, 6 o 12 columnas',
+        icono: 'columns',
+        mini: MINI.columnas,
+        nuevo: () => ({
+            cuantas: '3',
+            items: [{ hijos: [] }, { hijos: [] }, { hijos: [] }]
+        }),
+        resumen: b => `${(b.items || []).length} columnas`,
+        campos: [
+            {
+                k: 'cuantas', tipo: 'opciones', etiqueta: 'Columnas en escritorio', ops: [
+                    { v: '2', etiqueta: '2' }, { v: '3', etiqueta: '3' }, { v: '4', etiqueta: '4' },
+                    { v: '6', etiqueta: '6' }, { v: '12', etiqueta: '12' }
+                ],
+                ayuda: 'En celular siempre se apilan. El número es lo que se ve en pantalla ancha.'
+            },
+            {
+                k: 'items', tipo: 'repetible', etiqueta: 'Columnas', nombreItem: 'Columna',
+                nuevo: () => ({ hijos: [] }), campos: [], hijos: true
+            }
+        ],
+        html: (b, n) => {
+            const items = b.items || [];
+            if (!items.length) return '';
+            const clase = REJILLA[b.cuantas] || REJILLA['3'];
+            const partes = [`${ind(n)}<div class="row bloque mt-3 mb-3">`];
+            items.forEach(item => {
+                partes.push(`${ind(n + 1)}<div class="${clase}">`);
+                const dentro = htmlDeBloques(item.hijos, n + 2, true);
+                if (dentro) partes.push(dentro);
+                partes.push(`${ind(n + 1)}</div>`);
+            });
+            partes.push(`${ind(n)}</div>`);
+            return partes.join('\n');
+        }
+    },
+
+    /* ---- Recuadro para escribir ----
+       Los `textarea` en medio de la frase para completar oraciones. Es la única
+       pieza interactiva de las plantillas que NO necesita JavaScript: el alumno
+       escribe y ya. Su CSS (`recuadro__input`) ya está en la hoja de Moodle. */
+    escribir: {
+        nombre: 'Completar',
+        ayuda: 'Frases con un espacio en blanco para escribir la respuesta',
+        icono: 'cursor-text',
+        mini: MINI.escribir,
+        nuevo: () => ({
+            marcador: 'answer',
+            items: ['Lisa ___ green eyes.', 'I ___ friendly.']
+        }),
+        resumen: b => `${(b.items || []).filter(t => String(t).trim()).length} frases`,
+        campos: [
+            {
+                k: 'items', tipo: 'renglones', etiqueta: 'Frases',
+                marcador: 'Una frase por renglón. Escribe ___ donde va el espacio en blanco.',
+                ayuda: 'Los tres guiones bajos (___) se convierten en el recuadro donde escribe el alumno. Puedes poner más de uno en la misma frase.'
+            },
+            {
+                k: 'marcador', tipo: 'texto', etiqueta: 'Texto guía del recuadro',
+                marcador: 'answer'
+            }
+        ],
+        html: (b, n) => {
+            const items = (b.items || []).map(t => String(t).trim()).filter(Boolean);
+            if (!items.length) return '';
+            const hueco = `<textarea name="text_single" class="recuadro__input" placeholder="${escapar(b.marcador || '')}"></textarea>`;
+            return [
+                `${ind(n)}<div class="row bloque mt-3">`,
+                `${ind(n + 1)}<div class="col-12 col-lg-6">`,
+                `${ind(n + 2)}<div class="tab-panels p-4">`,
+                // El hueco se mete DESPUÉS de aplicar marcas: si se metiera antes,
+                // el escapado del texto convertiría el <textarea> en texto visible.
+                ...items.map(t => `${ind(n + 3)}<p>${marcas(t).replace(/_{3,}/g, hueco)}</p>`),
+                `${ind(n + 2)}</div>`,
+                `${ind(n + 1)}</div>`,
+                `${ind(n)}</div>`
+            ].join('\n');
+        }
+    },
+
+    /* ---- Conversación ----
+       El diálogo de las plantillas 01S.05: una tarjeta de borde punteado con
+       los parlamentos, y al lado la imagen. El audio NO lo pone la herramienta
+       —se inserta desde el editor de Moodle, que ya lo hace bien— y por eso la
+       columna de al lado queda lista para recibirlo.
+
+       El borde punteado sale de la clase `borde-punteado`, no del
+       `style="border-style: dashed"` de la plantilla: eso era un hex y medio
+       escritos a mano, y ya vive en la hoja del tema. */
+    conversacion: {
+        nombre: 'Conversación',
+        ayuda: 'Diálogo en una tarjeta punteada, con imagen al lado',
+        icono: 'chats-circle',
+        mini: MINI.conversacion,
+        nuevo: () => ({
+            lineas: ['**Carol:** In this box there are accessories.\n*En esta caja hay accesorios.*',
+                '**Anne:** Those sneakers are mine.\n*Esas zapatillas son mías.*'],
+            img: '', alt: ''
+        }),
+        resumen: b => `${(b.lineas || []).filter(t => String(t).trim()).length} parlamentos`,
+        campos: [
+            {
+                k: 'lineas', tipo: 'renglones', etiqueta: 'Parlamentos',
+                marcador: 'Un parlamento por renglón. Usa **Nombre:** al principio.',
+                ayuda: 'Para la traducción debajo, escribe un salto de línea dentro del mismo parlamento y ponla en *cursivas*.'
+            },
+            { k: 'img', tipo: 'url', imagen: true, etiqueta: 'Imagen del lado (opcional)', marcador: '@@PLUGINFILE@@/imagen.png' },
+            { k: 'alt', tipo: 'texto', etiqueta: 'Texto alternativo', siOculta: b => !(b.img || '').trim() }
+        ],
+        html: (b, n) => {
+            const lineas = (b.lineas || []).map(t => String(t).trim()).filter(Boolean);
+            if (!lineas.length) return '';
+            const partes = [
+                `${ind(n)}<div class="row bloque mb-4">`,
+                `${ind(n + 1)}<div class="col-12">`,
+                `${ind(n + 2)}<div class="row no-gutters align-items-center">`,
+                `${ind(n + 3)}<div class="card col-12 col-lg-5 p-4 rounded-2 border-primary borde-punteado m-3">`,
+                `${ind(n + 4)}<div class="card-text">`,
+                // El salto simple dentro de un parlamento es la traducción: va
+                // como <br>, igual que en el montaje.
+                ...lineas.map(t => `${ind(n + 5)}<p>${marcas(t).replace(/\n/g, '<br>')}</p>`),
+                `${ind(n + 4)}</div>`,
+                `${ind(n + 3)}</div>`,
+                `${ind(n + 3)}<div class="col-12 col-lg-6 align-items-center">`
+            ];
+            if ((b.img || '').trim()) {
+                partes.push(
+                    `${ind(n + 4)}<div class="col-12">`,
+                    `${ind(n + 5)}<img class="img-fluid" src="${ligaSegura(b.img.trim())}" alt="${escapar(b.alt || '')}">`,
+                    `${ind(n + 4)}</div>`);
+            }
+            partes.push(
+                `${ind(n + 3)}</div>`,
+                `${ind(n + 2)}</div>`,
+                `${ind(n + 1)}</div>`,
+                `${ind(n)}</div>`);
+            return partes.join('\n');
         }
     },
 
@@ -847,11 +1318,17 @@ const COMPONENTES = {
         ayuda: 'Caja de nota, advertencia o dato importante',
         icono: 'warning-circle',
         mini: MINI.alerta,
-        nuevo: () => ({ tipo: 'info', texto: '' }),
+        /* El campo se llama `tono`, NO `tipo`: `tipo` es el discriminador del
+           bloque y crearBloque() hace Object.assign con lo que devuelve esto.
+           Llamándolo `tipo` el bloque nacía como `tipo: 'info'` —que no es
+           ningún componente— y el lienzo entero reventaba al dibujarlo: se
+           agregaba el Aviso y a partir de ahí la herramienta no respondía.
+           Es el mismo choque de nombres que el `nota` de la figura. */
+        nuevo: () => ({ tono: 'info', texto: '' }),
         resumen: b => b.texto,
         campos: [
             {
-                k: 'tipo', tipo: 'opciones', etiqueta: 'Tono', ops: [
+                k: 'tono', tipo: 'opciones', etiqueta: 'Tono', ops: [
                     { v: 'info', etiqueta: 'Nota', icono: 'info' },
                     { v: 'warning', etiqueta: 'Cuidado', icono: 'warning' },
                     { v: 'success', etiqueta: 'Logro', icono: 'check-circle' },
@@ -862,7 +1339,10 @@ const COMPONENTES = {
         ],
         html: (b, n) => {
             if (!(b.texto || '').trim()) return '';
-            const clase = b.tipo === 'enmarcado' ? 'enmarcado' : `alert alert-${b.tipo || 'info'}`;
+            // `b.tono`, con respaldo a `b.tipo` para las páginas que se hayan
+            // guardado con el nombre viejo antes del arreglo.
+            const tono = b.tono || (b.tipo !== 'alerta' && b.tipo) || 'info';
+            const clase = tono === 'enmarcado' ? 'enmarcado' : `alert alert-${tono}`;
             return [
                 `${ind(n)}<div class="row justify-content-center bloque">`,
                 `${ind(n + 1)}<div class="col-12 col-md-8 mx-auto">`,
@@ -872,6 +1352,39 @@ const COMPONENTES = {
                 `${ind(n + 1)}</div>`,
                 `${ind(n)}</div>`
             ].join('\n');
+        }
+    },
+
+    /* ---- HTML tal cual ----
+       Sale del importador: lo que se pega y la herramienta no sabe reconocer
+       entra aquí y se publica **idéntico**. Es lo que hace que importar sea
+       seguro — sin este bloque, traer una página de Moodle sería una apuesta a
+       que el lector entienda el 100%, y lo que no entendiera se perdería.
+
+       No se escapa a propósito: es HTML de verdad, puesto por alguien que sabe
+       lo que hace. Es el único componente que no pasa por `marcas()`. */
+    crudo: {
+        nombre: 'HTML tal cual',
+        ayuda: 'Un trozo de HTML que se publica sin tocar',
+        icono: 'code',
+        mini: MINI.crudo,
+        nuevo: () => ({ html: '' }),
+        resumen: b => {
+            const t = String(b.html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+            return t ? t.slice(0, 60) : 'vacío';
+        },
+        campos: [
+            {
+                k: 'html', tipo: 'rico', etiqueta: 'HTML', filas: 8, sinMarcas: true,
+                marcador: '<div class="row bloque">…</div>',
+                ayuda: 'Se publica exactamente como está. Úsalo para lo que la herramienta todavía no sabe armar; lo demás conviene hacerlo con bloques, que sí se editan.'
+            }
+        ],
+        html: (b, n) => {
+            const t = String(b.html || '').trim();
+            if (!t) return '';
+            // Se reindenta para que el HTML final siga siendo legible al pegarlo.
+            return t.split('\n').map(l => ind(n) + l.trim()).join('\n');
         }
     },
 
@@ -894,9 +1407,11 @@ function idDeYoutube(url) {
     return m ? m[1] : '';
 }
 
-/* Orden de la paleta: primero lo de toda página, luego lo compuesto. */
-const ORDEN_PALETA = ['titulo', 'texto', 'lista', 'pasos', 'imagen', 'instruccion', 'tabla',
-    'acordeon', 'modal', 'tarjetas', 'pestanas', 'video', 'boton', 'alerta', 'separador'];
+/* Orden de la paleta: primero lo de toda página, luego lo compuesto.
+   `presentacion` va al frente porque es lo primero de una página de semana. */
+const ORDEN_PALETA = ['presentacion', 'titulo', 'texto', 'lista', 'pasos', 'imagen', 'instruccion', 'tabla',
+    'envolvente', 'columnas', 'acordeon', 'modal', 'tarjetas', 'pestanas', 'conversacion', 'video', 'escribir',
+    'boton', 'alerta', 'separador', 'crudo'];
 
 /* Paletas del aula. Las clases son las del tema (mainPlantilla23.M01 …); los
    hex son SOLO la muestra de color del selector, no salen al HTML. */

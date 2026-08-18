@@ -1,0 +1,59 @@
+/* ============================================================
+   RESALTES POR CATEGORÍA  (bg-marca-1 … bg-marca-6)
+   Para pegar en Estilos_Unificados/conjunto_unificado.scss
+   ============================================================
+
+   QUÉ SON
+   Un código de colores, no una escala de intensidad. En los ejercicios de
+   gramática cada color marca una parte de la oración y llegan a salir cuatro
+   en un mismo renglón:
+
+       <mark class="bg-marca-3 border-0">Is</mark>
+       <mark class="bg-marca-2 border-0">he</mark>
+       <mark class="bg-marca-6 border-0">at the airport</mark>
+       <mark class="bg-marca-5 border-0">?</mark>
+
+   POR QUÉ NO VAN EN bg-resalte-10…40
+   Esa escala dice "esto pesa más que aquello" y cambia con el aula. Estos seis
+   tienen que distinguirse ENTRE SÍ, y ninguno pesa más que otro.
+
+   POR QUÉ SON NEUTRAS AL AULA (a propósito, no por descuido)
+   Si siguieran la paleta, el mismo ejercicio de inglés tendría un código de
+   colores distinto en M01 que en M02, y el alumno que lleva dos módulos
+   perdería la referencia. Por eso NO usan var(--primary-*).
+
+   DE DÓNDE SALEN LOS HEX
+   De los style="background-color:…" escritos a mano en las plantillas 01S.05
+   (Plantilla_HTML y Plantilla_Pestanas). Son los mismos, sin cambiarles nada,
+   para que las páginas ya montadas se vean igual al migrarlas a la clase.
+   ============================================================ */
+
+.mainPlantilla23 .bg-marca-1 { background-color: #d8cfe3 !important; } /* morado  */
+.mainPlantilla23 .bg-marca-2 { background-color: #cfe0f3 !important; } /* azul    */
+.mainPlantilla23 .bg-marca-3 { background-color: #cee4da !important; } /* verde   */
+.mainPlantilla23 .bg-marca-4 { background-color: #fbe4d6 !important; } /* naranja */
+.mainPlantilla23 .bg-marca-5 { background-color: #eedae9 !important; } /* rosa    */
+.mainPlantilla23 .bg-marca-6 { background-color: #d4d4d4 !important; } /* gris    */
+
+/* El <mark> de Bootstrap trae su propio padding y un amarillo por omisión.
+   Se neutraliza aquí para que el color lo ponga solo la clase de arriba. */
+.mainPlantilla23 mark[class*="bg-marca-"] {
+    color: inherit;
+    padding: .1875em;
+    border-radius: 2px;
+}
+
+/* Color de letra del mismo juego: el morado con que las plantillas resaltan la
+   palabra clave dentro de la frase (<strong style="color:#7B5AA1">). */
+.mainPlantilla23 .text-marca { color: #7b5aa1 !important; }
+
+/* ============================================================
+   BORDE PUNTEADO  (borde-punteado)
+   La tarjeta de las conversaciones, hoy escrita como
+   style="border-style: dashed; border-width: 2px;"
+   ============================================================ */
+
+.mainPlantilla23 .borde-punteado {
+    border-style: dashed !important;
+    border-width: 2px !important;
+}

@@ -21,8 +21,9 @@ real del guion se muestra con su contenido y tú eliges qué es — *Tabla,
 Acordeón, Tarjetas, Texto* o *No va*. Las tablas de una celda no se preguntan:
 son barras de título y se convierten solas.
 
-**B. De cero.** Cinco plantillas de arranque (actividad con pasos, con acordeón,
-con tarjetas, con tabla, o en blanco) para no enfrentarse a una hoja vacía. A partir de ahí es el
+**B. De cero.** Seis plantillas de arranque (presentación de semana, actividad
+con pasos, con acordeón, con tarjetas, con tabla, o en blanco) para no
+enfrentarse a una hoja vacía. A partir de ahí es el
 mismo editor: nada de lo que sigue depende de haber subido un Word.
 
 Y en los dos casos:
@@ -37,6 +38,207 @@ Y en los dos casos:
    tableta, celular). El de celular es el que importa: ahí se ve si la tabla se
    vuelve tarjetas de verdad.
 4. Copias el HTML y sigues la pestaña **Antes de subir**.
+
+### El espacio en blanco del archivo NO son saltos de línea
+
+`aMarcas()` colapsa cualquier racha de espacios de los nodos de texto
+(`\s+` → un espacio), igual que hace el navegador. Sin eso, el HTML **formateado**
+—el que viene con sangría y renglones cortados, que es como sale del editor—
+entrega esos saltos como `
+`, y `parrafos()` los publica como `<br>` de verdad:
+el texto sale cortado exactamente donde el archivo tenía sus renglones.
+
+Se reportó como *"el texto lo acomoda diferente"* y costó encontrarlo porque el
+párrafo se ve a todo lo ancho; lo que cambia es dónde corta. Los `<br>` de verdad
+sí se conservan: esos vienen del elemento, no del espacio en blanco.
+
+## Traer una página de Moodle de vuelta
+
+El área de la pestaña **HTML** dejó de ser de solo lectura: se puede pegar ahí
+una página ya montada y traerla a bloques editables. Vive en
+`importar-html.js`, que es el camino inverso de `componentes.js`.
+
+**La regla que lo hace seguro: lo que no se reconoce NO se tira.** Entra como
+bloque `crudo` y se vuelve a publicar idéntico. Sin esa red, importar sería
+apostar a que el lector entienda el 100% del markup, y lo que fallara
+desaparecería sin avisar. Con ella, el peor caso es *"esto no se puede editar por
+piezas"*, nunca *"esto se perdió"*.
+
+Por lo mismo el lector es **deliberadamente desconfiado**: solo reclama un nodo
+cuando puede reconstruirlo igual. El lector de texto, por ejemplo, exige que la
+columna traiga **solo** `<p>`; con cualquier otra cosa dentro se va a crudo. Ante
+la duda, crudo.
+
+| Reconoce | Va a `crudo` |
+|---|---|
+| Título (h1/h2), texto, instrucción, tabla (con su banda), acordeón con sus hijos, video de YouTube, aviso, separador | Todo lo demás |
+
+Además saca la **paleta del aula** de la clase del contenedor y el **título de la
+página** del primer `h1`, quitando el `<hr>` que lo sigue: si no, al reimportar
+saldrían duplicados.
+
+Dos detalles del mecanismo:
+
+- **Un lector que truene no tumba la importación.** Cada uno va en su `try`; el
+  nodo que falle se va como crudo y lo demás sigue. Una página rara no puede
+  dejar al usuario sin nada.
+- **`guardarHistorial()` antes de pisar.** Traer reemplaza lo que haya armado;
+  es lo que hace que un pegado por equivocación no cueste el trabajo de la tarde.
+
+### La prueba que importa es la ida y vuelta
+
+Generar una página, pegarla de vuelta y comprobar que el HTML sale **idéntico**.
+Ya está verificada con título, instrucción, tabla, acordeón y separador: mismos
+2 440 caracteres, cero bloques crudos. Si algún día se toca el generador o el
+lector, esa es la prueba que hay que repetir.
+
+> El bloque `crudo` es el único que **no escapa** su contenido ni pasa por
+> `marcas()`: es HTML de verdad, puesto a propósito. Por eso no se ofrece como
+> primera opción — lo demás conviene hacerlo con bloques, que sí se editan.
+
+## El lienzo es un índice, no un formulario
+
+Los campos de un bloque **no** se editan en el lienzo: se editan en el **panel**
+que entra sobre él (`#panel-bloque`). El lienzo enseña la estructura —qué cuelga
+de qué apartado, qué va dentro de qué columna, con los hijos indentados— y el
+panel enseña un bloque a la vez.
+
+Las dos cosas juntas no cabían: con un guion de 20 bloques y todos los campos
+desplegados, el lienzo era un muro de cajas donde no se distinguía la página, que
+es justo lo que hay que ver para maquetar.
+
+Cómo se reparte:
+
+| Va en el lienzo | Va en el panel |
+|---|---|
+| Nombre y resumen del bloque | Los campos escalares (texto, opciones, casillas) |
+| Los **bloques hijos**, indentados | Los apartados de un repetible (título, imagen…) y **cuántos** bloques lleva cada uno |
+| Reordenar, duplicar, borrar | — |
+
+Tres cosas que conviene no deshacer:
+
+- **`dibujarTodo()` redibuja el panel; `dibujarLienzo()` no.** Un clic que solo
+  pliega hijos no debe arrancarle el foco al campo que se está escribiendo.
+- **El resumen del renglón se actualiza sin redibujar** (`refrescarResumen()`):
+  redibujar el lienzo en cada tecla mataba el foco del campo.
+- **Los hijos no se dibujan en los dos lados.** El `repetible` con `hijos` ya no
+  monta su `lienzoHijo` en el panel; deja solo la cuenta. Tenerlos en ambos era
+  el enredo que este rediseño vino a quitar.
+
+> ⚠️ La clase `.ficha` **ya estaba tomada** por los apartados de un repetible.
+> El panel nuevo usa `.panel-bloque`: al reusar `.ficha` le entraba
+> `position: absolute; inset: 0` a cada apartado y se apilaban encima. Es el
+> mismo choque de nombres que el `nota`/`tipo`; antes de reusar una clase,
+> búscala.
+
+### El panel cubre la COLUMNA, no el lienzo
+
+`#panel-bloque` cuelga de `.editor-panel`, no de `.lienzo-viewport`. Metido
+dentro del viewport se quedaba con el alto de este: **102px en una laptop, para
+500px de campos**. Todo caía bajo el pliegue y con un bloque Columnas el botón
+de agregar contenido no se encontraba nunca — se veía "Sin contenido todavía" y
+ninguna salida. Colgado de la columna son 464px.
+
+El panel trae su propio encabezado con volver y *Listo*, así que taparlo todo no
+deja a nadie sin salida.
+
+> Al probar esto **no basta con que el botón exista en el DOM**. Hay que medir
+> que se vea y que se pueda tocar: `getComputedStyle().opacity`, el tamaño real,
+> y que `document.elementFromPoint()` en su centro devuelva el propio botón. Las
+> dos veces que esto se dio por bueno sin medirlo, el botón estaba ahí y era
+> inalcanzable — una vez con `opacity: 0`, otra fuera del área visible.
+
+### Desde el panel se puede agregar contenido
+
+Cada columna, apartado o ventana enseña en el panel **qué lleva dentro** (chips
+que saltan a ese bloque) y una franja **+** para agregar uno más ahí mismo. Lo
+dibuja `resumenDeHijos()`, compartida por los dos sitios donde cuelga contenido
+—el campo `hijos` suelto y cada apartado de un repetible—.
+
+Esa franja se pide con `barraInsertar(lista, pos, true)`: la variante **visible y
+con etiqueta**. La de entre bloques del índice vive con `opacity: 0` hasta el
+hover, y ahí está bien —si no habría una franja gritando entre cada par—, pero
+dentro del panel es la única puerta para llenar una columna vacía, y escondida
+era exactamente lo mismo que no existir.
+
+Antes solo decía *"agrégalo desde el índice"*: un callejón sin salida. Estás
+parado en el panel, te manda a otro lado, y con una columna vacía ni siquiera
+había nada visible a donde ir. El orden sigue estando en el índice, que es donde
+se entiende la estructura; lo que se recuperó es poder **empezar** desde donde
+estás.
+
+### La franja "+" va también antes del primero
+
+`dibujarLista()` abre con `barraInsertar(lista, 0)`. Sin eso había dos callejones
+sin salida: meter algo al principio de la página, y llenar un **apartado vacío**
+del acordeón —ahí no hay ningún bloque debajo del cual insertar, así que la lista
+no tenía manera de crecer—.
+
+### Arrastrar: un solo mecanismo para tres cosas
+
+Hay tres arrastres y **los tres terminan en las mismas dos funciones**
+(`destinoDeSoltar()` para saber dónde cae, `moverBloqueA()` para moverlo).
+Separados acabarían haciendo cosas distintas, que es justo lo que ya pasó con
+`accionDeBloque`.
+
+| Se arrastra | Desde | Qué hace |
+|---|---|---|
+| Una pieza de la paleta | `.pieza` | Crea el bloque donde se suelte y le abre el panel |
+| Un bloque del índice | el asa `.arrastre` de su renglón | Lo mueve, **incluso a otro nivel** |
+| Un bloque de la vista previa | el asa `.previa-asa` de la barra flotante | Lo mismo, sin bajar la vista al índice |
+
+Lo que se está arrastrando vive en `piezaArrastrada` / `bloqueArrastrado`, no en
+el `dataTransfer`: durante el `dragover` no todos los navegadores dejan leerlo.
+
+> ⚠️ **Al empezar a arrastrar una pieza se cierra el panel de campos.** No es
+> un adorno: el panel va `position: absolute; inset: 0` **sobre** el lienzo, así
+> que mientras está abierto tapa la única zona que acepta el soltar — se
+> arrastraba y solo salía el cursor de prohibido. Y como agregar un bloque abre
+> su panel, estaba abierto casi siempre, o sea que el arrastre desde la paleta
+> no servía prácticamente nunca. Empezar a arrastrar es decir "quiero colocar
+> algo", así que dejar el índice a la vista es además lo que uno quiere ver.
+
+**Entre niveles.** Un bloque puede entrar a un apartado del acordeón o a una
+columna, y salirse. Antes no se podía *por diseño*: el arrastre viejo escuchaba
+por contenedor y descartaba todo lo que no fuera hermano
+(`origen.parentElement !== contenedor`). Ahora lo atiende un solo par de
+manejadores en `#lienzo`.
+
+> ⚠️ **`sePuedeSoltar()` no es opcional.** Sin él se puede soltar un acordeón
+> dentro de uno de sus propios apartados: el bloque se desprende del árbol y se
+> pierde con todo lo que lleva dentro. El destino prohibido ni siquiera pinta la
+> raya y el `dragover` no hace `preventDefault()`, así que el cursor enseña "no
+> se puede" **antes** de soltar, no después.
+
+**En la previa el bloque NO es draggable, y es a propósito.** Su contenido ya
+reacciona al clic (acordeones, pestañas, ventanas) y hacerlo arrastrable deja
+cada clic peleado entre abrir y mover. Quien arrastra es el **asa** de la barra
+flotante —las seis puntitas—, que no compite con nada, igual que la `.arrastre`
+del índice. Al empezar a arrastrar la barra se esconde: si no, se queda flotando
+sobre el bloque que ya se movió.
+
+Y un detalle del índice que se rompe fácil: el `dragstart` del renglón lleva
+`stopPropagation()`. Sin él, arrastrar un hijo arranca también el arrastre del
+padre y se mueve el acordeón entero en vez del bloque que se tomó.
+
+## El campo `tipo` que mataba la herramienta
+
+El bloque Aviso declaraba un campo llamado **`tipo`** para su tono. Como
+`crearBloque()` hacía `Object.assign({ id, tipo, abierto }, comp.nuevo())`, ese
+campo **se llevaba el `tipo` del bloque**: nacía como `tipo: 'info'`, que no es
+ningún componente, y `tarjetaDeBloque()` lanzaba al dibujarlo. A partir de ese
+clic el lienzo no se podía redibujar y la herramienta se quedaba muerta — sin
+poder siquiera borrar el bloque culpable, porque su papelera se dibuja ahí.
+
+Tres arreglos, porque uno solo no bastaba:
+
+1. El campo se llama **`tono`** (con respaldo al nombre viejo al generar, para
+   las páginas ya guardadas).
+2. **`crearBloque()` escribe la identidad al final**, no al principio: ningún
+   componente puede volver a llevarse `id`, `tipo` ni `abierto`.
+3. **`revisarNombresDeCampo()`** grita en consola al arrancar si algún componente
+   usa un nombre reservado, y **un bloque de tipo desconocido ya no tumba el
+   lienzo**: sale una tarjeta roja con su botón de borrar y el resto sigue vivo.
 
 ## El reparto de la pantalla
 
@@ -288,6 +490,90 @@ apartados sin nombre. Si no hay con qué titular, es una tabla.
 En acordeón y tarjetas, la **primera columna titula** y el resto de la fila se
 vuelve el contenido de ese apartado.
 
+## La presentación de la semana
+
+Es la página que abre cada semana y la más repetida de todas: a la izquierda el
+antetítulo (*"Presentación de la Semana 1"*), el `h1` con su barra de color, una
+línea y los párrafos; a la derecha el recuadro gris de *Contenidos de
+aprendizaje*, con una palabra que abre la ventana de la **Tabla 1**.
+
+Va como **un solo bloque** (`presentacion`), no como título + texto + tarjeta
+sueltos, porque las dos columnas son del **mismo `.row.bloque`**: armadas por
+separado, el recuadro cae debajo del texto en vez de a su lado, y esa era
+justamente la parte que salía mal a mano. Markup copiado de la página publicada,
+salvo los `style=` inline —redundantes: las clases ya ponen ese color—.
+
+Tres cosas del bloque:
+
+- **Trae su propio `h1`.** Si se usa, el campo *Título de la página* de la barra
+  de arriba va vacío o la página sale con dos títulos. Lo dice la ayuda del campo.
+- **El recuadro se apaga** con una casilla, para las presentaciones que no lo llevan.
+- **La ventana de la Tabla 1 llega armada**, con las cinco columnas del formato
+  (Semana · Nombre · Propósito formativo · Contenidos formativos · Contenido del
+  ámbito socioemocional) y sus dos filas: es la misma tabla en todas las semanas
+  y montarla desde cero era lo más tardado. Se edita en *Contenido de la ventana*
+  y se dispara con la marca `{{Tabla 1|…}}` del texto del recuadro.
+
+También es la primera plantilla de *Empezar de cero*.
+
+> `modalBootstrap()` recibió una opción `ancha` para esta ventana:
+> `modal-dialog-centered modal-xl`, `rounded-lg`, título en `h3` y `border-top`
+> en el cuerpo, que es como la publica el equipo. Va como opción y no como
+> cambio — las ventanas de las tarjetas y de los tooltips ya estaban cotejadas
+> con `modal-lg` y no había por qué moverlas.
+
+### Un interruptor que esconde campos vuelve a dibujar el lienzo
+
+Los campos con `siOculta` se filtran **al dibujarlos**, así que un interruptor
+que los gobierna tiene que llamar a `dibujarLienzo()` además de
+`refrescarSalida()`. Sin eso, apagar *Recuadro de contenidos* quitaba la columna
+de la página pero dejaba a la vista sus tres campos, que ya no aplicaban. El
+mismo arreglo destapa el caso que ya existía en el bloque Texto (*centrado* está
+gobernado por *destacado*).
+
+Es `dibujarLienzo()`, nunca `dibujarTodo()`: la previa ya se regenera en
+`refrescarSalida()`, y con `dibujarTodo()` se cerraría el acordeón que se acaba
+de abrir (ver arriba).
+
+## El envoltorio lleva el ancho escrito a mano
+
+```html
+<div class="container-fluid mainPlantilla23 MM pb-3" style="max-width: 100% !important;">
+```
+
+Ese `style` es **la única cosa inline que genera la herramienta**, y no se puede
+quitar. La hoja de Moodle solo suelta el ancho del contenido cuando la página se
+pinta como **descripción de actividad**:
+
+```css
+#page-content #region-main-box #region-main .activity-description .container-fluid,
+#page-content #region-main-box #region-main .activity-description .mainPlantilla23 {
+    max-width: none !important;
+    width: 100% !important;
+}
+```
+
+Abierta como **recurso Página** (`/mod/page/view.php`) esa regla no aplica —no hay
+`.activity-description`—, Moodle le deja su contenedor angosto y la presentación
+sale apretada. Por eso el montaje del equipo lo trae escrito a mano; la primera
+versión de la herramienta no lo ponía y ese fue justamente el reporte: *"me salió
+con márgenes muy reducidos"*.
+
+No contradice la regla de los colores: eso es un **ancho**, no un color. Los
+colores siguen saliendo todos por clase. Y arreglarlo desde la hoja no es opción
+barata — habría que tocar una regla que afecta a todas las páginas ya publicadas.
+
+### Y la tabla dentro de una ventana va a `col-12`
+
+Suelta en la página, una tabla se publica en `.col-10.mx-auto`: ese margen le da
+aire. Dentro de un `modal-xl` con cinco columnas, en cambio, ese mismo 10% de
+cada lado deja las celdas partiendo cada palabra en un renglón. La página real
+usa `col-12` ahí.
+
+Lo resuelve `conAnchoCompleto()`, que se enciende solo mientras se arma el cuerpo
+de una ventana ancha. Es un contexto, no un campo del bloque: la misma tabla
+puede estar suelta o dentro de una ventana y no tiene por qué saberlo.
+
 ## Texto sin HTML
 
 En cualquier campo de texto, la barrita inserta las marcas:
@@ -297,11 +583,191 @@ En cualquier campo de texto, la barrita inserta las marcas:
 | `**texto**` | negritas |
 | `*texto*` | cursivas |
 | `==texto==` | resaltado (`mark.bg-resalte-20`) |
+| `==verde:texto==` | resaltado **por categoría** (`bg-marca-3`); también `morado`, `azul`, `naranja`, `rosa`, `gris` |
 | `[texto](url)` | enlace con `target="_blank"` y `nomediaplugin` |
-| `{{palabra\|Título\|Explicación}}` | la palabra se vuelve un botón que abre una ventana emergente |
+| `{{palabra\|Título\|Explicación}}` | la palabra queda resaltada y abre una ventana con ese texto |
+| `{{palabra\|Título}}` | igual, pero la ventana se llena con **bloques** (así entra una tabla) |
+
+### Y no se teclea: se llena un formulario
+
+La marca `{{palabra|Título|Explicación}}` sigue existiendo y se puede escribir,
+pero **el botón de la barrita ya no la inserta a medias**. Antes ponía
+`{{palabra|Título|Explicación}}` y había que sustituir las dos palabras *dentro*
+de las llaves — nadie que no conozca la sintaxis adivina eso, que es lo contrario
+de lo que esta herramienta viene a hacer.
+
+Ahora abre un formulario de tres campos, pegado a la barrita y no en un modal
+(es un apunte corto, y un modal taparía el texto sobre el que se trabaja). Lo
+que traigas seleccionado en el campo llena **la palabra y el título**, que en el
+caso común son lo mismo: solo queda escribir la explicación.
+
+Dejar la explicación vacía produce la marca de **dos segmentos**, que es la que
+llena la ventana con bloques (así entra una tabla). Está dicho en el propio
+formulario, donde se necesita saber.
+
+> Valida antes de insertar: sin palabra no hace nada, y `|`, `{` y `}` se
+> rechazan con su mensaje — son la sintaxis de la marca, y colarlos partiría el
+> texto en pedazos que no son los que se quisieron.
+
+### Las ventanas puestas se ven bajo el campo
+
+En un `textarea` no se puede pintar la palabra de amarillo —es texto plano—, así
+que debajo se listan como chips las ventanas que ese texto ya tiene, con su
+explicación en el `title`. Es la única forma de ver de un vistazo cuáles llevan
+ventana sin ponerse a leer llaves.
+
+> Ojo al tocarlo: asignar `area.value` por código **no** dispara `input`, así que
+> tras insertar desde el formulario hay que llamar a `pintarLista()` a mano.
+
+### La palabra que abre la ventana NO es un botón
+
+Cotejado contra dos páginas publicadas —la "Presentación Semana 1" y el recurso
+de licencias libres—, el disparador es la **palabra resaltada** con el iconito
+de interactividad:
+
+```html
+<a class="text-decoration-none" type="button" data-bs-toggle="modal" data-bs-target="#id">
+  <mark class="bg-resalte-30 border-0"><strong class="interactivo">licencias libres</strong></mark>
+</a>
+```
+
+La primera versión emitía un `<button class="btn btn-sm text-tooltip …">`, que
+era deducido del CSS y no existe en ningún montaje: salía como un botón de
+Bootstrap a media frase. El iconito lo pinta el `::after` de `.interactivo` de la
+hoja del tema, y el color sale de `bg-resalte-30` — la página de referencia
+además lo repite inline (`background-color: rgb(231, 210, 149)`), que es el hex
+de `--prepa-resalteMM-30` escrito a mano. Aquí no: la clase ya lo pone con
+`!important` y así sigue a la paleta del aula.
+
+> Las dos páginas de referencia no coinciden entre ellas —una usa
+> `bg-resalte-10` y la otra `bg-resalte-30`—. Se unificó en `bg-resalte-30`, que
+> es el de la página más reciente y el que de verdad se lee como resaltado.
+
+**Sin el tercer segmento** la ventana no se llena con texto sino con los bloques
+del campo *Contenido de la ventana* del bloque que la contiene. Es lo que
+permite meter una tabla ahí (la "Tabla 1" de la presentación), que en una línea
+de texto no cabía. El contexto lo enciende `conVentanaDeBloques()` alrededor del
+`marcas()` del componente, y el closure de la cola se queda con los bloques en
+ese momento: la cola de modales se vacía más tarde, cuando el contexto ya se
+apagó.
+
+> Por eso `vaciarModales()` **vacía la cola antes de armar el HTML, no después**.
+> Una ventana hecha de bloques vuelve a entrar a `htmlDeBloques()` mientras se
+> arma, y con el reseteo al final ese reingreso encontraba la misma cola llena y
+> se quedaba dando vueltas.
 
 El texto del usuario **se escapa** antes de aplicar marcas: un `<` o un `&`
 pegados del Word no pueden inyectar etiquetas.
+
+## Los ajustes de página aparecen solo cuando aplican
+
+Paleta, Título y Resaltado viven arriba, agrupados bajo **Ajustes de la página**
+y plegables (se recuerda en `guion-ajustes-plegados`). Pero además **no siempre
+están**: un control que no puede hacer nada no ocupa sitio. Lo decide
+`avisarDeAjustes()` en cada refresco.
+
+| Ajuste | Cuándo se ve |
+|---|---|
+| **Paleta del aula** | Siempre — toda página tiene una |
+| **Resaltado** | Solo si la página ya tiene alguna palabra que abre ventana |
+| **Título** | Siempre, **salvo** que haya un bloque Presentación y el campo esté vacío |
+
+**El Resaltado** era el caso claro: sin una palabra con ventana, moverlo no
+cambia nada visible, así que se leía como un botón muerto —y así se reportó, dos
+veces—. Ahora aparece justo cuando se crea la primera, que es cuando empieza a
+significar algo. Se cuenta con `class="interactivo"` sobre el HTML ya generado:
+ni recorrer el árbol ni mantener otro contador.
+
+**El Título no se puede esconder "hasta que haya título"**: es el único sitio
+donde se escribe, así que no habría manera de poner el primero. Lo que sí sobra
+es cuando la página lleva un bloque Presentación, que trae el suyo. De ahí los
+tres casos, y el tercero es el que importa:
+
+| Estado | Qué pasa |
+|---|---|
+| Sin Presentación | Se ve, normal |
+| Presentación + campo vacío | Se esconde: no hay nada que hacer |
+| Presentación + campo **con texto** | **Reaparece en rojo**: la página saldría con dos títulos |
+
+> El tercero no es un descuido. Esconder el campo ahí ocultaría el problema en
+> vez de resolverlo: el título seguiría publicándose y saldrían dos encabezados
+> sin que nadie pudiera ver de dónde venía el segundo.
+
+## El nivel del resaltado se elige (y va por página)
+
+> El control son **botones**, no un `<select>`. Era el único desplegable de la
+> herramienta y con el tema oscuro su popup nativo salía blanco: la página no
+> declara `color-scheme`, así que los controles nativos se pintan con el tema
+> claro del sistema. Con botones —el mismo patrón `.opciones` del resto de la
+> herramienta— el problema no existe, y de paso se ve la intensidad de cada nivel.
+
+
+La palabra que abre una ventana sale con `bg-resalte-10…40`, y cuál se usa lo
+decide un selector arriba, junto al título. Por **página** y no por palabra a
+propósito: en las dos páginas ya publicadas cada recurso usa un nivel y lo usa
+parejo —la presentación el pálido, el de licencias libres el fuerte—. Mezclarlos
+dentro de una misma página le quitaría el sentido, que es "esto se puede tocar".
+
+El nivel vive en `pagina.resalte` y llega a `componentes.js` por
+`resalteDeVentana()`, con el mismo patrón que `marcarBloques()`: estado del
+módulo con setter, que se pone al empezar a generar.
+
+> Ojo: si se agrega otro ajuste de página hay que sumarlo también a `deshacer()`
+> y al `dibujarLienzo()` que repone el control. `pagina.resalte` se olvidaba al
+> deshacer hasta que se agregó en los dos sitios.
+
+## Los resaltes por categoría
+
+`==verde:Is==` sale como `<mark class="bg-marca-3 border-0">`. **No es la escala
+de `bg-resalte-10…40`**, y la diferencia importa:
+
+| | `bg-resalte-10…40` | `bg-marca-1…6` |
+|---|---|---|
+| Qué dice | intensidad — "esto pesa más" | categoría — "esto es el verbo" |
+| Cuántos por renglón | uno | hasta cuatro |
+| ¿Sigue la paleta del aula? | sí | **no, a propósito** |
+
+Lo último es lo que cuesta aceptar y no hay que deshacer: si siguieran la
+paleta, el mismo ejercicio de gramática tendría un código de colores distinto en
+M01 que en M02, y el alumno que lleva dos módulos perdería la referencia. Son de
+los poquísimos colores del sistema que **no** salen de `--primary-*`.
+
+Antes esto se escribía a mano en las plantillas
+(`style="background-color:#cee4da"`), que es lo que la marca viene a sustituir.
+
+> Las clases viven en la hoja de Moodle. El bloque listo para pegar está en
+> `work/marcas-categoria.scss`, con los seis hex sacados de las plantillas
+> 01S.05 sin cambiarles nada —para que lo ya montado se vea igual al migrarlo—.
+> Mientras no estén en la hoja, la previa las trae en su subconjunto; cuando
+> estén, la hoja real gana por orden de carga y quedan sincronizadas solas.
+
+### La banda de la tabla
+
+El renglón que cruza todas las columnas ("Contenido de Aprendizaje 1") es el
+campo **`banda`**: vacío no sale nada, con texto sale un `<tr>` con un solo
+`<th colspan="N">`, tal cual el montaje. Lleva el color **siempre**, sin
+depender de la casilla *Encabezado con el color del aula*: en la página
+publicada la banda se ve de color y los títulos de columna no.
+
+La tabla que trae armada el bloque Presentación viene con su banda puesta,
+porque en ese montaje siempre la lleva.
+
+## Piezas de las plantillas 01S.05
+
+Cuatro bloques salidos del cotejo con las plantillas que entregó el equipo de
+sitios. Todos con markup copiado, no deducido:
+
+| Bloque | Sale de | Detalle que no es obvio |
+|---|---|---|
+| **Caja de color** (`envolvente`) | *Bloque de texto con envolvente* | Con título y sin título son **markup distinto**, no una variante: con título es `.card` + `.card-header`; sin título es un `.card-body` centrado y más angosto (`col-lg-8`). Por eso el título vacío cambia el envoltorio. |
+| **Columnas** (`columnas`) | *Bloque con contenido de N* | Cada N trae **su** cadena de clases (tabla `REJILLA`), copiada tal cual. No es `12/N` calculado: el de 6 y el de 12 comparten los cortes de tableta (`col-sm-6 col-md-4`) y solo se separan en `lg`. |
+| **Completar** (`escribir`) | *Text areas* | Los `___` del texto se vuelven el `textarea.recuadro__input`. Se sustituyen **después** de aplicar marcas: antes, el escapado los habría impreso como texto. Es la única pieza interactiva de las plantillas que no necesita JavaScript. |
+| **Conversación** (`conversacion`) | *Conversaciones* | Tarjeta punteada con los parlamentos e imagen al lado. El borde sale de `borde-punteado`, no del `style="border-style: dashed"` de la plantilla. **El audio no lo pone la herramienta**: se inserta desde el editor de Moodle, que ya lo hace bien, y por eso la columna de al lado queda libre para recibirlo. |
+| **Video a 2 columnas** | *Texto + video a 2 columnas* | Es una **opción del bloque Video**, no un bloque nuevo: si el campo *Texto al lado* trae algo, se reparte en dos mitades; vacío, sale el video centrado de siempre. |
+
+Y una corrección sobre la plantilla: ahí el video a dos columnas usa
+`align-items-middle`, que **no existe en Bootstrap**. Aquí va
+`align-items-center`, que es la que sí alinea.
 
 ## Lo que produce (y por qué así)
 
@@ -346,6 +812,7 @@ Todo cuelga de `<div class="container-fluid mainPlantilla23 {paleta}">`.
 
 | Pieza | Markup |
 |---|---|
+| Presentación | un `.row.bloque` con `.col-12.col-lg-8` (antetítulo `h5` + `h1` + `<hr>` + párrafos) y `.col-lg-4.d-flex.align-items-center` (banda `.card-header.bg-primary-10` + `.card-text.bg-neutral-claro-50`) |
 | Título | `.row.bloque > .col-12 > .tituloUnidad > h1.text-primary` (el de sección, `.row.bloque > .tituloUnidad.mt-4 > h2`) |
 | Instrucción | `.instrucciones.d-flex.bg-resalte-10` con `.icono-instruccion.bg-resalte-30` e imagen de 26px |
 | Texto | `.row.bloque > .col-12 > p`; la pregunta que abre un apartado va en `.my-2.text-center` con `<strong>`; el centrado sin negritas es `p.text-center` |
@@ -459,6 +926,12 @@ y ajustar aquí: es una sola función por componente en `componentes.js`.
    centrada dentro del suyo, y el párrafo sin sangría del final —el "Nota:…"—
    **fuera** de la caja. Es la prueba de la sangría: si se rompe, ese párrafo se
    mete en el último paso.
+3. ter. **Presentación de semana** (plantilla del mismo nombre): en escritorio
+   el título y el recuadro gris deben quedar **lado a lado** (8/4) y en celular
+   apilados; la palabra *Tabla 1* debe salir resaltada con el iconito —no como
+   botón— y abrir una ventana ancha con la tabla dentro. Si el recuadro cae
+   debajo del título en escritorio, faltan `.col-lg-8`/`.col-lg-4` en
+   `vista-previa.js`.
 4. Una tabla de 2 columnas con celdas largas: el asistente debe sugerir
    Acordeón, y al aceptar debe quedar un acordeón con la 1ª columna de títulos.
 4. bis. **Un recurso con pestañas** (guion con la tabla `Pestaña | Contenido` y

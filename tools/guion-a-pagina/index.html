@@ -52,21 +52,47 @@
                      etiquetas van EN LÍNEA con su control: apiladas se comían
                      ~50px del alto del panel, que es justo lo que le falta al
                      lienzo en una laptop. -->
-                <div class="ficha-pagina">
+                <!-- Ajustes de TODA la página (no de un bloque). Se pliegan
+                     porque son de poner una vez y olvidar, y ahí parados
+                     siempre se leían como si hicieran falta a cada rato. -->
+                <button class="paleta-titulo ajustes-titulo" id="btn-ajustes" type="button" aria-expanded="true" aria-controls="ficha-pagina">
+                    <i class="ph ph-sliders-horizontal"></i> Ajustes de la página
+                    <span class="paleta-nota">aula, título y resaltado</span>
+                    <i class="ph ph-caret-down paleta-flecha"></i>
+                </button>
+                <div class="ficha-pagina" id="ficha-pagina">
                     <div class="campo-modulo">
                         <span class="campo-etiqueta"><i class="ph ph-palette"></i> Paleta del aula</span>
                         <div id="modulos" class="modulos" role="radiogroup" aria-label="Paleta del aula"></div>
                     </div>
-                    <div class="campo-titulo">
-                        <label class="campo-etiqueta" for="titulo-pagina"><i class="ph ph-text-h-one"></i> Título</label>
-                        <input id="titulo-pagina" class="plain-input" placeholder="Historia de la ciencia y tecnología">
+                    <div class="campo-titulo" id="campo-titulo">
+                        <label class="campo-etiqueta" for="titulo-pagina" title="El encabezado grande con la barra de color, hasta arriba de la página. Déjalo vacío si usas el bloque Presentación, que ya trae el suyo."><i class="ph ph-text-h-one"></i> Título</label>
+                        <input id="titulo-pagina" class="plain-input" placeholder="El encabezado grande de la página" title="El encabezado grande con la barra de color, hasta arriba de la página. Déjalo vacío si usas el bloque Presentación, que ya trae el suyo.">
+                        <p id="titulo-aviso" class="field-hint hidden"></p>
+                    </div>
+                    <!-- Intensidad del resaltado de las palabras que abren una
+                         ventana. Va por página y no por palabra: en los montajes
+                         del equipo cada recurso usa un nivel y lo usa parejo. -->
+                    <div class="campo-titulo" id="campo-resalte">
+                        <span class="campo-etiqueta" title="Qué tan fuerte se ve el amarillo de las palabras que abren una ventana. Aplica a toda la página."><i class="ph ph-highlighter"></i> Resaltado</span>
+                        <!-- Botones y NO un <select>: era el único desplegable de
+                             toda la herramienta, y con el tema oscuro el popup
+                             nativo salía blanco (la página no declara
+                             color-scheme). Además así se ve la intensidad. -->
+                        <div id="resalte-pagina" class="opciones opciones--resalte" role="radiogroup" aria-label="Intensidad del resaltado"></div>
+                        <p id="resalte-aviso" class="field-hint"></p>
                     </div>
                 </div>
 
                 <input id="input-docx" type="file" accept=".docx" hidden>
                 <p id="import-info" class="field-hint hidden"></p>
 
-                <!-- Lienzo de bloques -->
+                <!-- Lienzo de bloques. Es un ÍNDICE, no un formulario: cada
+                     bloque es un renglón con su nombre y su resumen, y los
+                     hijos van indentados debajo. Los campos se editan en la
+                     ficha de al lado. Antes todo se desplegaba aquí y con un
+                     guion de 20 bloques el lienzo era un muro de cajas donde no
+                     se distinguía la estructura de la página. -->
                 <div class="lienzo-viewport">
                     <div id="lienzo" class="lienzo scroll-sin-barra scroll-difuso" data-pista-scroll data-pista="#pista-lienzo" aria-label="Bloques de la página"></div>
                     <button class="pista-mas hidden" id="pista-lienzo" type="button">
@@ -81,11 +107,30 @@
                 <div class="paleta-componentes">
                     <button class="paleta-titulo" id="btn-paleta" type="button" aria-expanded="true" aria-controls="paleta" title="Mostrar u ocultar las piezas">
                         <i class="ph ph-plus-circle"></i> Agregar
-                        <span class="paleta-nota">se inserta debajo del bloque seleccionado</span>
+                        <span class="paleta-nota">haz clic, o arrastra la pieza a donde va</span>
                         <i class="ph ph-caret-down paleta-flecha"></i>
                     </button>
                     <div id="paleta" class="paleta-grid scroll-sin-barra scroll-difuso" data-pista-scroll></div>
                 </div>
+
+                <!-- Panel del bloque seleccionado. Cubre la COLUMNA ENTERA, no
+                     solo el lienzo: metido dentro del lienzo-viewport se
+                     quedaba con el alto de este —102px en una laptop, para
+                     500px de campos—, así que todo caía bajo el pliegue y el
+                     botón de agregar contenido no se encontraba nunca. Trae su
+                     propio encabezado con volver y Listo, así que taparlo todo
+                     no deja a nadie sin salida. -->
+                                <aside id="panel-bloque" class="panel-bloque hidden" aria-label="Campos del bloque">
+                    <div class="panel-bloque-cabeza">
+                        <button id="panel-volver" class="btn-secondary btn-chico" type="button" title="Volver al índice (Esc)">
+                            <i class="ph ph-arrow-left"></i>
+                        </button>
+                        <span class="panel-bloque-chip"><i class="ph ph-cube"></i></span>
+                        <span class="panel-bloque-nombre" id="panel-nombre"></span>
+                        <button id="panel-listo" class="btn-primary btn-chico" type="button">Listo</button>
+                    </div>
+                    <div id="panel-cuerpo" class="panel-bloque-cuerpo scroll-sin-barra scroll-difuso" data-pista-scroll></div>
+                </aside>
             </section>
 
             <!-- Reparto ajustable: nadie trabaja igual (unos editan, otros
@@ -129,10 +174,21 @@
                 </div>
 
                 <div id="code-content" class="tab-content">
+                    <!-- El área es EDITABLE: además de copiar el HTML, se puede
+                         pegar aquí una página que ya está en Moodle y traerla a
+                         la herramienta. Lo que el lector no reconozca entra como
+                         bloque "HTML tal cual" y se vuelve a publicar idéntico. -->
                     <div class="code-wrapper">
                         <button id="btn-copy" class="btn-icon" title="Copiar HTML"><i class="ph ph-copy"></i></button>
-                        <textarea id="code" class="code-output" readonly placeholder="El HTML para el editor de Moodle aparecerá aquí..."></textarea>
+                        <textarea id="code" class="code-output" placeholder="El HTML para el editor de Moodle aparecerá aquí. También puedes pegar aquí una página de Moodle y traerla con el botón de abajo."></textarea>
                     </div>
+                    <div class="code-traer">
+                        <button id="btn-traer" class="btn-secondary btn-chico" type="button">
+                            <i class="ph ph-download-simple"></i> Traer este HTML a la herramienta
+                        </button>
+                        <span class="field-hint">Reemplaza lo que tengas armado. Se puede deshacer.</span>
+                    </div>
+                    <p id="traer-avisos" class="field-hint hidden"></p>
                 </div>
 
                 <div id="check-content" class="tab-content">
@@ -177,6 +233,8 @@
     <script src="../micrositio-a-pagina/hoja-moodle-default.js"></script>
     <script src="vista-previa.js"></script>
     <script src="componentes.js"></script>
+    <!-- El camino inverso: HTML de Moodle -> bloques editables. -->
+    <script src="importar-html.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

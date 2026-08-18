@@ -28,7 +28,7 @@
        Estado
        --------------------------------------------------------------------- */
 
-    const pagina = { paleta: 'M01', titulo: '', bloques: [] };
+    const pagina = { paleta: 'M01', titulo: '', resalte: 'bg-resalte-30', clasesExtra: [], bloques: [] };
     let seleccion = null;          // id del bloque seleccionado
     let contadorId = 0;
     let indicaciones = [];         // marcas del guion que no se supo traducir
@@ -49,9 +49,16 @@
     const $ = s => document.querySelector(s);
     const nuevoIdBloque = () => ++contadorId;
 
+    /* La identidad del bloque (`id`, `tipo`, `abierto`) se escribe DESPUÉS de
+       los valores del componente, no antes. Al revés, un componente que declara
+       un campo con uno de esos tres nombres se llevaba entera la identidad: el
+       Aviso tenía un campo `tipo` para su tono y el bloque nacía como
+       `tipo: 'info'`, que no es ningún componente. A partir de ese clic el
+       lienzo no se podía dibujar y la herramienta se quedaba muerta.
+       El nombre del campo ya se corrigió; esto es para que no vuelva a pasar. */
     function crearBloque(tipo, abierto) {
         const comp = COMPONENTES[tipo];
-        return Object.assign({ id: nuevoIdBloque(), tipo, abierto: abierto !== false }, comp.nuevo());
+        return Object.assign(comp.nuevo(), { id: nuevoIdBloque(), tipo, abierto: abierto !== false });
     }
 
     /* Los hijos creados por defecto en componentes.js llegan sin id propio. */
@@ -95,6 +102,8 @@
         const datos = JSON.parse(previo);
         pagina.paleta = datos.pagina.paleta;
         pagina.titulo = datos.pagina.titulo;
+        pagina.resalte = datos.pagina.resalte;
+        pagina.clasesExtra = datos.pagina.clasesExtra || [];
         pagina.bloques = datos.pagina.bloques;
         contadorId = datos.contadorId;
         seleccion = null;
@@ -109,6 +118,7 @@
     function generarHTML(paraPrevia) {
         reiniciarIds();
         marcarBloques(Boolean(paraPrevia));
+        resalteDeVentana(pagina.resalte);
         const cuerpo = [];
         if ((pagina.titulo || '').trim()) {
             cuerpo.push(COMPONENTES.titulo.html({ nivel: 'h1', texto: pagina.titulo }, 1));
@@ -120,9 +130,33 @@
         marcarBloques(false);
         if (bloques) cuerpo.push(bloques);
         if (!cuerpo.length) return '';
-        // `container-fluid` + la paleta del aula: el wrapper exacto de las
-        // páginas que ya publica el equipo.
-        return `<div class="container-fluid mainPlantilla23 ${pagina.paleta}">\n${cuerpo.join('\n')}\n</div>`;
+        /* `container-fluid` + la paleta del aula: el wrapper exacto de las
+           páginas que ya publica el equipo.
+
+           El `pb-3` y el `max-width` inline NO son adorno ni se pueden quitar:
+           la hoja de Moodle solo suelta el ancho del contenido cuando la página
+           se pinta como descripción de actividad —la regla
+           `#region-main .activity-description .container-fluid { max-width:
+           none }`—. Abierta como recurso Página esa regla no aplica, Moodle le
+           deja su contenedor angosto y la presentación sale apretada. Por eso
+           el montaje del equipo lo trae escrito a mano, y por eso aquí también.
+
+           Es la única excepción a "nada inline": no es un color —esos siguen
+           saliendo por clase—, es un ancho que la hoja no puede dar sola sin
+           tocar todas las páginas ya publicadas.
+
+           El `pb-3` del montaje NO se copia, a propósito. La hoja le da a
+           `.mainPlantilla23` un `padding-bottom: 100px` sin `!important`, y las
+           utilidades de Bootstrap sí lo llevan: `pb-3` le gana y deja el fondo
+           en 16px. En la presentación de referencia da igual, pero aquí saldría
+           en TODAS las páginas, recortándoles el aire de abajo —justo lo
+           contrario del problema que se vino a arreglar—. */
+        /* Las clases extra que traía una página importada (`ms-convertido`, la
+           que pone Micrositio a Página) se conservan: la hoja del tema tiene
+           reglas propias colgadas de ellas y perderlas cambia cómo se ve la
+           página entera, sin avisar. */
+        const extra = (pagina.clasesExtra || []).length ? ' ' + pagina.clasesExtra.join(' ') : '';
+        return `<div class="container-fluid mainPlantilla23 ${pagina.paleta}${extra}" style="max-width: 100% !important;">\n${cuerpo.join('\n')}\n</div>`;
     }
 
     /* ---------------------------------------------------------------------
@@ -202,7 +236,9 @@ document.addEventListener('click', function (e) {
     }
 
     function refrescarSalida() {
+        refrescarResumen();
         const html = generarHTML();
+        avisarDeAjustes(html);
         $('#code').value = html;
         $('#preview-empty').classList.toggle('hidden', Boolean(html));
         $('#preview-caja').classList.toggle('hidden', !html);
@@ -277,9 +313,11 @@ document.addEventListener('click', function (e) {
        documentos; inyectada porque el HTML que se copia a Moodle no debe
        enterarse, igual que pasa con el data-bq.
 
-       No es arrastre a propósito: el contenido de la previa ya reacciona al
-       clic (acordeones, pestañas, ventanas), y hacerlo draggable dejaría cada
-       clic peleado entre abrir y mover.
+       El bloque NO es draggable: el contenido de la previa ya reacciona al clic
+       (acordeones, pestañas, ventanas) y hacerlo arrastrable dejaría cada clic
+       peleado entre abrir y mover. Quien arrastra es el ASA de la barra —las
+       seis puntitas—, que no compite con nada, igual que la `.arrastre` del
+       lienzo. Soltar usa el mismo `moverBloqueA()` que el lienzo.
        --------------------------------------------------------------------- */
 
     let bqBarra = null;   // id del bloque sobre el que quedó la barra
@@ -296,7 +334,12 @@ document.addEventListener('click', function (e) {
         const vista = doc.defaultView;
         const barra = doc.createElement('div');
         barra.className = 'previa-barra';
-        barra.innerHTML = BOTONES_BARRA.map(([accion, titulo, trazo]) =>
+        barra.innerHTML = `<span class="previa-asa" draggable="true" title="Arrastra para mover" aria-label="Arrastra para mover">` +
+            `<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">` +
+            `<circle cx="6" cy="4" r="1.3"/><circle cx="10" cy="4" r="1.3"/>` +
+            `<circle cx="6" cy="8" r="1.3"/><circle cx="10" cy="8" r="1.3"/>` +
+            `<circle cx="6" cy="12" r="1.3"/><circle cx="10" cy="12" r="1.3"/></svg></span>` +
+            BOTONES_BARRA.map(([accion, titulo, trazo]) =>
             `<button type="button" data-accion="${accion}" title="${titulo}" aria-label="${titulo}">` +
             `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" ` +
             `stroke-linecap="round" stroke-linejoin="round"><path d="${trazo}"/></svg></button>`).join('');
@@ -334,6 +377,61 @@ document.addEventListener('click', function (e) {
             colocar(e.target.closest('[data-bq]'));
         });
         doc.documentElement.addEventListener('mouseleave', ocultar);
+
+        /* --- Arrastrar desde la previa --- */
+        const asa = barra.querySelector('.previa-asa');
+
+        const quitarRayaPrevia = () => doc.querySelectorAll('.previa-raya').forEach(r => r.remove());
+
+        /* Dónde caería: el bloque de la previa bajo el cursor y la mitad en la
+           que se está. Se ignora el bloque que se arrastra y todo lo que lleve
+           dentro, que si no la raya parpadea sobre uno mismo. */
+        const destinoPrevia = e => {
+            const destino = e.target.closest('[data-bq]');
+            if (!destino) return null;
+            const id = Number(destino.dataset.bq);
+            if (id === bloqueArrastrado) return null;
+            const sitio = buscar(id);
+            if (!sitio) return null;
+            const caja = destino.getBoundingClientRect();
+            const antes = e.clientY < caja.top + caja.height / 2;
+            return { sitio, destino, antes, indice: antes ? sitio.i : sitio.i + 1 };
+        };
+
+        asa.addEventListener('dragstart', e => {
+            if (!bqBarra) return;
+            bloqueArrastrado = bqBarra;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(bqBarra));
+            barra.classList.remove('visible');
+        });
+        asa.addEventListener('dragend', () => {
+            bloqueArrastrado = null;
+            quitarRayaPrevia();
+        });
+
+        doc.addEventListener('dragover', e => {
+            if (!bloqueArrastrado) return;
+            const d = destinoPrevia(e);
+            quitarRayaPrevia();
+            if (!d || !sePuedeSoltar(bloqueArrastrado, d.sitio.lista)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const raya = doc.createElement('div');
+            raya.className = 'previa-raya';
+            d.destino.insertAdjacentElement(d.antes ? 'beforebegin' : 'afterend', raya);
+        });
+
+        doc.addEventListener('drop', e => {
+            if (!bloqueArrastrado) return;
+            const d = destinoPrevia(e);
+            quitarRayaPrevia();
+            if (!d) return;
+            e.preventDefault();
+            const id = bloqueArrastrado;
+            bloqueArrastrado = null;
+            if (moverBloqueA(id, d.sitio.lista, d.indice)) dibujarTodo();
+        });
 
         barra.addEventListener('click', e => {
             const btn = e.target.closest('[data-accion]');
@@ -406,6 +504,17 @@ document.addEventListener('click', function (e) {
 
         if (!(pagina.titulo || '').trim()) {
             avisos.push({ tono: 'aviso', texto: 'La página no tiene título.' });
+        }
+
+        /* Los resaltes por categoría (bg-marca-1…6) todavía NO están en la hoja
+           del tema. Si se usan sin haberlas agregado, el color no sale y —lo
+           peor— no se nota: el texto se ve normal y uno cree que subió bien.
+           Se avisa aquí, que es donde se revisa antes de publicar. */
+        if (/class="bg-marca-\d/.test(html)) {
+            avisos.push({
+                tono: 'error',
+                texto: 'Esta página usa resaltes por categoría (==verde:… ==). Sus clases bg-marca-1…6 tienen que estar en la hoja del tema de Moodle o el color NO se verá — y el texto saldrá normal, sin avisar de nada. El bloque para pegarlas está en work/marcas-categoria.scss.'
+            });
         }
         if (!html) {
             caja.innerHTML = '<div class="empty-state"><i class="ph ph-list-checks"></i><p>Arma la página y aquí aparece lo que falta por hacer en Moodle</p></div>';
@@ -509,6 +618,10 @@ document.addEventListener('click', function (e) {
 
     function dibujarTodo() {
         dibujarLienzo();
+        // La ficha se redibuja aquí y NO desde dibujarLienzo(): así un clic que
+        // solo pliega hijos no le arranca el foco al campo que se está
+        // escribiendo. Y si el bloque ya no existe, se cierra sola.
+        if (enFicha) dibujarFicha();
         refrescarSalida();
     }
 
@@ -516,6 +629,9 @@ document.addEventListener('click', function (e) {
        evita recargar la vista previa entera (y perder su scroll) por un clic. */
     function dibujarLienzo() {
         $('#titulo-pagina').value = pagina.titulo;
+        // Deshacer puede cambiar el nivel del resaltado: los botones lo siguen.
+        document.querySelectorAll('#resalte-pagina .opcion').forEach(b =>
+            b.classList.toggle('activa', b.dataset.nivel === pagina.resalte));
         dibujarPaletaAula();
         const lienzo = $('#lienzo');
         lienzo.innerHTML = '';
@@ -542,6 +658,15 @@ document.addEventListener('click', function (e) {
        --------------------------------------------------------------------- */
 
     const PLANTILLAS = [
+        {
+            // La página que abre cada semana. Es la más repetida de todas y la
+            // que peor sale a mano: las dos columnas van en el mismo .row y el
+            // recuadro gris cuelga de un .card-body suelto.
+            nombre: 'Presentación de semana',
+            detalle: 'Título, recuadro gris y su tabla',
+            mini: MINI.presentacion,
+            armar: () => [crearBloque('presentacion', true)]
+        },
         {
             // La forma de casi toda actividad de aprendizaje: el párrafo que
             // presenta y la lista numerada dentro de su caja de color.
@@ -665,11 +790,21 @@ document.addEventListener('click', function (e) {
     }
 
     function dibujarLista(lista, contenedor) {
+        /* La franja "+" va también ANTES del primero. Son dos casos que sin
+           esto no tenían salida: meter algo al principio de la página, y llenar
+           un apartado vacío del acordeón —ahí no hay ningún bloque debajo del
+           cual insertar, así que la lista se quedaba sin manera de crecer. */
+        contenedor.appendChild(barraInsertar(lista, 0));
         lista.forEach((bloque, i) => {
             contenedor.appendChild(tarjetaDeBloque(bloque));
             contenedor.appendChild(barraInsertar(lista, i + 1));
         });
-        prepararArrastre(contenedor, lista);
+        /* Ya no hay `prepararArrastre(contenedor, lista)`: el arrastre lo
+           atiende un solo par de manejadores en #lienzo (prepararSoltarEnLienzo).
+           El viejo escuchaba por contenedor y solo sabía reordenar entre
+           hermanos —comparaba `origen.parentElement !== contenedor` y descartaba
+           todo lo demás—, así que meter un bloque a un apartado del acordeón era
+           imposible por diseño. */
     }
 
     /**
@@ -677,31 +812,51 @@ document.addEventListener('click', function (e) {
      * que seleccionar el bloque de arriba y bajar a la paleta del pie: dos
      * pasos y una regla que hay que recordar. Aquí se inserta donde se ve.
      */
-    function barraInsertar(lista, posicion) {
+    /**
+     * Franja "+" para insertar.
+     *
+     * `visible` la convierte en un botón con etiqueta que SIEMPRE se ve. Entre
+     * bloques del índice conviene que sea discreta —aparece al pasar el mouse,
+     * si no habría una franja gritando entre cada par—, pero dentro del panel
+     * es la única manera de meterle contenido a una columna vacía, y ahí
+     * invisible es lo mismo que no existir.
+     */
+    function barraInsertar(lista, posicion, visible) {
         const barra = document.createElement('div');
-        barra.className = 'insertar';
+        barra.className = 'insertar' + (visible ? ' insertar--visible' : '');
 
         const mas = document.createElement('button');
         mas.type = 'button';
-        mas.className = 'insertar-mas';
+        mas.className = visible ? 'insertar-mas insertar-mas--etiqueta' : 'insertar-mas';
         mas.title = 'Insertar aquí';
-        mas.innerHTML = '<i class="ph ph-plus"></i>';
+        mas.innerHTML = visible
+            ? '<i class="ph ph-plus"></i><span>Agregar contenido</span>'
+            : '<i class="ph ph-plus"></i>';
 
+        /* Las piezas van CON SU NOMBRE, igual que en la paleta del pie. Antes
+           eran 21 iconos pelados uno junto a otro: para saber qué era cada uno
+           había que pasar el mouse y esperar el tooltip, veintiuna veces. Es la
+           misma pieza que se ofrece abajo, así que se ve igual que abajo. */
         const opciones = document.createElement('div');
-        opciones.className = 'insertar-opciones hidden';
+        opciones.className = 'insertar-opciones hidden scroll-sin-barra scroll-difuso';
         ORDEN_PALETA.forEach(tipo => {
+            const comp = COMPONENTES[tipo];
             const b = document.createElement('button');
             b.type = 'button';
-            b.className = 'mini-btn';
-            b.title = COMPONENTES[tipo].nombre;
-            b.innerHTML = `<i class="ph ph-${COMPONENTES[tipo].icono}"></i>`;
+            b.className = 'pieza pieza--mini';
+            b.title = comp.ayuda;
+            b.innerHTML = `<svg viewBox="0 0 40 32" class="pieza-mini" aria-hidden="true">${comp.mini}</svg>` +
+                `<span>${comp.nombre}</span>`;
             b.addEventListener('click', () => {
                 guardarHistorial();
                 const nuevo = crearBloque(tipo);
                 asignarIds([nuevo]);
                 lista.splice(posicion, 0, nuevo);
                 seleccion = nuevo.id;
-                dibujarTodo();
+                // Igual que la paleta y el soltar: se agrega y se abre para
+                // editar en el mismo gesto.
+                abrirFicha(nuevo.id);
+                refrescarSalida();
             });
             opciones.appendChild(b);
         });
@@ -720,6 +875,76 @@ document.addEventListener('click', function (e) {
        lista de sus hermanos —la que devuelve buscar()—, así que un bloque de un
        acordeón no se sale del acordeón sin querer.
        --------------------------------------------------------------------- */
+    /* El renglón del índice tiene que seguir lo que se escribe en la ficha,
+       pero redibujar el lienzo en cada tecla le arrancaría el foco al campo.
+       Se toca solo el texto del resumen, que es lo único que cambia. */
+    function refrescarResumen() {
+        if (!enFicha) return;
+        const d = buscar(enFicha);
+        if (!d) return;
+        const comp = COMPONENTES[d.bloque.tipo];
+        const card = document.querySelector(`.bloque-card[data-id="${enFicha}"]`);
+        const hueco = card && card.querySelector('.bloque-resumen');
+        if (comp && hueco) hueco.textContent = (comp.resumen(d.bloque) || '').slice(0, 70);
+    }
+
+    /* Los dos ajustes de página se explican solos.
+
+       El Resaltado no se ve por ningún lado hasta que la página tiene una
+       palabra que abre ventana: ahí parado, sin efecto visible, se lee como un
+       control que no sirve para nada —y así lo reportaron—. Se le dice cuándo
+       aplica y a cuántas palabras.
+
+       Y el Título choca con el bloque Presentación, que trae el suyo: usar los
+       dos publica la página con dos encabezados. Antes solo estaba dicho en la
+       ayuda del campo, donde no se lee. */
+    function avisarDeAjustes(html) {
+        /* --- Resaltado: solo existe si hay algo que resaltar ---
+           Sin una palabra que abra ventana, mover este control no cambia NADA
+           visible. Ahí parado se leía como un botón muerto —así se reportó—, y
+           un control que no puede hacer nada no debería ocupar sitio. Aparece
+           en cuanto la página tiene su primera palabra con ventana, que es
+           justo cuando empieza a significar algo. */
+        const cajaResalte = $('#campo-resalte');
+        const cuantas = (html.match(/class="interactivo"/g) || []).length;
+        if (cajaResalte) {
+            cajaResalte.classList.toggle('hidden', cuantas === 0);
+            const aviso = $('#resalte-aviso');
+            if (aviso) {
+                aviso.textContent = `Se aplica a ${cuantas} palabra${cuantas === 1 ? '' : 's'} ` +
+                    `que abre${cuantas === 1 ? '' : 'n'} ventana.`;
+            }
+        }
+
+        /* --- Título: se esconde solo cuando sobra ---
+           No se puede esconder "hasta que haya título": es el único sitio donde
+           se escribe, así que no habría manera de poner el primero. Lo que sí
+           sobra es cuando la página lleva un bloque Presentación, que trae el
+           suyo. Dos casos:
+             · Presentación y el campo vacío -> se esconde, no hay nada que hacer.
+             · Presentación y el campo CON texto -> se queda, en rojo: la página
+               saldría con dos títulos y hay que arreglarlo. Esconderlo ahí sería
+               ocultar el problema en vez de resolverlo. */
+        const cajaTitulo = $('#campo-titulo');
+        if (cajaTitulo) {
+            const conPresentacion = lista => (lista || []).some(b => b.tipo === 'presentacion' ||
+                conPresentacion(b.hijos) || (b.items || []).some(it => conPresentacion(it.hijos)));
+            const hayPresentacion = conPresentacion(pagina.bloques);
+            const escrito = Boolean((pagina.titulo || '').trim());
+            cajaTitulo.classList.toggle('hidden', hayPresentacion && !escrito);
+
+            const avisoTitulo = $('#titulo-aviso');
+            if (avisoTitulo) {
+                const choca = hayPresentacion && escrito;
+                avisoTitulo.textContent = choca
+                    ? 'El bloque Presentación ya trae su propio título: así la página sale con dos. Deja este vacío.'
+                    : '';
+                avisoTitulo.classList.toggle('hidden', !choca);
+                avisoTitulo.classList.toggle('field-hint--alerta', choca);
+            }
+        }
+    }
+
     function accionDeBloque(accion, id) {
         const sitio = buscar(id);
         if (!sitio) return false;
@@ -741,7 +966,11 @@ document.addEventListener('click', function (e) {
         if (accion === 'borrar') {
             lista.splice(i, 1);
             if (seleccion === id) seleccion = null;
+            // Si la ficha abierta era la de este bloque, se va con él: dejarla
+            // apuntando a un bloque que ya no existe era un panel muerto.
+            if (enFicha === id) cerrarFicha();
         }
+        if (accion === 'duplicar') abrirFicha(seleccion);
         dibujarTodo();
         return true;
     }
@@ -761,6 +990,36 @@ document.addEventListener('click', function (e) {
 
     function tarjetaDeBloque(bloque) {
         const comp = COMPONENTES[bloque.tipo];
+
+        /* Un bloque de tipo desconocido NO tumba el lienzo. Antes, cualquiera
+           —un guion raro, una página vieja, el Aviso con su campo `tipo`—
+           lanzaba aquí y se caía el dibujado entero: la herramienta dejaba de
+           responder y no había forma de quitar el bloque culpable, porque la
+           papelera también se dibuja aquí. Ahora sale una tarjeta con su botón
+           de borrar y el resto de la página sigue viva. */
+        if (!comp) {
+            const rota = document.createElement('div');
+            rota.className = 'bloque-card bloque-card--roto';
+            rota.dataset.id = bloque.id;
+            rota.innerHTML = `
+                <div class="bloque-cabeza">
+                    <span class="bloque-chip"><i class="ph ph-warning"></i></span>
+                    <span class="bloque-nombre">Bloque desconocido</span>
+                    <span class="bloque-resumen">tipo "${escapar(String(bloque.tipo))}" — no se puede editar</span>
+                    <span class="bloque-tools">
+                        <button class="mini-btn" data-accion="borrar" title="Quitar"><i class="ph ph-trash"></i></button>
+                    </span>
+                </div>`;
+            rota.querySelector('[data-accion="borrar"]').addEventListener('click', e => {
+                e.stopPropagation();
+                guardarHistorial();
+                const d = buscar(bloque.id);
+                if (d) d.lista.splice(d.i, 1);
+                dibujarTodo();
+            });
+            return rota;
+        }
+
         const card = document.createElement('div');
         // Plegado por omisión: un guion importado deja 20 bloques y con todos
         // los campos abiertos el lienzo era un muro de cajas donde no se
@@ -791,14 +1050,36 @@ document.addEventListener('click', function (e) {
         // entera fuera draggable, no se podría seleccionar texto en sus campos.
         const asa = cabeza.querySelector('.arrastre');
         asa.addEventListener('mousedown', () => { card.draggable = true; });
-        card.addEventListener('dragend', () => { card.draggable = false; });
+        card.addEventListener('dragstart', e => {
+            bloqueArrastrado = bloque.id;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(bloque.id));
+            card.classList.add('arrastrando');
+            // Sin esto, arrastrar un hijo también arrancaría el arrastre de su
+            // padre y se movería el acordeón entero en vez del bloque tomado.
+            e.stopPropagation();
+        });
+        card.addEventListener('dragend', () => {
+            card.draggable = false;
+            card.classList.remove('arrastrando');
+            bloqueArrastrado = null;
+            quitarRaya();
+        });
 
         cabeza.addEventListener('click', e => {
             const btn = e.target.closest('[data-accion]');
-            if (!btn || btn.dataset.accion === 'abrir') {
+            // El caret solo pliega y despliega los hijos en el índice.
+            if (btn && btn.dataset.accion === 'abrir') {
                 bloque.abierto = !bloque.abierto;
                 seleccion = bloque.id;
                 dibujarLienzo();
+                señalarEnPrevia(bloque.id);
+                return;
+            }
+            // Un clic en el renglón abre la ficha: es la acción que el usuario
+            // quiere el 90% de las veces y antes costaba dos pasos.
+            if (!btn) {
+                abrirFicha(bloque.id);
                 señalarEnPrevia(bloque.id);
                 return;
             }
@@ -818,16 +1099,178 @@ document.addEventListener('click', function (e) {
             card.appendChild(nota);
         }
 
+        /* El cuerpo de la tarjeta ya NO son los campos —esos viven en la ficha—
+           sino los bloques hijos, indentados. Así el lienzo enseña la estructura
+           de la página de un vistazo: qué cuelga de qué apartado, qué va dentro
+           de qué columna. Antes los hijos quedaban enterrados dentro del campo
+           que los contenía y había que abrir tres cajas para verlos. */
         if (!bloque.abierto) return card;
+        const grupos = gruposDeHijos(bloque);
+        if (!grupos.length) return card;
 
         const cuerpo = document.createElement('div');
-        cuerpo.className = 'bloque-cuerpo';
-        comp.campos.forEach(campo => {
-            if (campo.siOculta && campo.siOculta(bloque)) return;
-            cuerpo.appendChild(dibujarCampo(campo, bloque, card));
+        cuerpo.className = 'bloque-hijos';
+        grupos.forEach(g => {
+            if (g.etiqueta) {
+                const et = document.createElement('div');
+                et.className = 'hijos-etiqueta';
+                et.textContent = g.etiqueta;
+                cuerpo.appendChild(et);
+            }
+            const caja = document.createElement('div');
+            caja.className = 'hijos-lista';
+            dibujarLista(g.lista, caja);
+            cuerpo.appendChild(caja);
         });
         card.appendChild(cuerpo);
         return card;
+    }
+
+    /**
+     * De dónde cuelgan los hijos de un bloque. Son dos formas distintas y hay
+     * que conocer las dos: `hijos` directo (ventana, presentación) y
+     * `items[].hijos` (los apartados del acordeón, las tarjetas, las columnas).
+     * Devuelve una lista de {etiqueta, lista} para dibujarlas en orden.
+     */
+    function gruposDeHijos(bloque) {
+        const comp = COMPONENTES[bloque.tipo];
+        if (!comp) return [];
+        const grupos = [];
+        (comp.campos || []).forEach(campo => {
+            if (campo.tipo === 'hijos') {
+                bloque[campo.k] = bloque[campo.k] || [];
+                grupos.push({ etiqueta: '', lista: bloque[campo.k] });
+            }
+            if (campo.tipo === 'repetible' && campo.hijos) {
+                (bloque[campo.k] || []).forEach((item, i) => {
+                    item.hijos = item.hijos || [];
+                    const nombre = (item.titulo || item.etiqueta || '').trim();
+                    grupos.push({
+                        etiqueta: `${campo.nombreItem || 'Apartado'} ${i + 1}${nombre ? ' · ' + nombre : ''}`,
+                        lista: item.hijos
+                    });
+                });
+            }
+        });
+        return grupos;
+    }
+
+    /* ---------------------------------------------------------------------
+       La ficha: los campos del bloque seleccionado
+
+       Viven aquí y no en el lienzo porque el lienzo tiene otro trabajo —enseñar
+       la estructura de la página— y los dos juntos no caben: con un guion de 20
+       bloques y todos los campos desplegados, encontrar un apartado era
+       imposible. Un solo bloque a la vez, que es como se edita de verdad.
+       --------------------------------------------------------------------- */
+
+    /** El bloque cuya ficha está abierta. `null` = no hay ficha. */
+    let enFicha = null;
+
+    function abrirFicha(id) {
+        const d = buscar(id);
+        if (!d) return cerrarFicha();
+        enFicha = id;
+        seleccion = id;
+        dibujarFicha();
+        dibujarLienzo();
+    }
+
+    function cerrarFicha() {
+        enFicha = null;
+        $('#panel-bloque').classList.add('hidden');
+        $('.editor-panel').classList.remove('con-ficha');
+    }
+
+    /**
+     * El bloque de "qué hay dentro" que sale en el panel: los bloques hijos como
+     * chips para saltar a ellos, y la franja "+" para agregar uno más.
+     *
+     * Lo usan los DOS sitios donde cuelga contenido —el campo `hijos` suelto
+     * (la ventana emergente) y cada apartado de un repetible (columnas,
+     * acordeón, tarjetas)—. Compartido y no copiado: separados, agregar desde
+     * un lado y desde el otro acabaría haciendo cosas distintas.
+     */
+    function resumenDeHijos(etiqueta, lista) {
+        const caja = document.createElement('div');
+        caja.className = 'campo hijos-resumen';
+        if (etiqueta) {
+            const et = document.createElement('span');
+            et.className = 'campo-etiqueta';
+            et.textContent = etiqueta;
+            caja.appendChild(et);
+        }
+        if (lista.length) {
+            const chips = document.createElement('div');
+            chips.className = 'hijos-chips';
+            lista.forEach(h => {
+                const comp = COMPONENTES[h.tipo];
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'hijo-chip';
+                chip.title = 'Abrir este bloque';
+                chip.innerHTML = `<i class="ph ph-${comp ? comp.icono : 'warning'}"></i>` +
+                    `<span>${escapar(comp ? comp.nombre : h.tipo)}</span>`;
+                chip.addEventListener('click', () => abrirFicha(h.id));
+                chips.appendChild(chip);
+            });
+            caja.appendChild(chips);
+        } else {
+            const vacio = document.createElement('p');
+            vacio.className = 'field-hint';
+            vacio.textContent = 'Sin contenido todavía.';
+            caja.appendChild(vacio);
+        }
+        caja.appendChild(barraInsertar(lista, lista.length, true));
+        return caja;
+    }
+
+    function dibujarFicha() {
+        const caja = $('#panel-bloque');
+        const d = enFicha && buscar(enFicha);
+        if (!d) return cerrarFicha();
+        const bloque = d.bloque;
+        const comp = COMPONENTES[bloque.tipo];
+        if (!comp) return cerrarFicha();
+
+        caja.classList.remove('hidden');
+        $('.editor-panel').classList.add('con-ficha');
+        $('#panel-nombre').textContent = comp.nombre;
+        $('.panel-bloque-chip').innerHTML = `<i class="ph ph-${comp.icono}"></i>`;
+
+        const cuerpo = $('#panel-cuerpo');
+        cuerpo.innerHTML = '';
+
+        if (bloque.indicacion) {
+            const nota = document.createElement('p');
+            nota.className = 'bloque-nota';
+            nota.innerHTML = `<i class="ph ph-note-pencil"></i> <span>El guion pide: ${escapar(bloque.indicacion)}</span>`;
+            cuerpo.appendChild(nota);
+        }
+
+        /* Los campos `hijos` NO se dibujan aquí: sus bloques se ven y se ordenan
+           en el índice, que es donde se entiende la estructura. Dibujarlos en
+           los dos lados era justo el enredo que este rediseño viene a quitar. */
+        comp.campos.forEach(campo => {
+            if (campo.siOculta && campo.siOculta(bloque)) return;
+            /* Un campo `hijos` (el contenido de una ventana emergente) no se
+               dibuja entero aquí —sus bloques se ordenan en el índice— pero sí
+               deja agregar y saltar: si no, con la ventana vacía el panel era
+               un callejón sin salida, igual que pasaba con las columnas. */
+            if (campo.tipo === 'hijos') {
+                bloque[campo.k] = bloque[campo.k] || [];
+                cuerpo.appendChild(resumenDeHijos(campo.etiqueta, bloque[campo.k]));
+                return;
+            }
+            cuerpo.appendChild(dibujarCampo(campo, bloque, caja));
+        });
+
+        if (!cuerpo.children.length) {
+            const vacio = document.createElement('p');
+            vacio.className = 'field-hint';
+            vacio.textContent = 'Este bloque no tiene nada que configurar; su contenido se arma en el índice.';
+            cuerpo.appendChild(vacio);
+        }
     }
 
     function seleccionar(id) {
@@ -923,10 +1366,19 @@ document.addEventListener('click', function (e) {
             const input = document.createElement('input');
             input.type = 'checkbox';
             input.checked = Boolean(bloque[campo.k]);
+            /* Si algún campo del componente depende de este interruptor
+               (`siOculta`), hay que volver a dibujar el lienzo: los campos se
+               filtran al dibujarlos, así que sin esto apagar el recuadro de la
+               presentación —o marcar "destacado" en un Texto— dejaba a la vista
+               campos que ya no aplican. Es `dibujarLienzo()`, nunca
+               `dibujarTodo()`: la previa se regenera sola en refrescarSalida y
+               con dibujarTodo se cerraría el acordeón que se acaba de abrir. */
+            const gatilla = (COMPONENTES[bloque.tipo].campos || []).some(c => c.siOculta);
             input.addEventListener('change', () => {
                 guardarHistorial();
                 bloque[campo.k] = input.checked;
                 refrescarSalida();
+                if (gatilla) dibujarLienzo();
             });
             const s = document.createElement('span');
             s.className = 'slider';
@@ -988,8 +1440,7 @@ document.addEventListener('click', function (e) {
             { i: 'text-b', t: 'Negritas', a: '**', b: '**' },
             { i: 'text-italic', t: 'Cursivas', a: '*', b: '*' },
             { i: 'highlighter', t: 'Resaltado', a: '==', b: '==' },
-            { i: 'link', t: 'Enlace', a: '[', b: '](https://)' },
-            { i: 'cursor-click', t: 'Ventana emergente sobre la palabra', a: '{{', b: '|Título|Explicación}}' }
+            { i: 'link', t: 'Enlace', a: '[', b: '](https://)' }
         ];
         marcasBotones.forEach(m => {
             const b = document.createElement('button');
@@ -1010,6 +1461,37 @@ document.addEventListener('click', function (e) {
             barra.appendChild(b);
         });
 
+        /* La palabra resaltada que abre una ventana NO se teclea: se llena un
+           formulario. Antes el botón insertaba `{{palabra|Título|Explicación}}`
+           y había que sustituir las dos palabras DENTRO de las llaves — nadie
+           que no conozca la sintaxis adivina eso, que es justo lo contrario de
+           lo que esta herramienta viene a hacer. */
+        const btnVentana = document.createElement('button');
+        btnVentana.type = 'button';
+        btnVentana.className = 'mini-btn mini-btn--ventana';
+        btnVentana.title = 'Resaltar una palabra y abrirle una ventana';
+        btnVentana.innerHTML = '<i class="ph ph-cursor-click"></i>';
+        btnVentana.addEventListener('click', () => {
+            const ini = area.selectionStart, fin = area.selectionEnd;
+            abrirFormularioVentana(barra, area.value.slice(ini, fin), datos => {
+                guardarHistorial();
+                // Sin explicación, la ventana se llena con los bloques del campo
+                // "Contenido de la ventana" del bloque: así es como entra una
+                // tabla, que en una línea de texto no cabe.
+                const marca = datos.explicacion
+                    ? `{{${datos.palabra}|${datos.titulo}|${datos.explicacion}}}`
+                    : `{{${datos.palabra}|${datos.titulo}}}`;
+                area.value = area.value.slice(0, ini) + marca + area.value.slice(fin);
+                area.focus();
+                area.selectionStart = area.selectionEnd = ini + marca.length;
+                alEscribir(bloque, k, esRenglones ? area.value.split('\n') : area.value, card);
+                // Asignar `area.value` por código no dispara `input`, así que la
+                // lista de chips de abajo hay que repintarla a mano.
+                pintarLista();
+            });
+        });
+        barra.appendChild(btnVentana);
+
         // Las marcas también se pueden teclear; el "?" enseña cuáles son sin
         // obligar a leer un manual.
         const ayuda = document.createElement('button');
@@ -1020,16 +1502,100 @@ document.addEventListener('click', function (e) {
         const leyenda = document.createElement('p');
         leyenda.className = 'marcas-ayuda hidden';
         leyenda.innerHTML = '<code>**negritas**</code> · <code>*cursivas*</code> · ' +
-            '<code>==resaltado==</code> · <code>[texto](liga)</code> · ' +
-            '<code>{{palabra|Título|Explicación}}</code> abre una ventana. ' +
-            'Una línea en blanco separa párrafos.';
+            '<code>==resaltado==</code> · <code>==verde:categoría==</code> · ' +
+            '<code>[texto](liga)</code>. Para la palabra que abre una ventana usa ' +
+            'el botón de la manita. Una línea en blanco separa párrafos.';
         ayuda.addEventListener('click', () => leyenda.classList.toggle('hidden'));
         barra.appendChild(ayuda);
 
+        /* Debajo del campo, las ventanas que ese texto ya tiene. En un
+           `textarea` no se puede pintar la palabra de amarillo —es texto plano—,
+           así que se listan aparte: es la única forma de ver de un vistazo
+           cuáles llevan ventana y qué dice cada una, sin releer las llaves. */
+        const lista = document.createElement('div');
+        lista.className = 'ventanas-puestas';
+        const pintarLista = () => {
+            const texto = esRenglones ? (bloque[k] || []).join('\n') : (bloque[k] || '');
+            const halladas = [...String(texto).matchAll(/\{\{([^|{}]+)\|([^|{}]*)(?:\|([^{}]+))?\}\}/g)];
+            lista.innerHTML = halladas.length
+                ? halladas.map(m => `<span class="ventana-chip" title="${escapar((m[3] || '').trim() || 'La ventana lleva el contenido que armes abajo')}">` +
+                    `<i class="ph ph-cursor-click"></i>${escapar(m[1].trim())}</span>`).join('')
+                : '';
+            lista.classList.toggle('hidden', !halladas.length);
+        };
+        pintarLista();
+        area.addEventListener('input', pintarLista);
+        barra.addEventListener('click', () => setTimeout(pintarLista, 0));
+
         const envoltura = document.createElement('div');
         envoltura.className = 'marcas-caja';
-        envoltura.append(barra, leyenda);
+        envoltura.append(barra, leyenda, lista);
         return envoltura;
+    }
+
+    /**
+     * Formulario de "palabra resaltada que abre una ventana".
+     *
+     * Va pegado a la barrita y no en un modal: es un apunte de tres renglones y
+     * un modal a pantalla completa para esto se siente desproporcionado, además
+     * de que tapa el texto sobre el que se está trabajando.
+     *
+     * `seleccion` es lo que el usuario traía marcado en el campo, que casi
+     * siempre ES la palabra y también el título de la ventana: se rellenan las
+     * dos y en el caso común no hay que escribir nada más que la explicación.
+     */
+    function abrirFormularioVentana(barra, seleccion, alAceptar) {
+        barra.parentElement.querySelectorAll('.ventana-form').forEach(f => f.remove());
+
+        const palabra = (seleccion || '').trim();
+        const caja = document.createElement('div');
+        caja.className = 'ventana-form';
+        caja.innerHTML = `
+            <p class="ventana-form-titulo"><i class="ph ph-cursor-click"></i> Palabra que abre una ventana</p>
+            <label class="campo-etiqueta" for="vf-palabra">Palabra que se resalta</label>
+            <input id="vf-palabra" class="plain-input" placeholder="Google Workspace">
+            <label class="campo-etiqueta" for="vf-titulo">Título de la ventana</label>
+            <input id="vf-titulo" class="plain-input" placeholder="Google Workspace">
+            <label class="campo-etiqueta" for="vf-expli">Qué dice la ventana</label>
+            <textarea id="vf-expli" class="plain-input" rows="3" placeholder="Conjunto de aplicaciones de productividad y colaboración en la nube…"></textarea>
+            <p class="field-hint">Déjalo vacío si la ventana va a llevar una tabla: esa se arma abajo, en “Contenido de la ventana”.</p>
+            <p class="ventana-form-error hidden"></p>
+            <div class="ventana-form-pie">
+                <button type="button" class="btn-secondary btn-chico" data-vf="cancelar">Cancelar</button>
+                <button type="button" class="btn-primary btn-chico" data-vf="ok">Insertar</button>
+            </div>`;
+        barra.parentElement.appendChild(caja);
+
+        const $$ = s => caja.querySelector(s);
+        $$('#vf-palabra').value = palabra;
+        $$('#vf-titulo').value = palabra;
+        const error = $$('.ventana-form-error');
+
+        const cerrar = () => caja.remove();
+        $$('[data-vf="cancelar"]').addEventListener('click', cerrar);
+
+        $$('[data-vf="ok"]').addEventListener('click', () => {
+            const p = $$('#vf-palabra').value.trim();
+            const t = $$('#vf-titulo').value.trim();
+            // Las llaves y la barra son la sintaxis de la marca: dejarlas pasar
+            // partiría el texto en pedazos que no son los que el usuario quiso.
+            if (!p) return fallar('Escribe la palabra que se va a resaltar.', '#vf-palabra');
+            if (/[|{}]/.test(p + t + $$('#vf-expli').value)) {
+                return fallar('Quita los caracteres | { } — se usan para armar la marca.', '#vf-palabra');
+            }
+            cerrar();
+            alAceptar({ palabra: p, titulo: t || p, explicacion: $$('#vf-expli').value.trim() });
+        });
+
+        function fallar(mensaje, foco) {
+            error.textContent = mensaje;
+            error.classList.remove('hidden');
+            $$(foco).focus();
+        }
+        caja.addEventListener('input', () => error.classList.add('hidden'));
+        caja.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); cerrar(); } });
+
+        ($$('#vf-palabra').value ? $$('#vf-expli') : $$('#vf-palabra')).focus();
     }
 
     /* Rejilla de la tabla: encabezados + celdas, con botones para filas/columnas. */
@@ -1173,9 +1739,23 @@ document.addEventListener('click', function (e) {
                 ficha.appendChild(c);
             });
 
+            /* El contenido del apartado NO se dibuja aquí: sus bloques salen
+               indentados en el índice, que es donde se ve y se ordena la
+               estructura. Antes estaban en los dos lados y editar un acordeón
+               de tres apartados era abrir cajas dentro de cajas. Aquí queda
+               solo cuántos lleva, como referencia. */
+            /* El contenido del apartado se ORDENA en el índice, pero desde
+               aquí se puede agregar y saltar a él. Antes solo decía "agrégalo
+               desde el índice": un callejón sin salida — estás parado en el
+               panel, te manda a otro lado, y con una columna vacía ni siquiera
+               había nada visible a donde ir. */
+            /* Mismo resumen que el campo `hijos` suelto: agregar aquí y
+               saltar a lo que ya hay. Antes solo decía "agrégalo desde el
+               índice" — un callejón sin salida, porque estás parado en el panel
+               y con una columna vacía ni siquiera hay nada visible a donde ir. */
             if (campo.hijos) {
                 item.hijos = item.hijos || [];
-                ficha.appendChild(lienzoHijo(item, 'Contenido'));
+                ficha.appendChild(resumenDeHijos('', item.hijos));
             }
             caja.appendChild(ficha);
         });
@@ -1245,46 +1825,6 @@ document.addEventListener('click', function (e) {
        Arrastrar para reordenar
        --------------------------------------------------------------------- */
 
-    function prepararArrastre(contenedor, lista) {
-        let origen = null;
-
-        contenedor.addEventListener('dragstart', e => {
-            const card = e.target.closest('.bloque-card');
-            if (!card || card.parentElement !== contenedor) return;
-            origen = card;
-            card.classList.add('arrastrando');
-            e.dataTransfer.effectAllowed = 'move';
-            // Firefox no inicia el arrastre sin datos.
-            e.dataTransfer.setData('text/plain', card.dataset.id);
-            e.stopPropagation();
-        });
-
-        contenedor.addEventListener('dragover', e => {
-            if (!origen || origen.parentElement !== contenedor) return;
-            e.preventDefault();
-            const hermanos = [...contenedor.querySelectorAll(':scope > .bloque-card:not(.arrastrando)')];
-            const siguiente = hermanos.find(c => e.clientY < c.getBoundingClientRect().top + c.offsetHeight / 2);
-            contenedor.insertBefore(origen, siguiente || null);
-        });
-
-        contenedor.addEventListener('drop', e => {
-            if (!origen || origen.parentElement !== contenedor) return;
-            e.preventDefault();
-            e.stopPropagation();
-            guardarHistorial();
-            const orden = [...contenedor.querySelectorAll(':scope > .bloque-card')].map(c => Number(c.dataset.id));
-            lista.sort((a, b) => orden.indexOf(a.id) - orden.indexOf(b.id));
-            origen.classList.remove('arrastrando');
-            origen = null;
-            dibujarTodo();
-        });
-
-        contenedor.addEventListener('dragend', () => {
-            if (origen) origen.classList.remove('arrastrando');
-            origen = null;
-        });
-    }
-
     /* ---------------------------------------------------------------------
        Paletas: aula y componentes
        --------------------------------------------------------------------- */
@@ -1312,6 +1852,30 @@ document.addEventListener('click', function (e) {
         });
     }
 
+    /* Ningún componente puede llamarle a un campo `id`, `tipo` o `abierto`:
+       son la identidad del bloque. El Aviso lo hizo (`tipo` para su tono) y el
+       lienzo entero dejaba de dibujarse en cuanto se agregaba uno. crearBloque()
+       ya protege el orden, pero el campo seguiría sin poder editarse, así que
+       vale más gritarlo aquí que descubrirlo con la herramienta muerta. */
+    const NOMBRES_RESERVADOS = ['id', 'tipo', 'abierto', 'hijos', 'indicacion'];
+    function revisarNombresDeCampo() {
+        const choques = [];
+        Object.keys(COMPONENTES).forEach(t => {
+            const revisar = (campos, dentro) => (campos || []).forEach(c => {
+                // `hijos` sí es legítimo como campo: es donde cuelga el contenido.
+                if (NOMBRES_RESERVADOS.includes(c.k) && !(c.k === 'hijos' && c.tipo === 'hijos')) {
+                    choques.push(`${t}${dentro ? ' > ' + dentro : ''}.${c.k}`);
+                }
+                if (c.tipo === 'repetible') revisar(c.campos, c.k);
+            });
+            revisar(COMPONENTES[t].campos);
+        });
+        if (choques.length) {
+            console.error('[guion-a-pagina] Campos con nombre reservado (pisan la identidad del bloque):', choques);
+        }
+        return choques;
+    }
+
     function dibujarPaletaComponentes() {
         const caja = $('#paleta');
         ORDEN_PALETA.forEach(tipo => {
@@ -1324,7 +1888,168 @@ document.addEventListener('click', function (e) {
                 <svg viewBox="0 0 40 32" class="pieza-mini" aria-hidden="true">${comp.mini}</svg>
                 <span>${comp.nombre}</span>`;
             b.addEventListener('click', () => agregarBloque(tipo));
+            prepararArrastreDePieza(b, tipo);
             caja.appendChild(b);
+        });
+        prepararSoltarEnLienzo();
+    }
+
+    /* ---------------------------------------------------------------------
+       Arrastrar una pieza de la paleta y soltarla donde va
+
+       El clic sigue existiendo (inserta debajo del seleccionado) porque es más
+       rápido cuando ya sabes dónde vas. El arrastre es para cuando no: se ve
+       la raya de dónde va a caer antes de soltar.
+       --------------------------------------------------------------------- */
+
+    /** Tipo que se está arrastrando. En el dataTransfer no se puede leer
+        durante el dragover en todos los navegadores, así que se guarda aquí. */
+    let piezaArrastrada = null;
+    /** Id del bloque YA existente que se está arrastrando (lienzo o previa). */
+    let bloqueArrastrado = null;
+
+    /**
+     * Todas las listas que cuelgan de un bloque, hacia abajo. Sirve para lo
+     * único que no puede permitirse el arrastre entre niveles: soltar un
+     * acordeón DENTRO de uno de sus propios apartados. Eso lo desprendería del
+     * árbol —se perdería junto con todo lo que lleva dentro— y no hay deshacer
+     * que valga si no se nota en el momento.
+     */
+    function listasDelSubarbol(bloque) {
+        const salida = [];
+        const rec = b => {
+            if (Array.isArray(b.hijos)) { salida.push(b.hijos); b.hijos.forEach(rec); }
+            (b.items || []).forEach(it => {
+                if (Array.isArray(it.hijos)) { salida.push(it.hijos); it.hijos.forEach(rec); }
+            });
+        };
+        rec(bloque);
+        return salida;
+    }
+
+    /** ¿Se puede soltar este bloque en esa lista? */
+    function sePuedeSoltar(id, listaDestino) {
+        const d = buscar(id);
+        return Boolean(d) && !listasDelSubarbol(d.bloque).includes(listaDestino);
+    }
+
+    /**
+     * Mueve un bloque a otra lista (o a otro sitio de la suya). Es la única
+     * función que mueve: el lienzo y la vista previa la comparten, porque
+     * separadas acabarían haciendo cosas distintas —lo mismo que ya pasa con
+     * `accionDeBloque`—.
+     */
+    function moverBloqueA(id, listaDestino, indice) {
+        const d = buscar(id);
+        if (!d || !sePuedeSoltar(id, listaDestino)) return false;
+        guardarHistorial();
+        const mismaLista = d.lista === listaDestino;
+        const [bloque] = d.lista.splice(d.i, 1);
+        // Al sacarlo de su propia lista, todo lo que venía después corre un
+        // lugar: sin este ajuste, arrastrar hacia abajo se quedaba corto por uno.
+        let destino = (mismaLista && d.i < indice) ? indice - 1 : indice;
+        destino = Math.max(0, Math.min(destino, listaDestino.length));
+        listaDestino.splice(destino, 0, bloque);
+        seleccion = id;
+        return true;
+    }
+
+    function prepararArrastreDePieza(boton, tipo) {
+        boton.draggable = true;
+        boton.addEventListener('dragstart', e => {
+            piezaArrastrada = tipo;
+            e.dataTransfer.effectAllowed = 'copy';
+            // Firefox no arranca el arrastre sin algo en el dataTransfer.
+            e.dataTransfer.setData('text/plain', tipo);
+            boton.classList.add('pieza--arrastrando');
+            /* El panel de campos va `position: absolute; inset: 0` SOBRE el
+               lienzo, así que mientras está abierto tapa la única zona que
+               acepta el soltar: se arrastraba y solo salía el cursor de
+               prohibido. Y como agregar un bloque abre su panel, estaba abierto
+               casi siempre. Empezar a arrastrar es decir "quiero colocar algo",
+               así que se cierra y queda el índice a la vista, que es justo
+               donde hay que apuntar. */
+            if (enFicha) cerrarFicha();
+        });
+        boton.addEventListener('dragend', () => {
+            piezaArrastrada = null;
+            boton.classList.remove('pieza--arrastrando');
+            quitarRaya();
+        });
+    }
+
+    function quitarRaya() {
+        document.querySelectorAll('.raya-soltar').forEach(r => r.remove());
+        document.querySelectorAll('.lienzo--recibiendo').forEach(l => l.classList.remove('lienzo--recibiendo'));
+    }
+
+    /**
+     * Dónde caería la pieza: la lista de bloques a la que pertenece la tarjeta
+     * más cercana al cursor, y antes o después de ella según de qué mitad se
+     * está más cerca. Sobre el lienzo vacío, al final de la raíz.
+     */
+    function destinoDeSoltar(e) {
+        const card = e.target.closest('.bloque-card');
+        if (!card) return { lista: pagina.bloques, indice: pagina.bloques.length, card: null, antes: false };
+        const d = buscar(Number(card.dataset.id));
+        if (!d) return { lista: pagina.bloques, indice: pagina.bloques.length, card: null, antes: false };
+        const caja = card.getBoundingClientRect();
+        const antes = e.clientY < caja.top + caja.height / 2;
+        return { lista: d.lista, indice: antes ? d.i : d.i + 1, card, antes };
+    }
+
+    function prepararSoltarEnLienzo() {
+        const lienzo = $('#lienzo');
+        if (lienzo.dataset.soltarListo) return;
+        lienzo.dataset.soltarListo = '1';
+
+        lienzo.addEventListener('dragover', e => {
+            if (!piezaArrastrada && !bloqueArrastrado) return;
+            const { lista, card, antes } = destinoDeSoltar(e);
+            // Un destino prohibido (dentro de sí mismo) no marca raya y no
+            // acepta: se ve que no se puede antes de soltar, no después.
+            if (bloqueArrastrado && !sePuedeSoltar(bloqueArrastrado, lista)) {
+                quitarRaya();
+                return;
+            }
+            e.preventDefault();
+            e.dataTransfer.dropEffect = piezaArrastrada ? 'copy' : 'move';
+            quitarRaya();
+            lienzo.classList.add('lienzo--recibiendo');
+            const raya = document.createElement('div');
+            raya.className = 'raya-soltar';
+            if (card) card.insertAdjacentElement(antes ? 'beforebegin' : 'afterend', raya);
+            else lienzo.appendChild(raya);
+        });
+
+        lienzo.addEventListener('dragleave', e => {
+            if (!lienzo.contains(e.relatedTarget)) quitarRaya();
+        });
+
+        lienzo.addEventListener('drop', e => {
+            if (!piezaArrastrada && !bloqueArrastrado) return;
+            e.preventDefault();
+            const { lista, indice } = destinoDeSoltar(e);
+            quitarRaya();
+
+            // Bloque que ya existe: se mueve, y puede cambiar de nivel (entrar
+            // a un apartado del acordeón o a una columna, o salirse de ahí).
+            if (bloqueArrastrado) {
+                const id = bloqueArrastrado;
+                bloqueArrastrado = null;
+                if (moverBloqueA(id, lista, indice)) dibujarTodo();
+                return;
+            }
+
+            const tipo = piezaArrastrada;
+            piezaArrastrada = null;
+            guardarHistorial();
+            const nuevo = crearBloque(tipo);
+            asignarIds([nuevo]);
+            lista.splice(indice, 0, nuevo);
+            seleccion = nuevo.id;
+            abrirFicha(nuevo.id);
+            refrescarSalida();
         });
     }
 
@@ -1337,7 +2062,11 @@ document.addEventListener('click', function (e) {
         if (destino) destino.lista.splice(destino.i + 1, 0, nuevo);
         else pagina.bloques.push(nuevo);
         seleccion = nuevo.id;
-        dibujarTodo();
+        // Se agrega y se abre para editar en el mismo gesto: agregar un bloque
+        // y que no pase nada visible era el momento más confuso de la
+        // herramienta, sobre todo con los que nacen vacíos.
+        abrirFicha(nuevo.id);
+        refrescarSalida();
         const card = document.querySelector(`.bloque-card[data-id="${nuevo.id}"]`);
         if (card) card.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
@@ -2082,12 +2811,88 @@ document.addEventListener('click', function (e) {
         btn.addEventListener('click', () => fijar(!caja.classList.contains('plegada')));
     }
 
+    /* Los ajustes de la página (aula, título, resaltado) también se pliegan.
+       Son de poner una vez y olvidar; ahí parados siempre se leían como si
+       hicieran falta a cada rato, y encima se comen alto del lienzo. */
+    function prepararAjustes() {
+        const CLAVE = 'guion-ajustes-plegados';
+        const caja = $('#ficha-pagina');
+        const btn = $('#btn-ajustes');
+        if (!caja || !btn) return;
+        const fijar = plegada => {
+            caja.classList.toggle('plegada', plegada);
+            btn.setAttribute('aria-expanded', String(!plegada));
+            localStorage.setItem(CLAVE, plegada ? '1' : '0');
+        };
+        if (localStorage.getItem(CLAVE) === '1') fijar(true);
+        btn.addEventListener('click', () => fijar(!caja.classList.contains('plegada')));
+    }
+
     /* ---------------------------------------------------------------------
        Arranque
        --------------------------------------------------------------------- */
 
     function init() {
+        prepararAjustes();
+        revisarNombresDeCampo();
+        /* Las hojas de la previa viven en template literals: un acento grave
+           suelto en un comentario cierra la plantilla y el archivo entero deja
+           de parsearse. Cuando pasa, la previa sigue dibujando —la hoja del tema
+           carga aparte— pero SIN la rejilla de Bootstrap, así que todo sale
+           apilado y con los SVG a tamaño gigante. Cuesta dar con ello, y ya
+           pasó dos veces. */
+        if (typeof CSS_VISTA_PREVIA !== 'string' || !CSS_VISTA_PREVIA.length) {
+            console.error('[guion-a-pagina] vista-previa.js no cargó (¿un acento grave suelto en un comentario?). La previa va a mentir.');
+        }
         dibujarPaletaComponentes();
+
+        const cajaResalte = $('#resalte-pagina');
+        NIVELES_RESALTE.forEach(nv => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'opcion';
+            b.dataset.nivel = nv.v;
+            b.title = nv.etiqueta;
+            // La muestra de color es SOLO del selector, como la de la paleta del
+            // aula: no sale al HTML. El tono real lo pone la clase, y cambia con
+            // el módulo; aquí solo se compara la intensidad de una con otra.
+            b.innerHTML = `<span class="muestra-resalte" style="background:${nv.muestra}"></span><span>${nv.etiqueta}</span>`;
+            b.addEventListener('click', () => {
+                guardarHistorial();
+                pagina.resalte = nv.v;
+                dibujarLienzo();
+                refrescarSalida();
+            });
+            cajaResalte.appendChild(b);
+        });
+
+        /* Traer una página de Moodle de vuelta. Pisa lo que haya armado, así
+           que guarda historial primero: es lo que hace que un pegado por
+           equivocación no cueste el trabajo de la tarde. */
+        $('#btn-traer').addEventListener('click', () => {
+            const pegado = $('#code').value;
+            const avisos = $('#traer-avisos');
+            const leido = importarHTML(pegado);
+            if (!leido.bloques.length && !leido.titulo) {
+                avisos.textContent = leido.avisos.join(' ');
+                avisos.classList.remove('hidden');
+                return;
+            }
+            guardarHistorial();
+            asignarIds(leido.bloques);
+            pagina.bloques = leido.bloques;
+            pagina.titulo = leido.titulo || pagina.titulo;
+            if (leido.paleta) pagina.paleta = leido.paleta;
+            pagina.clasesExtra = leido.clasesExtra || [];
+            seleccion = null;
+            cerrarFicha();
+            dibujarTodo();
+            avisos.textContent = ['Listo: ' + leido.bloques.length + ' bloques.'].concat(leido.avisos).join(' ');
+            avisos.classList.remove('hidden');
+        });
+
+        $('#panel-volver').addEventListener('click', () => { cerrarFicha(); dibujarLienzo(); });
+        $('#panel-listo').addEventListener('click', () => { cerrarFicha(); dibujarLienzo(); });
         dibujarTodo();
         prepararDivisor();
         prepararPaleta();
@@ -2155,8 +2960,11 @@ document.addEventListener('click', function (e) {
                 e.preventDefault();
                 deshacer();
             }
-            // Un solo Escape para los dos paneles ampliados.
-            if (e.key === 'Escape' && reparto) reparto.cerrarAmpliado();
+            if (e.key === 'Escape') {
+                // La ficha primero: es lo que el usuario tiene enfrente.
+                if (enFicha) { cerrarFicha(); dibujarLienzo(); }
+                else if (reparto) reparto.cerrarAmpliado();
+            }
         });
     }
 

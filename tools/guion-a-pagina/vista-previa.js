@@ -32,12 +32,25 @@ body {
 }
 img { max-width: 100%; height: auto; }
 p { margin: 0 0 1rem; }
-h1, h2, h3, h4 { margin: 0 0 .5rem; font-weight: 500; }
+/* h5 entra por el antetítulo de la presentación ("Presentación de la Semana 1"). */
+h1, h2, h3, h4, h5 { margin: 0 0 .5rem; font-weight: 500; }
+h5 { font-size: 1.1rem; }
+/* La palabra que abre una ventana: <mark> con el <strong class="interactivo">
+   dentro. El color y el iconito los pone la hoja del tema; aquí solo se quita
+   el amarillo que el navegador le da a <mark> por omisión. */
+mark { background: transparent; color: inherit; padding: .1875em; }
 hr { border: 0; border-top: 1px solid #d5dce3; margin: 1.5rem 0; }
 
 /* --- Rejilla --- */
 .row { display: flex; flex-wrap: wrap; margin: 0 -12px; }
-.row > [class*="col-"] { padding: 0 12px; width: 100%; }
+/* Bootstrap 5 le da width:100% a TODOS los hijos de .row (row mayor asterisco), no solo
+   a los que traen clase col-. La previa lo tenia limitado a [class*="col-"] y
+   por eso un <p> suelto dentro de un .row —cosa que si aparece en las paginas
+   ya montadas— salia angosto y en paralelo con el siguiente, cuando en Moodle
+   va a todo lo ancho y apilado. La previa mentia justo ahi. */
+.row > * { padding: 0 12px; width: 100%; max-width: 100%; flex-shrink: 0; }
+/* La columna automatica: se reparte el ancho sobrante en vez de ocupar todo. */
+.col { flex: 1 0 0%; width: auto; }
 .justify-content-center { justify-content: center; }
 /* Las de alinear: las genera el campo "Alineación" de Botón, Ventana emergente
    y Tarjetas. Si faltaran aquí, la previa enseñaría todo centrado y mentiría. */
@@ -65,11 +78,13 @@ hr { border: 0; border-top: 1px solid #d5dce3; margin: 1.5rem 0; }
 .col-12 { flex: 0 0 100%; max-width: 100%; }
 @media (min-width: 576px) {
     .col-sm-6 { flex: 0 0 50%; max-width: 50%; }
+    .col-sm-12 { flex: 0 0 100%; max-width: 100%; }
 }
 @media (min-width: 768px) {
     .col-md-2 { flex: 0 0 16.6667%; max-width: 16.6667%; }
     .col-md-3 { flex: 0 0 25%; max-width: 25%; }
     .col-md-4 { flex: 0 0 33.3333%; max-width: 33.3333%; }
+    .col-md-12 { flex: 0 0 100%; max-width: 100%; }
     .col-md-6 { flex: 0 0 50%; max-width: 50%; }
     .col-md-8 { flex: 0 0 66.6667%; max-width: 66.6667%; }
     .col-md-10 { flex: 0 0 83.3333%; max-width: 83.3333%; }
@@ -147,6 +162,10 @@ caption { caption-side: top; padding: .5rem; }
 .card { border: 1px solid rgba(0,0,0,.176); border-radius: .375rem; overflow: hidden; background: #fff; }
 .card-body { padding: 1rem; }
 .card-header { padding: .5rem .75rem; border-bottom: 1px solid rgba(0,0,0,.125); }
+/* El recuadro de la presentación: el .card-body va suelto (sin .card que lo
+   encierre) y la banda + el cuerpo se pintan con bg-primary-10 y
+   bg-neutral-claro-50, que sí vienen de la hoja del tema. */
+.card-text { display: block; }
 .card-img-top { width: 100%; object-fit: cover; }
 /* card-group/card-deck: fila de tarjetas de igual alto, como en el montaje */
 .card-group, .card-deck { display: flex; flex-wrap: wrap; }
@@ -160,11 +179,41 @@ caption { caption-side: top; padding: .5rem; }
 .rounded-4 { border-radius: .75rem !important; }
 .border-4 { border-width: 4px !important; }
 .mx-auto { margin-left: auto; margin-right: auto; }
+.mx-3 { margin-left: 1rem; margin-right: 1rem; }
 .my-2 { margin: .5rem 0; }
+.border-0 { border: 0 !important; }
+.text-decoration-none { text-decoration: none; }
 .me-2 { margin-right: .5rem; }
 .p-2 { padding: .5rem; }
 .p-3 { padding: 1rem; }
 .p-4 { padding: 1.5rem; }
+.pb-3 { padding-bottom: 1rem; }
+.mb-4 { margin-bottom: 1.5rem; }
+.no-gutters { margin-left: 0; margin-right: 0; }
+.align-items-center { align-items: center; }
+.mb-2 { margin-bottom: .5rem; }
+.mt-3 { margin-top: 1rem; }
+.mb-3 { margin-bottom: 1rem; }
+.px-3 { padding-left: 1rem; padding-right: 1rem; }
+.p-0 { padding: 0; }
+.rounded-1 { border-radius: .25rem; }
+.rounded-2 { border-radius: .375rem; }
+/* Los seis resaltes por categoría. En Moodle salen de bg-marca-1…6 de la hoja;
+   aquí van con su hex porque la previa tiene que enseñar el color exacto y
+   estas clases NO siguen la paleta del aula (ver componentes.js). */
+.bg-marca-1 { background-color: #d8cfe3; }
+.bg-marca-2 { background-color: #cfe0f3; }
+.bg-marca-3 { background-color: #cee4da; }
+.bg-marca-4 { background-color: #fbe4d6; }
+.bg-marca-5 { background-color: #eedae9; }
+.bg-marca-6 { background-color: #d4d4d4; }
+/* Ojo: .recuadro__input y .tab-panels NO van aqui, los declara la hoja real del
+   tema (que se carga despues). Copiarlos era el bug del #d8a7b6 otra vez: dos
+   definiciones del mismo estilo y una envejeciendo. Este archivo es solo el
+   subconjunto de Bootstrap que Moodle da por hecho.
+   Y nada de acentos graves en los comentarios: esta hoja vive dentro de un
+   template literal y uno solo la parte en dos. */
+.frame-video { width: 100%; height: 100%; border: 0; }
 .align-self-stretch { align-self: stretch; }
 .align-baseline { vertical-align: baseline; }
 .fs-4 { font-size: 1.5rem; }
@@ -173,7 +222,13 @@ caption { caption-side: top; padding: .5rem; }
 .col-8 { flex: 0 0 66.6667%; max-width: 66.6667%; }
 @media (min-width: 992px) {
     .col-lg-3 { flex: 0 0 25%; max-width: 25%; }
+    /* Las dos columnas de la presentación: 8/4. Sin ellas la previa apila el
+       recuadro gris debajo del título y el bloque parece estar roto. */
+    .col-lg-4 { flex: 0 0 33.3333%; max-width: 33.3333%; }
     .col-lg-6 { flex: 0 0 50%; max-width: 50%; }
+    .col-lg-1 { flex: 0 0 8.3333%; max-width: 8.3333%; }
+    .col-lg-2 { flex: 0 0 16.6667%; max-width: 16.6667%; }
+    .col-lg-8 { flex: 0 0 66.6667%; max-width: 66.6667%; }
 }
 a { color: var(--primary-50, #6b4c8b); }
 
@@ -184,6 +239,12 @@ a { color: var(--primary-50, #6b4c8b); }
 .modal-lg { max-width: 800px; }
 .modal-xl { max-width: 1140px; }
 .modal-sm { max-width: 300px; }
+/* La ventana ancha de la presentación (la Tabla 1) va centrada y con la esquina
+   redondeada; el cuerpo se separa del encabezado con una línea. */
+.modal-dialog-centered { display: flex; align-items: center; min-height: calc(100% - 3.5rem); }
+.modal-dialog-centered > .modal-content { width: 100%; }
+.rounded-lg { border-radius: .5rem; }
+.border-top { border-top: 1px solid #dee2e6; }
 .modal-content { background: #fff; border-radius: .5rem; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
 .modal-header {
     display: flex; align-items: center; justify-content: space-between;
@@ -276,6 +337,20 @@ window.CSS_BARRA_PREVIA = `
     transition: opacity .12s ease;
 }
 .previa-barra.visible { opacity: 1; visibility: visible; }
+/* El asa: lo unico arrastrable de la previa. El bloque no lo es a proposito
+   (competiria con los clics que abren acordeones y ventanas). */
+.previa-asa {
+    display: flex; align-items: center; justify-content: center;
+    width: 22px; border-radius: 6px; cursor: grab; color: #8b93a1;
+}
+.previa-asa:active { cursor: grabbing; }
+.previa-asa:hover { background: #eef1f5; color: #333340; }
+.previa-asa svg { width: 15px; height: 15px; }
+/* Donde va a caer el bloque que se arrastra. */
+.previa-raya {
+    height: 3px; border-radius: 3px; background: #6597d8;
+    margin: 2px 0; box-shadow: 0 0 0 1px rgba(255,255,255,.7);
+}
 /* Dentro de una ventana emergente (position: fixed) la barra va fija también, y
    por encima del .modal (z-index 1055). */
 .previa-barra--fija { position: fixed; z-index: 1060; }

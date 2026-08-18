@@ -550,3 +550,223 @@
     .camino { padding: 14px 12px; }
     .inicio-plantillas { grid-template-columns: 1fr 1fr; }
 }
+
+/* Bloque de tipo desconocido: se dibuja para poder quitarlo, no para editarlo.
+   Antes reventaba el lienzo entero y no había manera de llegar a su papelera. */
+.bloque-card--roto {
+    border-color: var(--peligro, #c0392b);
+    opacity: .85;
+}
+.bloque-card--roto .bloque-chip { color: var(--peligro, #c0392b); }
+
+/* ==========================================================================
+   REDISEÑO: índice compacto + ficha lateral
+
+   El lienzo dejó de ser un formulario y pasó a ser un ÍNDICE de la página.
+   Los campos viven en la ficha, que entra sobre el lienzo. Los dos juntos no
+   cabían: con un guion de 20 bloques y todos los campos desplegados no se
+   distinguía la estructura, que es justo lo que hay que ver para maquetar.
+   ========================================================================== */
+
+/* --- El renglón del índice --- */
+.bloque-card > .bloque-cabeza { cursor: pointer; }
+.bloque-card > .bloque-cabeza:hover { background: var(--hover, rgba(127, 127, 127, .08)); }
+
+/* Los hijos, indentados: es lo que enseña qué cuelga de qué. */
+.bloque-hijos {
+    margin: 0 0 .35rem 1.1rem;
+    padding-left: .7rem;
+    border-left: 2px solid var(--borde, rgba(127, 127, 127, .28));
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+}
+.hijos-etiqueta {
+    font-size: .72rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    opacity: .6;
+    margin-top: .35rem;
+}
+.hijos-lista { display: flex; flex-direction: column; gap: .3rem; }
+
+/* --- El panel de campos ---
+   Ojo con el nombre: `.ficha` YA existía para los apartados de un repetible
+   (los del acordeón). Reusarla aquí le metía `position:absolute; inset:0` a
+   cada apartado y los apilaba encima. Es el mismo choque de nombres del
+   `nota`/`tipo`: antes de reusar una clase, buscarla. --- */
+/* El ancla es la COLUMNA entera, no el lienzo: dentro del lienzo-viewport el
+   panel se quedaba con el alto de este —102px en una laptop, para 500px de
+   campos—, así que casi todo caía bajo el pliegue. El botón de agregar
+   contenido a una columna vacía no se encontraba nunca. */
+.editor-panel { position: relative; }
+.panel-bloque {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--panel, #1b1b22);
+    border-radius: 12px;
+}
+.panel-bloque.hidden { display: none; }
+.panel-bloque-cabeza {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .6rem;
+    border-bottom: 1px solid var(--borde, rgba(127, 127, 127, .28));
+    flex: none;
+}
+.panel-bloque-chip { display: inline-flex; opacity: .8; flex: none; }
+/* El nombre se queda con el sobrante y se recorta si no cabe; los botones no
+   crecen. Hace falta decirlo: `.btn-primary` de shared.css trae `width: 100%`
+   —para los botones de acción a lo ancho de un panel— y aquí se comía la fila
+   entera, tapando el nombre del bloque. shared.css no se toca: se acota aquí. */
+.panel-bloque-nombre {
+    font-weight: 600;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.panel-bloque-cabeza > .btn-secondary,
+.panel-bloque-cabeza > .btn-primary {
+    width: auto;
+    flex: none;
+}
+.panel-bloque-cuerpo {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: .6rem;
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+}
+
+/* --- Arrastrar desde la paleta --- */
+.pieza--arrastrando { opacity: .45; }
+.lienzo--recibiendo { outline: 2px dashed var(--acento, #7aa2f7); outline-offset: -4px; border-radius: 10px; }
+.raya-soltar {
+    height: 3px;
+    border-radius: 3px;
+    background: var(--acento, #7aa2f7);
+    margin: .15rem 0;
+    flex: none;
+}
+
+/* ==========================================================================
+   La palabra que abre una ventana
+
+   Es la marca que más se usa y la que peor se explicaba sola: el botón
+   insertaba `{{palabra|Título|Explicación}}` y había que sustituir las dos
+   palabras DENTRO de las llaves. Ahora hay formulario, y debajo del campo se
+   listan las ventanas que ese texto ya tiene —en un textarea no se puede pintar
+   la palabra de amarillo, así que se enseñan aparte—.
+   ========================================================================== */
+
+.mini-btn--ventana { color: var(--resalte-fuerte, #b8860b); }
+
+.ventana-form {
+    margin-top: 8px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--borde, rgba(127, 127, 127, .3));
+    background: var(--panel-2, rgba(127, 127, 127, .08));
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.ventana-form-titulo { margin: 0 0 4px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.ventana-form .campo-etiqueta { margin: 6px 0 2px; font-size: 12px; }
+.ventana-form textarea.plain-input { resize: vertical; min-height: 60px; font-family: inherit; }
+.ventana-form-error { margin: 6px 0 0; font-size: 12.5px; color: var(--peligro, #c0392b); }
+.ventana-form-error.hidden { display: none; }
+.ventana-form-pie { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+/* shared.css le da width:100% a .btn-primary; aquí son dos botones en fila. */
+.ventana-form-pie .btn-primary,
+.ventana-form-pie .btn-secondary { width: auto; flex: none; }
+
+.ventanas-puestas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.ventanas-puestas.hidden { display: none; }
+.ventana-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 12px; cursor: help;
+    background: var(--resalte-suave, rgba(255, 209, 64, .22));
+    border: 1px solid var(--resalte-borde, rgba(255, 209, 64, .5));
+}
+
+/* Qué hay dentro de una columna / apartado / ventana, visto desde el panel.
+   Los chips saltan a ese bloque; la franja "+" agrega uno más ahí mismo. */
+.hijos-resumen { display: flex; flex-direction: column; gap: 6px; }
+.hijos-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.hijo-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 9px; border-radius: 999px; cursor: pointer;
+    font-size: 12.5px; font-family: inherit;
+    color: inherit;
+    background: var(--panel-2, rgba(127, 127, 127, .12));
+    border: 1px solid var(--borde, rgba(127, 127, 127, .28));
+}
+.hijo-chip:hover { border-color: var(--acento, #7aa2f7); }
+
+/* Traer HTML de Moodle: el área de código dejó de ser de solo lectura. */
+.code-traer { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.code-traer .btn-secondary { width: auto; flex: none; }
+
+/* La franja "+" dentro del panel: SIEMPRE visible y con etiqueta.
+   La de entre bloques vive escondida hasta el hover a propósito; aquí es la
+   única puerta para meterle contenido a una columna vacía, y escondida era
+   exactamente lo mismo que no existir. */
+.insertar--visible { align-items: stretch; }
+.insertar-mas--etiqueta {
+    opacity: 1;
+    width: 100%; height: auto; min-height: 32px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 6px 10px; font-size: 12.5px; font-family: inherit;
+    border: 1px dashed var(--control-border); border-radius: 8px;
+    background: transparent; color: var(--text-muted);
+}
+.insertar--visible:hover .insertar-mas--etiqueta,
+.insertar-mas--etiqueta:hover {
+    opacity: 1; color: var(--accent); border-color: var(--accent);
+    border-style: solid; background: var(--control-bg);
+}
+
+/* El menú de "Agregar contenido": las piezas CON SU NOMBRE.
+   Antes eran 21 iconos pelados en fila; para saber qué era cada uno había que
+   pasar el mouse y esperar el tooltip, veintiuna veces. Es la misma pieza que
+   ofrece la paleta del pie, así que se ve igual que allá — solo más compacta. */
+.insertar-opciones {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap: 4px;
+    /* `.insertar` es flex con align-items:center, así que sin esto la caja se
+       encoge al contenido y la rejilla colapsa a UNA columna alta y angosta.
+       En el panel se resolvía con `.insertar--visible`, pero entre bloques del
+       índice no, y ahí salía el menú en vertical. */
+    align-self: stretch;
+    width: 100%;
+}
+.pieza--mini {
+    gap: 3px;
+    padding: 7px 4px;
+    font-size: 11px;
+    line-height: 1.25;
+    text-align: center;
+}
+.pieza--mini .pieza-mini { width: 26px; height: 21px; }
+
+/* Ajustes de la página: mismo plegado que la paleta del pie. */
+.ajustes-titulo { margin-bottom: 8px; }
+.ficha-pagina.plegada { display: none; }
+
+/* Los avisos de los ajustes de página: dicen cuándo el control aplica.
+   El Resaltado sin palabras que abran ventana no se nota por ningún lado, y
+   ahí parado se leía como un control que no sirve para nada. */
+.field-hint--activo { color: var(--accent); }
+.field-hint--alerta { color: var(--peligro, #c0392b); }
