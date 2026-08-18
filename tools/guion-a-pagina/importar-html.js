@@ -112,12 +112,37 @@
 
     /* --- Lectores, en orden. El primero que reclama el nodo se lo queda. --- */
 
+    /**
+     * Un título SUELTO, y solo eso.
+     *
+     * La comprobación estricta no es paranoia: `.col-12` también casa con
+     * `.col-12.col-lg-8`, que es la columna izquierda del bloque **Presentación**
+     * —y ahí dentro hay un `.tituloUnidad`—. Con el selector suelto, este lector
+     * reclamaba la presentación entera y devolvía un triste título: se perdían el
+     * antetítulo, los párrafos, el recuadro gris de la derecha y su tabla. **2 640
+     * caracteres, sin avisar.**
+     *
+     * Por eso se exige que la fila traiga UNA sola columna, que esa columna no
+     * lleve nada más que el `.tituloUnidad`, y que dentro no haya un antetítulo.
+     * Lo que no cumpla se va a `crudo` y se publica idéntico.
+     */
     function leerTitulo(el) {
-        const h1 = el.querySelector(':scope > .col-12 > .tituloUnidad > h1, :scope > .tituloUnidad > h1');
-        if (h1) return { tipo: 'titulo', nivel: 'h1', texto: aMarcas(h1) };
-        const h2 = el.querySelector(':scope > .tituloUnidad > h2, :scope > .col-12 > .tituloUnidad > h2');
-        if (h2) return { tipo: 'titulo', nivel: 'h2', texto: aMarcas(h2) };
-        return null;
+        const columnas = [...el.children];
+        if (columnas.length !== 1) return null;
+
+        const col = columnas[0];
+        const caja = col.classList.contains('tituloUnidad') ? col : col.firstElementChild;
+        if (!caja || !caja.classList.contains('tituloUnidad')) return null;
+        // La columna no puede traer nada más (un <hr>, párrafos…).
+        if (caja === col.firstElementChild && col.children.length !== 1) return null;
+
+        const encabezados = [...caja.children];
+        if (encabezados.length !== 1) return null;   // un h5 de antetítulo descarta
+
+        const h = encabezados[0];
+        const et = h.tagName.toLowerCase();
+        if (et !== 'h1' && et !== 'h2') return null;
+        return { tipo: 'titulo', nivel: et, texto: aMarcas(h) };
     }
 
     function leerInstruccion(el) {

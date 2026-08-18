@@ -125,10 +125,46 @@ Dos detalles del mecanismo:
 
 ### La prueba que importa es la ida y vuelta
 
-Generar una página, pegarla de vuelta y comprobar que el HTML sale **idéntico**.
-Ya está verificada con título, instrucción, tabla, acordeón y separador: mismos
-2 440 caracteres, cero bloques crudos. Si algún día se toca el generador o el
-lector, esa es la prueba que hay que repetir.
+Armar una página con **los 21 bloques**, pegarla de vuelta y comprobar que no se
+pierde nada. Es la única prueba que cubre los dos caminos a la vez —de cero a
+Moodle y de Moodle a la herramienta— y la que hay que repetir al tocar el
+generador o el lector.
+
+Cómo se compara, porque el texto crudo **no** sale idéntico y eso es normal:
+
+1. Se quitan **todos** los espacios: los bloques `crudo` re-indentan plano, así
+   que la sangría cambia sin que cambie nada.
+2. Se normalizan los **ids autogenerados** (`acordeon2` → `ACC`, `modal5` → `MOD`…):
+   `reiniciarIds()` renumera según el orden, y un bloque que pasó a crudo corre
+   la cuenta.
+
+Con eso, el resultado tiene que ser **idéntico carácter por carácter**. Hoy lo es:
+8 679 = 8 679, y una segunda vuelta da exactamente lo mismo (10 392 = 10 392), que
+es lo que prueba que no degrada al repetir.
+
+> Comparar solo el largo engaña: entre la primera y la segunda pasada bailan
+> ~1 300 caracteres **de pura sangría**. Y comparar el primer carácter distinto
+> engaña igual, porque casi siempre cae en un id renumerado. La comparación útil
+> es contar marcadores estructurales (`accordion-item`, `modal fade`, `table`,
+> `tab-pane`…) y exigir que ninguno cambie.
+
+### Los lectores tienen que ser estrictos, no generosos
+
+`leerTitulo()` pedía `:scope > .col-12 > .tituloUnidad > h1`. Parece razonable —
+y se comía el bloque **Presentación** entero: `.col-12` también casa con
+`.col-12.col-lg-8`, que es su columna izquierda, y ahí dentro hay un
+`.tituloUnidad`. Reclamaba el nodo y devolvía un triste título, tirando el
+antetítulo, los párrafos, el recuadro gris de la derecha y su tabla. **2 640
+caracteres, sin avisar.**
+
+Ahora exige que la fila traiga UNA sola columna, que esa columna no lleve nada
+más, y que no haya antetítulo. Lo que no cumple se va a `crudo` y se publica
+idéntico.
+
+> La regla general: un lector que reclama un nodo se queda con **todo** el
+> subárbol. Si no puede reconstruirlo entero, no debe reclamarlo. Un selector de
+> más cuesta contenido perdido; uno de menos solo cuesta que ese trozo no se
+> pueda editar por piezas.
 
 > El bloque `crudo` es el único que **no escapa** su contenido ni pasa por
 > `marcas()`: es HTML de verdad, puesto a propósito. Por eso no se ofrece como
