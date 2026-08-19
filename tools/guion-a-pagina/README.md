@@ -314,43 +314,6 @@ Tres arreglos, porque uno solo no bastaba:
    usa un nombre reservado, y **un bloque de tipo desconocido ya no tumba el
    lienzo**: sale una tarjeta roja con su botón de borrar y el resto sigue vivo.
 
-## Un respaldo de `var()` es un color hardcodeado
-
-Todo lo que se agregó en el rediseño se escribió al principio así:
-
-```css
-background: var(--panel, #1b1b22);   /* MAL */
-```
-
-`--panel` **no existe** en este proyecto. En oscuro se veía bien de pura
-casualidad —el respaldo era oscuro— y en claro el panel salía **negro sobre
-fondo blanco**, con las etiquetas invisibles. El respaldo silencia el error
-justo en el tema en el que estabas trabajando, que es lo que lo hace tan fácil
-de no ver.
-
-Los tokens reales del proyecto, y a qué corresponde cada invento:
-
-| Se inventó | Va |
-|---|---|
-| `--panel` | `--surface-raised` (opaco en los dos temas; el panel tapa el lienzo) |
-| `--panel-2`, `--hover` | `--control-bg` |
-| `--borde` | `--control-border` |
-| `--acento` | `--accent` |
-| `--peligro` | `--danger` |
-
-Los tres del chip de ventana no existían y sí cambian entre temas, así que se
-declararon **en los dos** al principio de `styles.css`
-(`--chip-ventana-bg/-borde/-texto`).
-
-> Cómo se revisa: `grep` de `var(--…, …)` en la hoja de la herramienta. Si algún
-> `var()` lleva respaldo, es un color hardcodeado esperando a salir mal en el
-> otro tema. Hoy solo queda `--col-editor`, que no es color: es el ancho que
-> escribe el divisor.
-
-> Ojo con las `.preview-container` y el iframe de la previa: **esos sí llevan
-> `#fff` a propósito**, porque imitan la página real de Moodle y no deben seguir
-> el tema oscuro (regla del README raíz).
-
 ## El reparto de la pantalla
 
 Es un constructor con vista previa, así que el ancho es materia prima. Cuatro

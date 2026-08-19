@@ -647,7 +647,7 @@
         if (conFormula.length) {
             avisos.push(`El guion pide fórmula en ${conFormula.length === 1 ? 'el reactivo' : 'los reactivos'} `
                 + `${enumerar(conFormula.map(String))}: dentro de Moodle se comprobará que estén `
-                + `montadas como LaTeX —\\( … \\) en la frase, $$ … $$ si van solas— y no como texto.`);
+                + `montadas como LaTeX entre \\( y \\) —el único delimitador que va— y no como texto.`);
         }
 
         const donde = [];

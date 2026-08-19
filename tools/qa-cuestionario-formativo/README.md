@@ -228,6 +228,132 @@ filas de la misma tabla. Adivinar mal es peor que no adivinar: `\( … \)` nunca
 rompe el renglón y el mensaje remata con «solo si la quieres sola y centrada,
 cámbialo por `$$ … $$`».
 
+### Solo vale `\( … \)`
+
+Regla del área, sin excepciones: en Moodle la fórmula va **siempre** entre `\(` y
+`\)`, tal cual la escribe la calculadora de ecuaciones del editor. Si en la
+calculadora tecleas `2+2`, en el texto queda `\( 2+2 \)`. Ni `$$`, ni `\[`, ni
+`$` suelto. Cualquier otro delimitador es **error**, no aviso.
+
+Esto eliminó un aviso que había antes —«revisa a ojo cuál delimitador toca»—:
+ya no hay nada que decidir, así que no hay nada que declarar.
+
+**De dónde sale el código: del formulario de edición, no del DOM.** MathJax
+sustituye el texto por su propio marcado y no deja el TeX original en ninguna
+parte —medido: cero `annotation encoding="application/x-tex"` en los cuatro
+montajes reales—, así que mirando la página es imposible saber con qué
+delimitador se escribió. Lo que sí lo dice es el campo `questiontext[text]` de
+la página de edición, que `revisarPreguntaInterna` ya descargaba para cotejar
+respuestas. Ahí el texto está crudo, con sus delimitadores literales.
+
+Consecuencia de orden que cuesta un rato encontrar: `revisarDelimitadores`,
+`avisarDeFormulaNoCotejada` y `revisarFormulasEnBloque` corren **después** de
+`cotejarPaginasInternas`, no dentro de `cotejarContenido`. Antes, el inventario
+está vacío y no encuentran nada.
+
+El `$` suelto **no** se busca a propósito: Moodle no lo trata como delimitador y
+en un cuestionario de matemáticas hay precios y variables con `$` por todas
+partes. Buscarlo sería una fábrica de falsos positivos.
+
+`revisarFormulasEnBloque` queda como **respaldo** para la sesión sin permiso de
+edición: ahí no hay código fuente que leer, pero el modo bloque se nota en la
+página —MathJax baja la fórmula de renglón y la centra— y eso ya prueba que no
+se usó `\( … \)`. Solo corre si el inventario quedó vacío, o duplicaría el
+hallazgo.
+
+**Trampa de escape.** Los patrones van como literales de expresión regular
+(`/\\(([\s\S]{1,300}?)\\)/g`), no como cadenas. Escritos como cadena hacen falta
+seis contrabarras seguidas, nadie las relee bien y de hecho se escaparon mal a
+la primera: quedó `[sS]` donde debía ir `[\s\S]` y el patrón no casaba nunca —en
+silencio, que es lo peor—.
+
+### La retroalimentación y el gemelo de la fórmula
+
+La retroalimentación es **el único texto que se coteja contra el código fuente**
+y no contra la página, y eso cambia las reglas: ahí la fórmula no está dibujada,
+está cruda. Los dos lados escriben la misma fórmula en notaciones distintas, y
+compararlas como texto era un falso positivo en cadena:
+
+```
+Word    El operador ∧<Latex#\wedge #> (1) se relaciona…
+Moodle  El operador \( \wedge \)(1) se relaciona…
+```
+
+Así es como producción escribe las fórmulas en el guion —el símbolo a la vista y
+el código LaTeX en la marca—, **no es un error suyo**. `sinFormulas()` aparta las
+dos formas y compara el resto. No se pierde cobertura: la fórmula de la
+retroalimentación entra en el inventario (`registrarLatex` la anota como «la
+retroalimentación A»), así que su delimitador sí se revisa y sale en la
+evidencia. Cada quien a lo suyo: esta regla mira el texto, aquella la fórmula.
+
+**El gemelo visible no siempre es un símbolo suelto.** Hay tres convenciones y
+las tres había que apartarlas:
+
+| Guion | Cómo lo escribe | Gemelo a apartar |
+|---|---|---|
+| CF1 | `∧<Latex#\wedge #>` | `∧` |
+| CF4 | `6+8÷2×4<Lat#6+8 \div 2 \times 4 #>` | `6+8÷2×4` |
+| CF2 | `<Ecuación> 2⋅2⋅2⋅3⋅5⋅5 = 600 <Termina ecuación> <Cod Lat> 2\cdot 2… <Termina Cod Lat>` | el bloque entero |
+
+Dos trampas dentro de esto:
+
+- El gemelo se describe como **«números y operadores»**, no como «cualquier cosa
+  que no sea letra». Con lo segundo se comía el punto de `verdadera.<Lat#…#>` y
+  devolvía el falso positivo por otro lado. Así, un punto final no entra —no va
+  entre dígitos— y un decimal como `2.5` sí.
+- En la forma del CF2 hay que borrar el **contenido**, no solo las etiquetas: el
+  `<Ecuación>` es el gemelo visible, y dejarlo puesto es lo que hacía saltar toda
+  la retroalimentación del CF2.
+
+Y al final de `firmaRetroalimentacion` se cierra el hueco que deja la fórmula
+antes de un signo (`8÷2=4 ;` contra `8÷2=4;`). Un espacio antes de una coma no
+es un hallazgo de QA; reportarlo como «cambia la retroalimentación» sí es un
+falso positivo, y de los que hartan porque salen en cadena.
+
+### El código fuente manda sobre la página
+
+`revisarFormulasSinMontar` y `revisarFormulasDeRetro` consultan primero el
+inventario (`tieneLatexEnElFuente`). MathJax se carga aparte y tarda: si el
+verificador corre antes de que termine, la página todavía no tiene la fórmula
+dibujada y acusaría un montaje que está bien. Con el fuente delante no hay duda.
+Por eso las cinco reglas de fórmulas corren **después** de
+`cotejarPaginasInternas`, no dentro de `cotejarContenido`.
+
+### Cómo se probó
+
+Un arnés sintetiza la página de edición de cada reactivo a partir del propio
+Word, en dos variantes: **BIEN** (cada marca del guion convertida a `\( … \)`) y
+**MAL** (la misma, con `$$`). Un montaje correcto tiene que dar cero hallazgos de
+fórmula; el otro, uno por reactivo afectado.
+
+| | BIEN | MAL (`$$`) |
+|---|---|---|
+| CF1 | 0 hallazgos de fórmula · 0 de retro | P5 marcada |
+| CF2 | P3, P5, P9 «no montó»* · 0 de retro | + P6 y P8 marcadas |
+| CF4 | 0 hallazgos de fórmula · 0 de retro | P4, P8, P11, P12 marcadas |
+
+\* Correcto: en esos tres reactivos la fórmula solo existe como ecuación OMML de
+Word, sin código que copiar, así que un montaje real tampoco tendría LaTeX ahí.
+
+El CF3 no se puede ejercitar con este arnés: su LaTeX vive **solo en comentarios
+al margen**, no en el cuerpo, así que el arnés no tiene de dónde sacarlo. Ahí
+sigue el aviso de «no se pudo cotejar», que es la respuesta honesta.
+
+### El inventario en la evidencia
+
+El PDF trae una tabla **Fórmulas LaTeX (n)** con reactivo, dónde, código y
+delimitador; las mal escritas van en rojo con ✗. Lo pidió el área: no basta con
+marcar los errores, la evidencia tiene que decir cuántas fórmulas se detectaron
+y cuáles, para contrastarlas contra el guion sin volver a abrir Moodle. El campo
+`nota` explica el cero, porque no es lo mismo «no hay fórmulas» que «no se
+pudieron leer».
+
+Con el código fuente en la mano, además, el LaTeX del guion y el de Moodle **sí
+se comparan** (`firmaLatex` los normaliza sin espacios ni llaves, para que
+`3^{2}\cdot 3^{3}` y `3^2 \cdot 3^3` cuenten como la misma). La discrepancia sale
+como **aviso y no como error**: las dos notaciones pueden escribir la misma
+fórmula de maneras distintas y no vamos a inventar un error por eso.
+
 ### La fórmula que en el Word es una imagen
 
 Falso positivo cazado en el CF3, reactivos 8 y 9. El guion escribe «¿Cuál es el

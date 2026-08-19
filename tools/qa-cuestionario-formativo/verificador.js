@@ -275,8 +275,71 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
         return null;
     }
 
+    /* La retroalimentación es el único texto que se coteja contra el CÓDIGO
+       FUENTE de Moodle y no contra la página, y eso cambia las reglas: ahí la
+       fórmula no está dibujada, está cruda. Los dos lados escriben la misma
+       fórmula en notaciones distintas y compararlas como texto es un falso
+       positivo garantizado:
+
+         Word    El operador ∧<Latex#\wedge #> (1) se relaciona…
+         Moodle  El operador \( \wedge \)(1) se relaciona…
+
+       Así es como producción escribe las fórmulas en el guion —el símbolo a la
+       vista y el código LaTeX en la marca—, no es un error suyo. Se apartan las
+       dos formas y se compara el resto, que es lo que esta regla revisa.
+
+       No se pierde cobertura: la fórmula de la retroalimentación entra en el
+       inventario (`registrarLatex` la registra como «la retroalimentación A»),
+       así que su delimitador sí se revisa y sale en la evidencia. Cada quien a
+       lo suyo: esta regla mira el texto, aquella mira la fórmula. */
+    function sinFormulas(s) {
+        return String(s == null ? '' : s)
+            // Moodle: el código con su delimitador, tal cual sale del editor.
+            .replace(/\\\([\s\S]{1,300}?\\\)/g, ' ')
+            .replace(/\$\$[\s\S]{1,300}?\$\$/g, ' ')
+            .replace(/\\\[[\s\S]{1,300}?\\\]/g, ' ')
+            /* Word: la marca Y el símbolo pegado delante, que son la misma
+               fórmula dicha dos veces. El símbolo se enumera —flechas y
+               operadores matemáticos— en vez de aceptar cualquier carácter que
+               no sea letra: con «cualquiera» se comía el punto de
+               `verdadera.<Latex#…#>` y devolvía el falso positivo. */
+            /* La marca Y el gemelo visible pegado delante, que son la misma
+               fórmula dicha dos veces. El gemelo no siempre es un símbolo
+               suelto: en el CF4 es la expresión entera.
+
+                 CF1   ∧<Latex#\wedge #>              gemelo: ∧
+                 CF4   6+8÷2×4<Lat#6+8 \div 2 …#>     gemelo: 6+8÷2×4
+                 CF4   8÷2=4<Lat#8 \div 2 =4 #>       gemelo: 8÷2=4
+
+               El gemelo se describe como «números y operadores», no como
+               «cualquier cosa que no sea letra». Con lo segundo se comía el
+               punto de `verdadera.<Lat#…#>` y devolvía el falso positivo por
+               otro lado; así, un punto final no entra porque no va entre
+               dígitos, y un decimal como `2.5` sí. */
+            .replace(/(?:\d+(?:[.,]\d+)?|[=+\-*/^()·×÷±←-⇿∀-⋿])*\s{0,2}<\s*lat(?:ex)?\s*#[\s\S]*?#\s*>/gi, ' ')
+            /* La otra convención, la del CF2: el guion escribe la fórmula DOS
+               veces —la versión legible y su código— y Moodle la escribe una:
+
+                 Word    …el producto: <Ecuación> 2⋅2⋅2⋅3⋅5⋅5 = 600 <Termina
+                         ecuación> <Cod Lat> 2\cdot 2 \cdot 2… <Termina Cod Lat>
+                 Moodle  …el producto: \( 2\cdot 2 \cdot 2… \)
+
+               Aquí hay que borrar el CONTENIDO, no solo las etiquetas: el
+               `<Ecuación>` es el gemelo visible de la fórmula, y dejarlo puesto
+               es lo que hacía saltar la retroalimentación del CF2. */
+            .replace(/<\s*ecuaci[oó]n\s*>[\s\S]{0,400}?<\s*termina\s+ecuaci[oó]n\s*>/gi, ' ')
+            .replace(/<\s*cod\s+lat\s*>[\s\S]{0,400}?<\s*termina\s+cod\s+lat\s*>/gi, ' ');
+    }
+
     function firmaRetroalimentacion(s) {
-        return limpiarRetroalimentacion(normalizarNotacion(s));
+        return limpiarRetroalimentacion(normalizarNotacion(sinFormulas(s)))
+            /* Quitar la fórmula deja un hueco delante del signo: el Word da
+               «8÷2=4 ;» y Moodle «8÷2=4;». Se cierra en LOS DOS lados al final
+               de la cadena, que es donde se sabe que ya no queda nada por
+               borrar. Un espacio antes de una coma no es un hallazgo de QA;
+               reportarlo como «cambia la retroalimentación» sí es un falso
+               positivo, y de los que hartan porque salen en cadena. */
+            .replace(/\s+([;:,.)\]])/g, '$1');
     }
 
     function retroalimentacionesIguales(a, b) {
@@ -367,6 +430,94 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
          $$ … $$   en bloque, fórmula sola y centrada — sí rompe el renglón */
     var LATEX_CRUDO = /\$\$[\s\S]{1,200}?\$\$|\\\(|\\\[|<\s*latex\b[^>]*>|<\s*cod\s+lat\b[^>]*>|\\(?:wedge|vee|Rightarrow|Leftrightarrow|leftrightarrow|rightarrow|frac|sqrt|cdot|times|div|pi|alpha|beta|gamma|theta|leq|geq|neq|approx|sum|prod|int|infty)\b/i;
 
+    /* ======================================================================
+       INVENTARIO DE FÓRMULAS LaTeX
+
+       Regla del área, sin excepciones: en Moodle la fórmula va SIEMPRE entre
+       `\(` y `\)`, tal cual sale de la calculadora del editor. Si en la
+       calculadora escribes `2+2`, en el texto queda `\( 2+2 \)`. Ni `$$`, ni
+       `\[`, ni `$` suelto.
+
+       De dónde sale el código: NO del DOM. MathJax reemplaza el texto por su
+       propio marcado y no deja el TeX original en ninguna parte —lo medimos:
+       cero `annotation encoding="application/x-tex"` en los montajes reales—,
+       así que mirando la página no se puede saber con qué delimitador se
+       escribió. Lo que sí lo dice es el CAMPO del formulario de edición, que
+       `revisarPreguntaInterna` ya descarga para cotejar respuestas. Ahí el
+       texto está crudo, con sus delimitadores literales.
+
+       El `$` suelto NO se busca a propósito: Moodle no lo trata como
+       delimitador y en un cuestionario de matemáticas hay precios y variables
+       con `$` por todas partes. Buscarlo sería una fábrica de falsos positivos.
+       ====================================================================== */
+    /* Literales de expresión regular a propósito, no cadenas: escribir esto
+       como cadena obliga a un `\\\\\\(` que nadie relee bien, y de hecho se
+       escapó mal la primera vez —quedó `[sS]` donde debía ir `[\s\S]` y no
+       casaba nunca—. Con el literal, lo que se lee es lo que busca. */
+    var DELIMITADORES = [
+        { re: /\\\(([\s\S]{1,300}?)\\\)/g, como: '\\( … \\)', correcto: true },
+        { re: /\$\$([\s\S]{1,300}?)\$\$/g, como: '$$ … $$', correcto: false },
+        { re: /\\\[([\s\S]{1,300}?)\\\]/g, como: '\\[ … \\]', correcto: false }
+    ];
+
+    var inventarioLatex = [];
+
+    function registrarLatex(numero, donde, html) {
+        var texto = textoDeHtml(String(html || ''));
+        DELIMITADORES.forEach(function (d) {
+            var re = d.re;
+            re.lastIndex = 0;
+            var m;
+            while ((m = re.exec(texto))) {
+                inventarioLatex.push({
+                    numero: numero, donde: donde, codigo: limpiar(m[1]),
+                    delimitador: d.como, correcto: d.correcto
+                });
+            }
+        });
+    }
+
+    // `3^{2}\cdot 3^{3}` y `3^2 \cdot 3^3` son la misma fórmula. Se comparan
+    // sin espacios ni llaves; lo demás se respeta, que LaTeX distingue mayúsculas.
+    function firmaLatex(codigo) {
+        return String(codigo || '').replace(/[\s{}]/g, '');
+    }
+
+    /* El error que pidió el área: cualquier delimitador que no sea `\( … \)`.
+       Uno por pregunta, con los códigos ya reescritos como deben quedar. */
+    function revisarDelimitadores(parejas) {
+        var porPregunta = {};
+        inventarioLatex.forEach(function (f) {
+            if (f.correcto) return;
+            (porPregunta[f.numero] = porPregunta[f.numero] || []).push(f);
+        });
+        Object.keys(porPregunta).forEach(function (numero) {
+            var malas = porPregunta[numero];
+            var nodo = null;
+            parejas.forEach(function (p) {
+                if (p.actual && String(p.indiceEsperado + 1) === String(numero)) nodo = p.actual.nodo;
+            });
+            /* Sin repetir: una misma celda puede llevar dos fórmulas mal, y
+               enumerarla dos veces se lee como error de la herramienta
+               («la retroalimentación C y la retroalimentación C»). */
+            var usados = [];
+            var sitios = [];
+            malas.forEach(function (f) {
+                if (usados.indexOf(f.delimitador) < 0) usados.push(f.delimitador);
+                if (sitios.indexOf(f.donde) < 0) sitios.push(f.donde);
+            });
+            anotar('error', 'Fórmulas',
+                'La pregunta ' + numero + ' usa un delimitador que no va',
+                malas.slice(0, 4).map(function (f) { return '\\( ' + f.codigo + ' \\)'; }).join('   ·   '),
+                'Está escrita con ' + usados.join(' y ') + ' en '
+                    + enumerar(sitios.slice(0, 5))
+                    + (sitios.length > 5 ? ' y ' + (sitios.length - 5) + ' sitio(s) más' : '')
+                    + '. La fórmula va siempre entre \\( y \\), tal cual sale de la '
+                    + 'calculadora de ecuaciones del editor.',
+                nodo);
+        });
+    }
+
     /* ¿Moodle renderizó la fórmula? Cuando el filtro de matemáticas hace su
        trabajo, la página deja huella: el envoltorio del filtro, el contenedor
        de MathJax, el MathML de accesibilidad o la imagen del filtro TeX. Si el
@@ -392,6 +543,9 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
             if (!p.actual || !p.esperada) return;
             if (!p.esperada.pideFormulaRetro || p.esperada.pideFormula) return;
             if (tieneMatematicasRenderizadas(p.actual.nodo)) return;
+            // Si se pudo leer el código fuente, la retroalimentación ya se
+            // revisó de verdad: está en el inventario y su delimitador también.
+            if (tieneLatexEnElFuente(p.indiceEsperado + 1)) return;
             reactivos.push(String(p.indiceEsperado + 1));
             nodos.push(p.actual.nodo);
         });
@@ -405,10 +559,23 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
             nodos);
     }
 
+    // ¿El código fuente de esta pregunta trae LaTeX, esté dibujado o no?
+    function tieneLatexEnElFuente(numero) {
+        for (var i = 0; i < inventarioLatex.length; i++) {
+            if (String(inventarioLatex[i].numero) === String(numero)) return true;
+        }
+        return false;
+    }
+
     function revisarFormulasSinMontar(actuales, parejas) {
         parejas.forEach(function (p) {
             if (!p.actual || !p.esperada || !p.esperada.pideFormula) return;
             if (tieneMatematicasRenderizadas(p.actual.nodo)) return;
+            /* El código fuente manda sobre la página. MathJax se carga aparte y
+               tarda: si el verificador corre antes de que termine, la página
+               todavía no tiene la fórmula dibujada y esto acusaría un montaje
+               que en realidad está bien. Con el fuente delante no hay duda. */
+            if (tieneLatexEnElFuente(p.indiceEsperado + 1)) return;
             anotar('error', 'Fórmulas',
                 'La pregunta ' + (p.indiceEsperado + 1) + ' no montó la fórmula como LaTeX',
                 comoEscribirla(p.esperada.formulas),
@@ -419,61 +586,36 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
     }
 
     /* La sugerencia concreta: el código del guion ya envuelto en su
-       delimitador, listo para pegar en el editor de Moodle. Si el guion no dejó
-       código —solo una ecuación de Word— se explica la regla y ya.
+       delimitador, listo para pegar en el editor de Moodle. Si el guion no
+       dejó código —solo una ecuación de Word— se explica la regla y ya.
 
-       Siempre `\( … \)`: es el que deja la fórmula dentro de la frase y no
-       rompe el renglón, y es lo que hace el único montaje bien hecho de los
-       revisados. `$$ … $$` se menciona como la excepción a mano, porque cuál de
-       los dos toca no se puede deducir del Word (ver el README). */
-    var REGLA_DELIMITADOR = 'Solo si quieres la fórmula sola y centrada en su '
-        + 'propio renglón, cámbialo por $$ … $$';
-
+       Siempre `\( … \)`, sin excepción: es lo que pide el área y lo que
+       escribe la calculadora de ecuaciones del editor de Moodle. Si en la
+       calculadora escribes `2+2`, en el texto queda `\( 2+2 \)`. */
     function comoEscribirla(formulas) {
         var lista = (formulas || []).slice(0, 4);
         if (!lista.length) {
-            return 'La fórmula va en LaTeX, entre \\( y \\). ' + REGLA_DELIMITADOR;
+            return 'La fórmula va en LaTeX, entre \\( y \\). ';
         }
         var escritas = lista.map(function (codigo) { return '\\(' + codigo + '\\)'; });
         var sobran = (formulas.length > lista.length)
             ? ' (y ' + (formulas.length - lista.length) + ' más del mismo reactivo)' : '';
-        return 'Escríbelo así en Moodle: ' + escritas.join('   ') + sobran
-            + ' · ' + REGLA_DELIMITADOR;
+        return 'Escríbelo así en Moodle: ' + escritas.join('   ') + sobran;
     }
 
-    /* Lo que la herramienta NO puede afirmar, dicho en el panel y no escondido
-       en el README: cuál de los dos delimitadores toca en cada fórmula. El
-       guion parte la marca a un párrafo aparte, así que su maquetado no dice si
-       la fórmula va dentro de la frase o sola en su renglón. Se sugiere siempre
-       `\( … \)` —el que no rompe el renglón— y se avisa para que se mire.
+    /* Cuando el guion trae la fórmula como imagen o solo en el comentario,
+       `textoSinMatematicas` la aparta para no acusar de un cambio de texto que
+       no existe —y al apartarla, nadie comprobó que diga lo que debe decir—.
 
-       Solo se avisa de los reactivos donde la fórmula SÍ está renderizada: si
-       falta, ya hay un error arriba y el aviso sobraría. */
-    function avisarDelDelimitador(parejas) {
-        var reactivos = [];
-        var nodos = [];
-        parejas.forEach(function (p) {
-            if (!p.actual || !p.esperada || !p.esperada.pideFormula) return;
-            if (!tieneMatematicasRenderizadas(p.actual.nodo)) return;
-            reactivos.push(String(p.indiceEsperado + 1));
-            nodos.push(p.actual.nodo);
-        });
-        if (!reactivos.length) return;
-        anotar('aviso', 'Fórmulas',
-            'Revisa a ojo cómo cae la fórmula en '
-                + (reactivos.length === 1 ? 'la pregunta ' : 'las preguntas ') + enumerar(reactivos),
-            'La fórmula dentro de la frase con \\( … \\); sola y centrada con $$ … $$',
-            'La fórmula sí se dibuja, pero cuál de los dos delimitadores toca no '
-                + 'se puede deducir del guion. Mira que no baje de renglón donde '
-                + 'debería ir en la frase, ni al revés.',
-            nodos);
-    }
+       Con el inventario en la mano eso ya no es un punto ciego: el código
+       fuente de Moodle trae el LaTeX literal y el guion trae el suyo, así que
+       se comparan. Si cuadran, no hay nada que decir. Si no, se dice —como
+       AVISO y no como error: las dos notaciones pueden escribir la misma
+       fórmula de maneras distintas (`\cdot` contra `\times`, `x^2` contra
+       `x^{2}`) y no vamos a inventar un error por eso—.
 
-    /* El otro punto ciego, y el más importante de declarar: cuando el guion
-       trae la fórmula como imagen o solo en el comentario, apartamos la fórmula
-       para no acusar de un cambio de texto que no existe —y al apartarla,
-       nadie comprobó que diga lo que debe decir—. Aquí se avisa, y con el
-       código del comentario delante para que cotejarlo sea mirar dos líneas. */
+       Sin inventario —sesión sin permiso de edición— se cae al aviso de
+       siempre: no se pudo cotejar, revisa a ojo, aquí está el código. */
     function avisarDeFormulaNoCotejada(parejas) {
         parejas.forEach(function (p) {
             if (!p.actual || !p.esperada || !p.esperada.pideFormula) return;
@@ -481,22 +623,48 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
             // Solo si de verdad la apartamos: con la fórmula puesta el cotejo
             // completo ya cuadraba y no hay nada que declarar.
             if (contenidosIguales(normalizarTextoPregunta(p.esperada.texto), p.actual.texto)) return;
-            var codigos = p.esperada.formulas || [];
+            var numero = p.indiceEsperado + 1;
+            var delGuion = p.esperada.formulas || [];
+            var enMoodle = inventarioLatex.filter(function (f) {
+                return String(f.numero) === String(numero);
+            });
+            if (enMoodle.length && delGuion.length) {
+                var puestas = enMoodle.map(function (f) { return firmaLatex(f.codigo); });
+                var faltan = delGuion.filter(function (c) {
+                    return puestas.indexOf(firmaLatex(c)) < 0;
+                });
+                if (!faltan.length) return;
+                anotar('aviso', 'Fórmulas',
+                    'La fórmula de la pregunta ' + numero + ' no dice lo mismo que el guion',
+                    faltan.slice(0, 4).map(function (c) { return '\\( ' + c + ' \\)'; }).join('   ·   '),
+                    'En Moodle está puesta como '
+                        + enMoodle.slice(0, 4).map(function (f) { return '\\( ' + f.codigo + ' \\)'; }).join('   ·   ')
+                        + '. Puede ser la misma fórmula escrita de otra forma; comprueba que se lea igual.',
+                    p.actual.nodo);
+                return;
+            }
             anotar('aviso', 'Fórmulas',
-                'La fórmula de la pregunta ' + (p.indiceEsperado + 1) + ' no se pudo cotejar',
-                codigos.length ? codigos.join('   ·   ') : 'El guion la trae como imagen',
+                'La fórmula de la pregunta ' + numero + ' no se pudo cotejar',
+                delGuion.length ? delGuion.join('   ·   ') : 'El guion la trae como imagen',
                 'En el Word la fórmula es una imagen o un comentario al margen, no texto, '
-                    + 'así que solo se comprobó que en Moodle esté montada como LaTeX. '
-                    + 'Que diga exactamente lo que debe decir hay que verlo a ojo.',
+                    + 'y no se pudo leer el código fuente de Moodle para compararlas. '
+                    + 'Solo se comprobó que esté montada como LaTeX; que diga lo que debe '
+                    + 'decir hay que verlo a ojo.',
                 p.actual.nodo);
         });
     }
 
-    /* Modo bloque donde debería ir en línea. `$$…$$` le dice a MathJax que la
-       fórmula va sola: la baja de renglón y la centra. Si a los lados hay texto
-       en el mismo párrafo, el autor quería `\( … \)`. Se pide texto de VERDAD a
-       ambos lados —no solo espacios— para no marcar la fórmula que sí va sola. */
+    /* RESPALDO del cotejo de delimitadores, para la sesión que no pudo abrir
+       las páginas de edición (sin permiso de docente). Ahí no hay código
+       fuente que leer, pero el modo bloque sí se nota en la página: `$$` y
+       `\[` le dicen a MathJax que la fórmula va sola, y la baja de renglón y
+       la centra. Es prueba suficiente de que NO se usó `\( … \)`.
+
+       Solo corre si el inventario quedó vacío: con las páginas leídas, quien
+       manda es `revisarDelimitadores`, que ve el delimitador literal, y correr
+       los dos duplicaría el hallazgo. */
     function revisarFormulasEnBloque(actuales) {
+        if (inventarioLatex.length) return;
         actuales.forEach(function (ap, i) {
             if (!ap.nodo) return;
             var sueltas = [];
@@ -505,18 +673,15 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
             [].forEach.call(cajas, function (caja) {
                 if (caja.getAttribute('display') === 'false') return;
                 if (caja.localName === 'math' && caja.closest('mjx-assistive-mml')) return;
-                var parrafo = caja.closest('p, li, td, div');
-                if (!parrafo) return;
-                var alrededor = (parrafo.textContent || '')
-                    .replace(caja.textContent || '', '').replace(/\s+/g, '');
-                if (alrededor.length > 3) sueltas.push(caja);
+                sueltas.push(caja);
             });
             if (!sueltas.length) return;
-            anotar('aviso', 'Fórmulas',
-                'La pregunta ' + (i + 1) + ' baja la fórmula de renglón',
-                'Una fórmula dentro de la frase va entre \\( y \\), que la deja en línea',
-                'Está entre $$ y $$, que es el modo bloque: MathJax la manda '
-                    + 'sola a un renglón aparte y la centra.',
+            anotar('error', 'Fórmulas',
+                'La pregunta ' + (i + 1) + ' usa un delimitador que no va',
+                'La fórmula va siempre entre \\( y \\)',
+                'Está escrita en modo bloque —con $$ o \\[—: MathJax la manda sola '
+                    + 'a un renglón aparte y la centra. No se pudo leer el código '
+                    + 'fuente para decir cuál de los dos es.',
                 sueltas[0]);
         });
     }
@@ -799,11 +964,6 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
             }
         }
         revisarFormulasCrudas(actuales);
-        revisarFormulasSinMontar(actuales, parejas);
-        revisarFormulasDeRetro(parejas);
-        avisarDeFormulaNoCotejada(parejas);
-        avisarDelDelimitador(parejas);
-        revisarFormulasEnBloque(actuales);
         if (otroComportamiento.length) {
             var nombres = [];
             otroComportamiento.forEach(function (x) {
@@ -904,6 +1064,19 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
         if (!respuestas.length || !fracciones.length) {
             throw new Error('la página de edición no expuso los campos de respuestas');
         }
+
+        /* El texto CRUDO, con los delimitadores literales: la única fuente
+           fiable de con qué se escribió la fórmula. Ver `registrarLatex`. */
+        var enunciado = camposPorNombre(doc, 'questiontext').filter(function (n) {
+            return /\[text\]$/.test(n.name);
+        });
+        if (enunciado[0]) registrarLatex(numero, 'el enunciado', enunciado[0].value);
+        respuestas.forEach(function (campo, i) {
+            registrarLatex(numero, 'la respuesta ' + String.fromCharCode(65 + i), campo.value);
+        });
+        retro.forEach(function (campo, i) {
+            registrarLatex(numero, 'la retroalimentación ' + String.fromCharCode(65 + i), campo.value);
+        });
 
         var single = doc.querySelector('[name="single"]');
         if (single) {
@@ -1120,6 +1293,15 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
             ],
             textoTodoBien: 'El contenido, las respuestas correctas, las retroalimentaciones y la '
                 + 'configuración revisada coinciden con el guion.',
+            /* El conteo de fórmulas que pidió el área. `nota` explica el cero:
+               no es lo mismo «no hay fórmulas» que «no se pudieron leer». */
+            latex: {
+                formulas: inventarioLatex,
+                nota: inventarioLatex.length ? ''
+                    : (esperado.preguntas.some(function (p) { return p.pideFormula; })
+                        ? 'El guion pide fórmulas, pero en Moodle no se encontró ninguna escrita en LaTeX'
+                        : 'Ni el guion ni el montaje traen fórmulas')
+            },
             // Los que salieron al leer el Word, en el panel de la herramienta.
             avisosDelGuion: esperado.avisos || [],
             notaAlcance: 'Cubre el contenido visible, las respuestas correctas y la configuración que la '
@@ -1203,5 +1385,14 @@ window.VERIFICADOR_CF = async function (DATOS, evidencia) {
     panelCargando();
     var resultado = await cotejarContenido();
     await cotejarPaginasInternas(resultado);
+    /* Van DESPUÉS a propósito: las tres necesitan el inventario de
+       fórmulas, y ese solo existe una vez leídas las páginas de edición.
+       Corriéndolas antes, el inventario está vacío y `revisarDelimitadores`
+       no encuentra nada que revisar. */
+    revisarFormulasSinMontar(resultado.actuales, resultado.parejas);
+    revisarFormulasDeRetro(resultado.parejas);
+    avisarDeFormulaNoCotejada(resultado.parejas);
+    revisarDelimitadores(resultado.parejas);
+    revisarFormulasEnBloque(resultado.actuales);
     return pintar(esperado.preguntas.length + ' reactivos del Word cotejados · los puntajes son informativos');
 };

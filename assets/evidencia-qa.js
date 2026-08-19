@@ -88,6 +88,13 @@ window.EVIDENCIA_QA = function (info) {
         '.ok strong { color:#1e6b34; }',
         // Los avisos del guion son del Word, no de Moodle: bloque aparte para
         // que nadie los lea como fallas del montaje.
+        'table.latex { width:100%; border-collapse:collapse; margin:6px 0 2px; font-size:10.5px; }',
+        'table.latex th { text-align:left; font-weight:600; color:#5b6472; border-bottom:1px solid #d8dde3;',
+        '  padding:4px 6px; font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; }',
+        'table.latex td { padding:4px 6px; border-bottom:1px solid #eceff2; vertical-align:top; }',
+        'table.latex code { font-family:ui-monospace,Consolas,monospace; font-size:10.5px; }',
+        'table.latex tr.malo td { background:#fdf1f1; color:#8c2b2b; }',
+        'table.latex tr.malo code { font-weight:700; }',
         '.guion { border:1px solid #f0c98a; border-left-width:4px; background:#fffcf6;',
         '  border-radius:0 9px 9px 0; padding:11px 14px; margin-top:8px; break-inside:avoid; }',
         '.guion ul { margin:0; padding:0; list-style:none; }',
@@ -178,6 +185,33 @@ window.EVIDENCIA_QA = function (info) {
         h.push('<div class="guion"><ul>');
         delGuion.forEach(function (a) { h.push('<li>' + esc(a) + '</li>'); });
         h.push('</ul></div>');
+    }
+
+    /* Inventario de fórmulas LaTeX. Lo pidió el área explícitamente: no basta
+       con marcar los errores, la evidencia tiene que decir CUÁNTAS fórmulas se
+       detectaron y CUÁLES, para poder contrastar contra el guion sin volver a
+       abrir Moodle. Cada una se imprime ya envuelta en su delimitador para que
+       se lea igual que en el editor. */
+    var latex = info.latex || null;
+    if (latex && latex.formulas && latex.formulas.length) {
+        var mal = latex.formulas.filter(function (f) { return !f.correcto; }).length;
+        h.push('<h2>Fórmulas LaTeX (' + latex.formulas.length + ')'
+            + '<em>' + (mal
+                ? mal + (mal === 1 ? ' con delimitador incorrecto' : ' con delimitador incorrecto')
+                : 'todas entre \( y \), como debe ser') + '</em></h2>');
+        h.push('<table class="latex"><thead><tr><th>Reactivo</th><th>Dónde</th>'
+            + '<th>Fórmula</th><th>Delimitador</th></tr></thead><tbody>');
+        latex.formulas.forEach(function (f) {
+            h.push('<tr' + (f.correcto ? '' : ' class="malo"') + '>'
+                + '<td>' + esc(String(f.numero)) + '</td>'
+                + '<td>' + esc(f.donde || '') + '</td>'
+                + '<td><code>' + esc(f.codigo || '') + '</code></td>'
+                + '<td><code>' + esc(f.delimitador || '') + '</code>'
+                + (f.correcto ? '' : ' ✗') + '</td></tr>');
+        });
+        h.push('</tbody></table>');
+    } else if (latex && latex.nota) {
+        h.push('<h2>Fórmulas LaTeX (0)<em>' + esc(latex.nota) + '</em></h2>');
     }
 
     h.push('<div class="firma"><div>Revisó (nombre y firma)</div><div>Visto bueno</div></div>');
