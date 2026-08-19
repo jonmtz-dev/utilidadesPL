@@ -326,6 +326,7 @@ async function leerBloquesDeDocx(file, opciones) {
     const doc = await abrirDocumentoDocx(file);
     const body = doc.getElementsByTagNameNS(W_NS, 'body')[0] || doc.documentElement;
     const formatosLista = await leerFormatosListaDocx(file);
+    const sangriasDeEstilo = await leerSangriasDeEstilosDocx(file);
 
     const bloqueDesdeNodo = n => {
         if (n.localName === 'p') {
@@ -340,6 +341,24 @@ async function leerBloquesDeDocx(file, opciones) {
             // párrafo alineado con su texto). Se entrega crudo; la herramienta decide.
             const ind = n.getElementsByTagNameNS(W_NS, 'ind')[0];
             const sangria = ind ? Math.max(0, Number(ind.getAttributeNS(W_NS, 'left') || ind.getAttributeNS(W_NS, 'start') || 0)) : 0;
+            /* Sangria FRANCESA (la primera linea sale a la izquierda del resto):
+               es `w:hanging`, o un `w:firstLine` negativo. Va como campo NUEVO
+               —`sangriaColgante` en twips y `sangriaFrancesa` ya resuelto— para
+               no tocar `sangria`, que tres herramientas ya leen como "cuanto se
+               corre el parrafo".
+               Cuando el parrafo no la trae escrita encima, se hereda del estilo
+               (los Word de bibliografia suelen definirla en un estilo propio). */
+            const colganteDirecto = ind && ind.hasAttributeNS(W_NS, 'hanging')
+                ? Number(ind.getAttributeNS(W_NS, 'hanging') || 0) : 0;
+            const primeraDirecta = ind && ind.hasAttributeNS(W_NS, 'firstLine')
+                ? Number(ind.getAttributeNS(W_NS, 'firstLine') || 0) : 0;
+            const traeIndPropio = Boolean(ind
+                && (ind.hasAttributeNS(W_NS, 'hanging') || ind.hasAttributeNS(W_NS, 'firstLine')));
+            const pStyle = n.getElementsByTagNameNS(W_NS, 'pStyle')[0];
+            const delEstilo = pStyle ? sangriasDeEstilo[pStyle.getAttributeNS(W_NS, 'val')] : 0;
+            const colgante = Math.round(traeIndPropio
+                ? Math.max(colganteDirecto, primeraDirecta < 0 ? -primeraDirecta : 0)
+                : (delEstilo || 0));
             const idLista = numId && numId.getAttributeNS(W_NS, 'val');
             const nivel = Number(ilvl && ilvl.getAttributeNS(W_NS, 'val') || 0);
             // Algunos Word no incrementan `ilvl` al anidar. En su lugar crean
@@ -358,6 +377,8 @@ async function leerBloquesDeDocx(file, opciones) {
                 texto,
                 imagenes,
                 sangria,
+                sangriaColgante: colgante,
+                sangriaFrancesa: colgante > 0,
                 lista: Boolean(numPr),
                 idLista,
                 tipoLista: (formatoLista && typeof formatoLista === 'object' ? formatoLista.tipo : formatoLista) || 'ordenada',
@@ -549,6 +570,60 @@ async function leerFormatosListaDocx(file) {
         Object.keys(abstractos).filter(k => k.startsWith(`${idAbs}:`)).forEach(k => {
             salida[`${id}:${k.split(':')[1]}`] = abstractos[k];
         });
+    });
+    return salida;
+}
+
+/**
+ * Sangria colgante (francesa) declarada en los ESTILOS: { styleId: twips }.
+ *
+ * Sirve de respaldo para `sangriaFrancesa` de leerBloquesDeDocx. Los dos Word
+ * de bibliografia con los que se construyo esto la traen escrita encima de cada
+ * parrafo (`<w:ind w:hanging="720">`), pero Word tambien deja definirla una vez
+ * en un estilo —"Bibliografia", "Referencia"— y entonces el parrafo no dice
+ * nada. Sin esto, un documento asi se leeria como "ninguna fuente tiene sangria
+ * francesa" y el QA reportaria 150 errores inventados.
+ *
+ * `w:basedOn` se sigue hasta la raiz: un estilo puede heredar la sangria del
+ * que lo origina. El limite de saltos es por seguridad, no por profundidad
+ * real: un archivo con una herencia circular colgaria el navegador.
+ */
+async function leerSangriasDeEstilosDocx(file) {
+    const archivos = await leerZip(await file.arrayBuffer());
+    const entrada = archivos.get('word/styles.xml');
+    if (!entrada) return {};
+    const xml = new TextDecoder('utf-8').decode(await inflar(entrada));
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+
+    const propias = {};   // lo que declara el estilo mismo
+    const padres = {};
+    [...doc.getElementsByTagNameNS(W_NS, 'style')].forEach(st => {
+        const id = st.getAttributeNS(W_NS, 'styleId');
+        if (!id) return;
+        const pPr = st.getElementsByTagNameNS(W_NS, 'pPr')[0];
+        const ind = pPr && pPr.getElementsByTagNameNS(W_NS, 'ind')[0];
+        if (ind) {
+            const colgante = Number(ind.getAttributeNS(W_NS, 'hanging') || 0);
+            const primera = Number(ind.getAttributeNS(W_NS, 'firstLine') || 0);
+            const valor = Math.max(colgante, primera < 0 ? -primera : 0);
+            if (ind.hasAttributeNS(W_NS, 'hanging') || ind.hasAttributeNS(W_NS, 'firstLine')) {
+                propias[id] = Math.round(valor);
+            }
+        }
+        const base = st.getElementsByTagNameNS(W_NS, 'basedOn')[0];
+        if (base) padres[id] = base.getAttributeNS(W_NS, 'val');
+    });
+
+    const salida = {};
+    Object.keys(padres).concat(Object.keys(propias)).forEach(id => {
+        let actual = id;
+        let saltos = 0;
+        while (actual && saltos < 10) {
+            if (propias[actual] !== undefined) { salida[id] = propias[actual]; return; }
+            actual = padres[actual];
+            saltos++;
+        }
+        salida[id] = 0;
     });
     return salida;
 }

@@ -13,7 +13,7 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.48.0';
+const VERSION = '1.50.0';
 const CACHE = `panel-herramientas-v${VERSION}`;
 
 // Rutas relativas a propósito: en GitHub Pages la app vive en un subdirectorio
@@ -68,6 +68,7 @@ const APP_SHELL = [
     'assets/modulos-311.js',
     'tools/bibliografias-margarita/index.html',
     'tools/bibliografias-margarita/script.js',
+    'tools/bibliografias-margarita/qa.js',
     'tools/bibliografias-margarita/styles.css',
     'tools/guion-a-pagina/index.html',
     'tools/guion-a-pagina/script.js',
@@ -136,7 +137,13 @@ self.addEventListener('fetch', (event) => {
                     return res;
                 })
                 .catch(async () => {
-                    const cacheado = await caches.match(req);
+                    /* `ignoreSearch` porque hay ligas del panel que llevan
+                       query: la tarjeta de QA de Bibliografías abre la misma
+                       herramienta con `?modo=qa`. Buscando por dirección
+                       completa esa entrada no está en caché y sin conexión
+                       caía al launcher en vez de abrir la herramienta. La query
+                       aquí solo elige una pestaña; el archivo es el mismo. */
+                    const cacheado = await caches.match(req, { ignoreSearch: true });
                     if (cacheado) return cacheado;
                     // Navegación sin conexión y sin caché: mandamos el launcher.
                     if (req.mode === 'navigate') {

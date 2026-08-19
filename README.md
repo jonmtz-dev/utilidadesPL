@@ -106,6 +106,8 @@ tools/
   qa-51/                    Revisa que lo montado en 5.1 sea el guion y la rúbrica
     README.md                Qué se coteja, qué se perdona y por qué
     index.html · script.js · verificador.js · styles.css
+  bibliografias-margarita/  Word de fuentes → página 5.1, y QA de lo ya montado
+    index.html · script.js · qa.js · styles.css
 .claude/launch.json         Config del servidor local para previsualizar
 ```
 
@@ -134,6 +136,25 @@ costaba encontrar la que tocaba. Detalles del dibujo:
   luego las de 5.1, sin barajarse.
 - Sin fondo ni caja: la rejilla ya está llena de `.glass-panel` y otra
   superficie más solo compite. Ahí separa la línea, no el relleno.
+
+**Una herramienta puede tener dos tarjetas.** Bibliografías Margarita Maza monta
+la página *y* revisa la montada, así que aparece dos veces: en Montaje, y en
+Revisión · QA como "QA de Bibliografías", con la misma `url` más `?modo=qa`. No
+hay código duplicado —es la misma carpeta, la herramienta lee ese parámetro y
+abre en su tercer modo—; lo que se duplica es la puerta, porque quien va a
+revisar busca en la sección de QA y no tiene por qué saber que dentro de una
+tarjeta de montaje hay una pestaña más.
+
+Dos cosas que eso obligó a dejar resueltas:
+
+- **El `slug` de la tarjeta no es el de la carpeta** (`qa-bibliografias` →
+  `tools/bibliografias-margarita/`). No pasa nada: la insignia de versión y el
+  botón de volver deducen la herramienta por la carpeta de la dirección, no por
+  el slug de la tarjeta.
+- **El Service Worker busca en caché con `ignoreSearch`.** Sin eso, sin conexión
+  la liga con `?modo=qa` no coincidía con nada guardado y caía al launcher. Es
+  la misma trampa por la que la marca de plataforma va en el hash y no en la
+  query (ver §7).
 
 ### De qué plataforma se entró
 
@@ -438,7 +459,8 @@ Así no hay que subir imagen por imagen ni copiar URLs largas.
 
 ### Bibliografías Margarita Maza (`tools/bibliografias-margarita/`)
 
-Dos modos, y es a propósito que usen marcas distintas:
+Tres modos: dos para montar y uno para revisar. Los dos primeros usan marcas
+distintas a propósito:
 
 1. **Desde Word** — el .docx de fuentes se vuelve la página completa:
    `container-fluid mainPlantilla23 <paleta> pb-3 mw-100`, título con su rayita
@@ -458,6 +480,48 @@ Dos modos, y es a propósito que usen marcas distintas:
 2. **Corregir HTML pegado** — la lógica original: a los `<a>` de YouTube les
    agrega `class="nomediaplugin"`. **No se cambió a `nolink`**: hay páginas
    montadas con esa marca y cambiarla les reescribiría el criterio a media obra.
+3. **Revisar lo montado (QA)** — se sube el Word y se pega el HTML de la página
+   ya publicada; el informe dice qué no coincide. El motor vive en `qa.js` y
+   devuelve datos, así que se puede probar solo:
+   `QaBibliografia.revisar({ fuentes, html })`. **Tiene su propia tarjeta en el
+   panel**, dentro de Revisión · QA ("QA de Bibliografías"): es esta misma
+   herramienta abierta con `?modo=qa`.
+
+#### Qué revisa el modo QA
+
+| Se revisa | Nivel si falla |
+|---|---|
+| Cada fuente del Word está montada, y con su texto exacto | **Error** (falta, sobra, cambia una palabra o un acento) |
+| Cambia solo la puntuación o los espacios | Aviso: casi siempre una corrección de estilo al montar |
+| Todo `<a>` lleva `target="_blank"` | **Error**: sin él el enlace se lleva al estudiante fuera del curso |
+| Los de YouTube van con `span.nolink` (o el `nomediaplugin` viejo) | **Error**: Moodle los cambia por un reproductor incrustado |
+| Una URL del Word quedó como texto plano | **Error** |
+| El texto visible del enlace es otra dirección que su `href` | **Error** |
+| Falta `rel="noopener"` | Aviso: el montaje del área lo lleva siempre |
+| **La sangría francesa es la del Word** | **Error** por párrafo: `class="fuente"` de más o de menos |
+| Marcas del guion publicadas (`<h1>`, `<Figura>`…) | **Error** |
+| Orden distinto al del Word, repetidas, párrafos vacíos, texto sin año ni URL | Aviso |
+| El conteo de "Hipervínculos" de la hoja de control no cuadra | Aviso |
+
+Tres decisiones que conviene no deshacer:
+
+- **Se pide el HTML pegado, no un marcador que corra en Moodle** como en las
+  otras dos herramientas de QA. Lo que hay que revisar está en el CÓDIGO —el
+  `target`, el `span.nolink`, la clase `fuente`—, y eso se lee tal cual en el
+  editor de la Página sin ejecutar nada.
+- **Los dos formatos de guion entran igual.** El que solo manda las fuentes y el
+  que las manda detrás de una hoja de control (módulo, elaboradores,
+  indicaciones para producción). Esa hoja vive en TABLAS, y como `docx.js` no
+  entrega el texto de una celda como párrafo, se cae sola. El título
+  "Bibliografía" y las marcas tipo `<h1>` se quitan por nombre. **La misma
+  función la usa el modo 1** (`QaBibliografia.fuentesDeBloques`): antes ese
+  guion largo montaba `<h1>` como si fuera una fuente.
+- **Cuando el Word viene mezclado, no se reportan 32 errores del montaje.** Pasa
+  de verdad: un guion real trae 108 fuentes con sangría francesa y 32 sin ella.
+  Se avisa **una vez** que el Word no es consistente, se listan las que se
+  salen, y se coteja Moodle contra la mayoría —que es lo que el montador iba a
+  hacer de todos modos—. Ese aviso cuenta como uno solo en el veredicto; si no,
+  una página impecable salía con "31 avisos".
 
 El selector de paleta cambia la clase del contenedor, y de ahí sale el color de
 la rayita del `<h1>` (`.tituloUnidad h1 { border-left: 8px var(--primary-40) }`).
@@ -630,6 +694,7 @@ de forma distinta. Las dos formas de hacerlo, con los casos que las motivaron:
 | --- | --- | --- |
 | Guion a Página necesitaba las tablas anidadas de una celda, en orden | Cambiar `lineas`/`texto` para que dejaran de aplanar | **Campo nuevo** `contenido`, con los párrafos y las tablas en el orden real. `lineas` y `texto` intactos |
 | Necesitaba los saltos de línea manuales (`w:br`) como `\n` | Devolverlos siempre | **Opción** `textoDeParrafoConNegritas(p, { saltos: true })`, apagada por omisión |
+| El QA de bibliografías necesitaba saber si el párrafo trae **sangría francesa** | Reinterpretar `sangria`, que ya leen tres herramientas como "cuánto se corre el párrafo" | **Campos nuevos** `sangriaColgante` (twips) y `sangriaFrancesa` (booleano), de `w:hanging` o de un `w:firstLine` negativo. `sangria` intacto |
 
 El segundo caso enseña por qué: el Integrador HTML parte sus listas por renglón,
 así que un salto dentro de un elemento se habría convertido en **dos** elementos.

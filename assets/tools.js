@@ -117,15 +117,32 @@ const TOOLS = [
         url: 'tools/qa-cuestionario-formativo/index.html',
         status: 'ready'
     },
+    /* Segunda entrada a Bibliografías Margarita Maza, no una herramienta nueva.
+       La misma carpeta abierta en su modo de revisión (`?modo=qa`): quien va a
+       revisar busca en la sección de QA, no en la de montaje, y mandarlo a una
+       tarjeta que dice "Convierte el Word…" era pedirle que supiera que adentro
+       hay una tercera pestaña. El código no se duplica; la liga sí. */
+    {
+        slug: 'qa-bibliografias',
+        grupo: 'qa',
+        moodle: '5.1',
+        title: 'QA de Bibliografías',
+        description: 'Coteja la bibliografía montada contra el Word: que estén todas las fuentes y bien escritas, que los enlaces abran en pestaña nueva y que la sangría francesa sea la del documento.',
+        icon: 'books',
+        accent: ['#0f9d58', '#1f6f4a'],
+        tags: ['QA', 'Bibliografía', 'Enlaces', 'Word'],
+        url: 'tools/bibliografias-margarita/index.html?modo=qa',
+        status: 'ready'
+    },
     {
         slug: 'bibliografias-margarita',
         grupo: 'rm',
         moodle: '5.1',
         title: 'Bibliografías Margarita Maza',
-        description: 'Convierte el Word de fuentes en la página de bibliografía (dos columnas, sangría francesa, sin vistas previas de YouTube) o corrige los enlaces de un HTML ya hecho.',
+        description: 'Convierte el Word de fuentes en la página de bibliografía (dos columnas, sangría francesa, sin vistas previas de YouTube), corrige los enlaces de un HTML ya hecho y revisa que lo montado coincida con el Word.',
         icon: 'books',
         accent: ['#FF0000', '#B20000'],
-        tags: ['Bibliografía', 'Word', 'Enlaces', 'HTML'],
+        tags: ['Bibliografía', 'Word', 'Enlaces', 'HTML', 'QA'],
         url: 'tools/bibliografias-margarita/index.html',
         status: 'ready'
     }

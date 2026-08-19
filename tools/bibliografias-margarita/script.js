@@ -11,8 +11,12 @@
    2. **Corregir HTML pegado** — la lógica original de esta herramienta, intacta:
       a los <a> de YouTube les agrega `class="nomediaplugin"`. NO se cambió a
       span.nolink a propósito: hay páginas ya montadas que dependen de ella.
+   3. **Revisar lo montado** — el QA: coteja el Word contra el HTML que ya está
+      en Moodle. El motor vive en `qa.js`; aquí solo se lee el Word, se pide la
+      revisión y se dibuja el informe.
 
-   Que los dos modos usen marcas distintas es deliberado, no un descuido.
+   Que los dos primeros modos usen marcas distintas es deliberado, no un
+   descuido.
 
    Lo que se lee del Word lo hace `assets/docx.js` —el mismo lector de las otras
    tres herramientas— y las paletas salen de `assets/paletas.js`.
@@ -28,7 +32,7 @@
     // Encabezados que el Word trae al inicio y NO son una fuente.
     const RE_TITULO = /^(bibliograf[ií]a|referencias?|fuentes?( de consulta)?|para saber m[áa]s)\.?$/i;
 
-    const estado = { paleta: 'reg', archivo: '' };
+    const estado = { paleta: 'reg', archivo: '', qa: { fuentes: [], archivo: '', hipervinculos: null, informe: null } };
 
     /* ---------------------------------------------------------------------
        Modo 1: del Word a la página
@@ -197,23 +201,21 @@ ${parrafos}
             /* Con `cursivas: true` para que los títulos conserven su itálica:
                leerParrafosDeDocx() entrega texto plano y las perdía. */
             const bloques = await leerBloquesDeDocx(file, { cursivas: true });
-            const parrafos = bloques
-                .filter(b => b.tipo === 'parrafo' && (b.texto || '').trim())
-                .map(b => b.texto.trim());
-            const lista = parrafos.filter(p => {
-                REGEX_URL.lastIndex = 0;      // el /g guarda estado entre llamadas
-                // El encabezado se compara sin marcas: "*Bibliografía*" también lo es.
-                return !(RE_TITULO.test(p.replace(/\\*/g, '').trim()) && !REGEX_URL.test(p));
-            });
-            if (!lista.length) {
+            /* Quién separa las fuentes de lo que no lo es vive en qa.js, y lo
+               usan los dos modos a propósito: así el guion largo —el que trae
+               por delante la hoja de control con el módulo, los elaboradores y
+               las indicaciones para producción— se lee igual al montar que al
+               revisar. Antes ese formato colaba la marca `<h1>` como una fuente
+               más. */
+            const { fuentes, descartados } = QaBibliografia.fuentesDeBloques(bloques);
+            if (!fuentes.length) {
                 avisoDocx('El documento no tiene párrafos que se puedan usar como fuentes.', false);
                 return;
             }
-            const omitidos = parrafos.length - lista.length;
             estado.archivo = file.name;
-            $('#input-fuentes').value = lista.join('\n');
-            avisoDocx(`${file.name} — ${lista.length} fuente(s)` +
-                (omitidos ? `, ${omitidos} encabezado(s) omitido(s).` : '.') +
+            $('#input-fuentes').value = fuentes.map(f => f.texto).join('\n');
+            avisoDocx(`${file.name} — ${fuentes.length} fuente(s)` +
+                (descartados.length ? `, ${descartados.length} encabezado(s) omitido(s).` : '.') +
                 ' Revísalas abajo antes de copiar el HTML.', true);
             refrescarSalida();
         } catch (e) {
@@ -267,6 +269,223 @@ ${parrafos}
         activarTab('code');
     }
 
+    /* ---------------------------------------------------------------------
+       Modo 3: QA de lo montado
+
+       El cotejo vive en `qa.js` y aquí solo se junta lo que necesita: las
+       fuentes del Word y el HTML de la página. Se pide el HTML pegado —no un
+       marcador que corra dentro de Moodle, como en las otras dos herramientas
+       de QA— porque lo que hay que revisar está en el CÓDIGO: el `target` del
+       enlace, el `span.nolink` y la clase `fuente`. Eso se lee tal cual en el
+       editor de la Página, sin ejecutar nada.
+       --------------------------------------------------------------------- */
+
+    async function cargarDocxQa(file) {
+        if (!/\.docx$/i.test(file.name)) {
+            avisoQa('Ese archivo no es un .docx. Si está en .doc, ábrelo en Word y guárdalo como .docx.', false);
+            return;
+        }
+        try {
+            const bloques = await leerBloquesDeDocx(file, { cursivas: true });
+            const { fuentes, descartados } = QaBibliografia.fuentesDeBloques(bloques);
+            if (!fuentes.length) {
+                avisoQa('El documento no tiene párrafos que se puedan usar como fuentes.', false);
+                return;
+            }
+            estado.qa.fuentes = fuentes;
+            estado.qa.archivo = file.name;
+            // Solo lo trae el guion largo; con el corto se queda en null y ese
+            // cotejo no se hace.
+            estado.qa.hipervinculos = QaBibliografia.hipervinculosDeclarados(bloques);
+            const conSangria = fuentes.filter(f => f.sangriaFrancesa).length;
+            $('#zona-word-qa').classList.add('dropzone--cargada');
+            avisoQa(`${file.name} — ${fuentes.length} fuente(s), ${conSangria} con sangría francesa` +
+                (descartados.length ? `, ${descartados.length} encabezado(s) omitido(s)` : '') +
+                (estado.qa.hipervinculos !== null ? `. El guion declara ${estado.qa.hipervinculos} hipervínculo(s)` : '') + '.', true);
+            revisarSiSePuede();
+        } catch (e) {
+            console.error('[biblio] docx qa:', e);
+            avisoQa('No se pudo leer el .docx: ' + e.message, false);
+        }
+    }
+
+    function avisoQa(texto, ok) {
+        const p = $('#qa-docx-info');
+        p.textContent = texto;
+        p.style.color = ok ? 'var(--success)' : 'var(--danger)';
+    }
+
+    function revisarSiSePuede() {
+        const listo = estado.qa.fuentes.length > 0 && $('#input-montado').value.trim() !== '';
+        $('#btn-revisar').disabled = !listo;
+        // Con el informe ya en pantalla se rehace solo: si acabas de corregir
+        // algo en Moodle, pegas de nuevo y ves el resultado sin volver a pulsar.
+        if (listo && estado.qa.informe) revisar();
+    }
+
+    function revisar() {
+        const informe = QaBibliografia.revisar({
+            fuentes: estado.qa.fuentes,
+            html: $('#input-montado').value,
+            hipervinculos: estado.qa.hipervinculos
+        });
+        estado.qa.informe = informe;
+        pintarInforme(informe);
+        activarTab('qa');
+    }
+
+    /* Diferencia resaltada: se recortan el prefijo y el sufijo comunes y se
+       pinta lo de en medio. Es lo único que hace legible un "casi igual" de 300
+       caracteres, y es el mismo criterio de las otras dos herramientas de QA. */
+    function diferencia(esperado, actual) {
+        const a = String(esperado || ''), b = String(actual || '');
+        let i = 0, fa = a.length, fb = b.length;
+        while (i < fa && i < fb && a[i] === b[i]) i++;
+        while (fa > i && fb > i && a[fa - 1] === b[fb - 1]) { fa--; fb--; }
+        const marca = (s) => s ? `<mark>${escapar(s)}</mark>` : '';
+        return {
+            esperado: escapar(a.slice(0, i)) + marca(a.slice(i, fa)) + escapar(a.slice(fa)),
+            actual: b ? escapar(b.slice(0, i)) + marca(b.slice(i, fb)) + escapar(b.slice(fb))
+                : '<em>no aparece</em>'
+        };
+    }
+
+    /** El informe en pantalla: veredicto, datos del cotejo y los hallazgos. */
+    function pintarInforme(informe) {
+        $('#qa-empty').classList.add('hidden');
+        $('#qa-informe').classList.remove('hidden');
+
+        const sello = informe.errores ? 'error' : (informe.avisos ? 'aviso' : 'ok');
+        const texto = informe.errores ? 'Hay que corregir'
+            : (informe.avisos ? 'Revisar avisos' : 'Todo correcto');
+        const icono = informe.errores ? 'x-circle' : (informe.avisos ? 'warning' : 'check-circle');
+        $('#qa-veredicto').innerHTML =
+            `<span class="qa-sello qa-sello--${sello}"><i class="ph ph-${icono}"></i> ${texto}</span>` +
+            ` <span class="qa-veredicto-detalle">${informe.errores} error(es) · ${informe.avisos} aviso(s)` +
+            `${estado.qa.archivo ? ' · ' + escapar(estado.qa.archivo) : ''}</span>`;
+
+        const r = informe.resumen;
+        const s = r.sangria || {};
+        const datos = [
+            ['file-doc', `<b>${r.fuentesWord}</b> fuentes en el Word`, false],
+            ['browser', `<b>${r.fuentesMoodle}</b> párrafos en Moodle`, r.fuentesWord !== r.fuentesMoodle],
+            ['check', `<b>${r.iguales}</b> idénticas`, false],
+            ['link', `<b>${r.enlaces}</b> enlaces (${r.urlsWord} URL en el Word)`, r.enlaces !== r.urlsWord],
+            ['youtube-logo', `<b>${r.youtube}</b> de YouTube`, false],
+            ['text-indent', `Sangría francesa: Word <b>${s.word || '—'}</b> · Moodle <b>${s.moodleCon}/${s.moodleTotal}</b>`, false]
+        ];
+        if (r.estructura.envoltorio) {
+            datos.push(['palette', `Paleta <b>${escapar(r.estructura.paleta || '—')}</b>`, !r.estructura.paleta]);
+            datos.push(['columns', r.estructura.columnas ? 'Dos columnas' : 'Una columna', false]);
+        }
+        $('#qa-resumen').innerHTML = datos.map(([i, t, mal]) =>
+            `<span class="qa-dato${mal ? ' qa-dato--mal' : ''}"><i class="ph ph-${i}"></i> ${t}</span>`).join('');
+
+        const caja = $('#qa-hallazgos');
+        if (!informe.hallazgos.length) {
+            caja.innerHTML = '<div class="qa-todo-bien"><i class="ph ph-check-circle"></i>' +
+                '<div>La página montada coincide con el Word: no falta ni sobra ninguna fuente, ' +
+                'los enlaces abren en pestaña nueva y la sangría es la del documento.</div></div>';
+            if (window.actualizarPistas) window.actualizarPistas();
+            return;
+        }
+        const orden = { error: 0, aviso: 1 };
+        const lista = informe.hallazgos.slice().sort((a, b) => orden[a.nivel] - orden[b.nivel]);
+        caja.innerHTML = lista.map(h => {
+            // 40 casos del mismo tipo no se leen; se enseñan los primeros y se
+            // dice cuántos quedan. La evidencia imprimible los lleva todos.
+            const visibles = h.items.slice(0, 40);
+            const [etiEsperado, etiActual] = h.etiquetas || ['Word', 'Moodle'];
+            const items = visibles.map(it => {
+                const d = diferencia(it.esperado, it.actual);
+                const filas = [];
+                if (it.esperado) filas.push(`<div class="linea"><b>${escapar(etiEsperado)}:</b> <span>${d.esperado}</span></div>`);
+                if (!h.sinLadoActual) {
+                    filas.push(`<div class="linea"><b>${escapar(etiActual)}:</b> ` +
+                        `<span>${it.actual ? d.actual : '<em>no aparece</em>'}</span></div>`);
+                }
+                return `<li class="qa-item">${filas.join('')}</li>`;
+            }).join('');
+            const resto = h.items.length - visibles.length;
+            return `<div class="qa-bloque qa-bloque--${h.nivel}">
+                <h3><span class="qa-grupo">${escapar(h.grupo)}</span> ${escapar(h.titulo)}
+                    ${h.items.length ? `<span class="qa-cuenta">${h.items.length}</span>` : ''}</h3>
+                <p class="qa-nota">${escapar(h.nota)}</p>
+                ${items ? `<ul class="qa-items">${items}</ul>` : ''}
+                ${resto > 0 ? `<p class="qa-mas">…y ${resto} más. Están todos en la evidencia.</p>` : ''}
+            </div>`;
+        }).join('');
+        // La lista se acaba de rellenar: sin esto el difuminado del borde no
+        // sabe que ya hay contenido de sobra y no se enciende.
+        if (window.actualizarPistas) window.actualizarPistas();
+    }
+
+    /** El informe como texto, para pegarlo en un correo o en un ticket. */
+    function textoDelInforme(informe) {
+        const lineas = [`QA de bibliografía — ${estado.qa.archivo || 'sin archivo'}`,
+            `${informe.errores} error(es) · ${informe.avisos} aviso(s)`,
+            `${informe.resumen.fuentesWord} fuentes en el Word · ${informe.resumen.fuentesMoodle} párrafos en Moodle`,
+            ''];
+        informe.hallazgos.forEach(h => {
+            lineas.push(`[${h.nivel.toUpperCase()}] ${h.grupo} — ${h.titulo}${h.items.length ? ` (${h.items.length})` : ''}`);
+            if (h.nota) lineas.push(`  ${h.nota}`);
+            const [etiEsperado, etiActual] = h.etiquetas || ['Word', 'Moodle'];
+            h.items.forEach(it => {
+                if (it.esperado) lineas.push(`  ${etiEsperado}: ${it.esperado}`);
+                if (!h.sinLadoActual) lineas.push(`  ${etiActual}: ${it.actual || '(no aparece)'}`);
+                lineas.push('');
+            });
+            lineas.push('');
+        });
+        return lineas.join('\n');
+    }
+
+    /* La misma evidencia imprimible de las otras dos herramientas de QA
+       (assets/evidencia-qa.js): el área la archiva como PDF. */
+    function generarEvidencia() {
+        const informe = estado.qa.informe;
+        if (!informe) return;
+        const hallazgos = [];
+        informe.hallazgos.forEach(h => {
+            if (!h.items.length) {
+                hallazgos.push({ nivel: h.nivel, grupo: h.grupo, titulo: h.titulo + ' — ' + h.nota });
+                return;
+            }
+            h.items.forEach(it => {
+                const d = diferencia(it.esperado, it.actual);
+                hallazgos.push({
+                    nivel: h.nivel, grupo: h.grupo, titulo: h.titulo,
+                    esperadoHtml: it.esperado ? d.esperado : '',
+                    actualHtml: it.actual ? d.actual : '<em>no aparece</em>'
+                });
+            });
+        });
+        const r = informe.resumen;
+        window.EVIDENCIA_QA({
+            hallazgos,
+            tipo: 'Bibliografía',
+            titulo: r.estructura.titulo || 'Bibliografía',
+            subtitulo: estado.qa.archivo,
+            clave: (estado.qa.archivo || 'bibliografia').replace(/\.docx$/i, ''),
+            herramienta: 'Bibliografías Margarita Maza',
+            estado: informe.errores ? 'HAY QUE CORREGIR' : (informe.avisos ? 'CON AVISOS' : 'CORRECTO'),
+            color: informe.errores ? '#c62828' : (informe.avisos ? '#ef6c00' : '#2e7d32'),
+            url: 'HTML pegado desde el editor de Moodle',
+            etiquetaEsperado: 'En el Word',
+            ficha: [
+                ['Fuentes en el Word', String(r.fuentesWord)],
+                ['Párrafos en Moodle', String(r.fuentesMoodle)],
+                ['Fuentes idénticas', String(r.iguales)],
+                ['Enlaces montados', `${r.enlaces} (${r.youtube} de YouTube)`],
+                ['Sangría francesa', `Word: ${r.sangria.word || '—'} · Moodle: ${r.sangria.moodleCon} de ${r.sangria.moodleTotal}`],
+                ['Paleta del aula', r.estructura.paleta || '—']
+            ],
+            textoTodoBien: 'La página montada coincide con el Word.',
+            resumen: 'Revisión de la bibliografía montada contra el Word de fuentes.',
+            notaAlcance: 'Se coteja el HTML pegado desde el editor de la Página.'
+        });
+    }
+
     /* ---------------------------------------------------------------- UI */
 
     function activarTab(nombre) {
@@ -284,10 +503,24 @@ ${parrafos}
         });
         document.querySelectorAll('.modo-panel').forEach(p =>
             p.classList.toggle('activo', p.id === `modo-${modo}`));
-        // La previa solo tiene sentido con la página armada desde el Word.
-        $('.tab-btn[data-target="preview"]').classList.toggle('hidden', modo !== 'word');
+        // Cada pestaña declara en qué modos vive (`data-modos` del HTML): la
+        // previa no dice nada del HTML pegado, ni el informe fuera del QA.
+        document.querySelectorAll('.tab-btn').forEach(t => {
+            const modos = (t.dataset.modos || '').split(' ').filter(Boolean);
+            t.classList.toggle('hidden', modos.length > 0 && !modos.includes(modo));
+        });
         if (modo === 'word') { refrescarSalida(); activarTab('preview'); }
+        else if (modo === 'qa') activarTab('qa');
         else activarTab('code');
+    }
+
+    /* El modo con el que se entra. El panel tiene DOS tarjetas para esta
+       herramienta —una en Montaje y otra en Revisión · QA— y la segunda apunta
+       aquí con `?modo=qa`. Sin esto, quien entrara por la de QA caería en la
+       pantalla de montar. */
+    function modoDeLaLiga() {
+        const pedido = new URLSearchParams(location.search).get('modo') || '';
+        return ['word', 'pegar', 'qa'].includes(pedido) ? pedido : '';
     }
 
     function dibujarPaletas() {
@@ -309,26 +542,29 @@ ${parrafos}
         });
     }
 
-    function prepararZona() {
-        const zona = $('#dropzone');
-        const input = $('#input-docx');
+    /* Una sola zona para los dos modos que piden un Word: recibe a quién
+       avisar. Antes estaba escrita contra los id del modo 1. */
+    function prepararZona(idZona, idInput, cargar) {
+        const zona = $(idZona);
+        const input = $(idInput);
         zona.addEventListener('click', () => input.click());
         zona.addEventListener('keydown', e => {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
         });
-        input.addEventListener('change', () => input.files[0] && cargarDocx(input.files[0]));
+        input.addEventListener('change', () => input.files[0] && cargar(input.files[0]));
         ['dragenter', 'dragover'].forEach(ev => zona.addEventListener(ev, e => {
             e.preventDefault(); zona.classList.add('dropzone--active');
         }));
         ['dragleave', 'drop'].forEach(ev => zona.addEventListener(ev, e => {
             e.preventDefault(); zona.classList.remove('dropzone--active');
         }));
-        zona.addEventListener('drop', e => e.dataTransfer.files[0] && cargarDocx(e.dataTransfer.files[0]));
+        zona.addEventListener('drop', e => e.dataTransfer.files[0] && cargar(e.dataTransfer.files[0]));
     }
 
     function init() {
         dibujarPaletas();
-        prepararZona();
+        prepararZona('#dropzone', '#input-docx', cargarDocx);
+        prepararZona('#zona-word-qa', '#input-docx-qa', cargarDocxQa);
 
         document.querySelectorAll('.modo-btn').forEach(b =>
             b.addEventListener('click', () => activarModo(b.dataset.modo)));
@@ -347,6 +583,25 @@ ${parrafos}
         });
         $('#btn-process').addEventListener('click', corregirPegado);
 
+        // Modo QA.
+        $('#input-montado').addEventListener('input', revisarSiSePuede);
+        $('#btn-revisar').addEventListener('click', revisar);
+        $('#btn-evidencia').addEventListener('click', generarEvidencia);
+        $('#btn-copiar-informe').addEventListener('click', () => {
+            if (!estado.qa.informe) return;
+            const i = $('#btn-copiar-informe i');
+            navigator.clipboard.writeText(textoDelInforme(estado.qa.informe)).then(() => {
+                i.className = 'ph ph-check';
+                setTimeout(() => { i.className = 'ph ph-copy'; }, 2000);
+            }).catch(() => {
+                // El portapapeles lo puede negar el navegador (pestaña sin
+                // foco, permiso denegado). Sin este aviso el botón se quedaba
+                // igual y parecía que sí había copiado.
+                i.className = 'ph ph-warning';
+                setTimeout(() => { i.className = 'ph ph-copy'; }, 2000);
+            });
+        });
+
         $('#btn-copy').addEventListener('click', () => {
             const ta = $('#output-code');
             if (!ta.value.trim()) return;
@@ -357,6 +612,9 @@ ${parrafos}
                 setTimeout(() => { i.className = 'ph ph-copy'; i.style.color = ''; }, 2000);
             }).catch(() => { ta.focus(); ta.select(); });
         });
+
+        const inicial = modoDeLaLiga();
+        if (inicial) activarModo(inicial);
 
         const reparto = Reparto.iniciar({
             workspace: '#workspace',

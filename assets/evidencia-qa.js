@@ -137,7 +137,10 @@ window.EVIDENCIA_QA = function (info) {
 
     var ficha = (info.ficha || []).concat([
         ['Fecha de la revisión', fechaLarga(ahora)],
-        ['Dirección revisada', location.href],
+        // `info.url` para quien no revisa dentro de Moodle: el QA de
+        // bibliografías coteja un HTML pegado y ahí `location.href` sería la
+        // dirección de la herramienta, que no dice nada de lo revisado.
+        ['Dirección revisada', info.url || location.href],
         ['Herramienta', 'Panel de Herramientas · ' + (info.herramienta || 'QA')]
     ]);
     h.push('<div class="ficha">');
