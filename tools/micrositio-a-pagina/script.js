@@ -1019,6 +1019,34 @@ function initMicrositio() {
     const btnCopyCss = document.getElementById('btn-copy-css');
     const outputCode = document.getElementById('output-code');
     const outputCss = document.getElementById('output-css');
+    /* --- Ancho de la vista previa: escritorio / tableta / celular ---
+       Mismo patron que Guion Instruccional. El ancho real se escribe en px al
+       lado, que es lo que evita creer que se esta viendo un escritorio cuando
+       la ventana no da para tanto. */
+    function medirPrevia() {
+        const medida = document.getElementById('preview-medida');
+        const marco = document.getElementById('preview-frame');
+        if (!medida || !marco) return;
+        const ancho = Math.round(marco.getBoundingClientRect().width);
+        medida.textContent = ancho ? ancho + ' px' : '';
+    }
+
+    function prepararAnchosPrevia() {
+        const caja = document.getElementById('preview-caja');
+        if (!caja) return;
+        document.querySelectorAll('.ancho-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.ancho-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                caja.dataset.ancho = btn.dataset.ancho;
+                medirPrevia();
+            });
+        });
+        // La medida sigue al tamano de la ventana, no solo al boton.
+        window.addEventListener('resize', medirPrevia);
+        medirPrevia();
+    }
+
     const previewEmpty = document.getElementById('preview-empty');
     const previewFrame = document.getElementById('preview-frame');
     const imgsLista = document.getElementById('imgs-lista');
@@ -1041,6 +1069,7 @@ function initMicrositio() {
         quitarJs: document.getElementById('opt-quitar-js'),
         tabla: document.getElementById('opt-tabla'),
         svgPng: document.getElementById('opt-svg-png'),
+        nombres: document.getElementById('opt-nombres'),
         colorear: document.getElementById('opt-colorear'),
         colorearHeader: document.getElementById('opt-colorear-header'),
         blindar: document.getElementById('opt-blindar'),
@@ -1286,9 +1315,10 @@ function initMicrositio() {
             // nombre de salida pasa a .png (TinyMCE rechaza los SVG al arrastre
             // múltiple; los subimos ya rasterizados).
             const reescribiendo = draftBase || opt.pluginfile.checked;
-            const salida = (reescribiendo && opt.svgPng.checked && extension(ruta) === 'svg')
+            let salida = (reescribiendo && opt.svgPng.checked && extension(ruta) === 'svg')
                 ? base.replace(/\.svg$/i, '.png')
                 : base;
+            if (reescribiendo && opt.nombres && opt.nombres.checked) salida = nombreSeguro(salida);
 
             // Al arrastrarlas al editor todas quedan planas: dos archivos con el
             // mismo nombre en carpetas distintas se pisarían.
@@ -1308,6 +1338,29 @@ function initMicrositio() {
             return opt.pluginfile.checked
                 ? `@@PLUGINFILE@@/${encodeURIComponent(salida)}`
                 : valor;
+        }
+
+        /**
+         * Nombre de archivo que Moodle sí reconoce: sin acentos ni espacios.
+         *
+         * No es manía de limpieza. Los micrositios llegan de Mac y ahí los
+         * acentos se guardan **descompuestos** (NFD): la "ó" son dos caracteres,
+         * la o y una tilde suelta, que al codificar sale como `%CC%81`. Al subir
+         * la imagen, el navegador y Moodle suelen recomponerla a NFC (`%C3%B3`),
+         * así que el nombre del archivo y el que pide el HTML dejan de coincidir
+         * y la imagen no carga. Se ve como "las imágenes no jalan" sin más pista.
+         *
+         * Quitar el acento sirve para las dos formas a la vez, y de paso resuelve
+         * los espacios. El nombre de salida manda: el zip de descarga usa este
+         * mismo, así que archivo y HTML siguen casando.
+         */
+        function nombreSeguro(nombre) {
+            return String(nombre)
+                .normalize('NFD')                 // separa la letra de su tilde
+                .replace(/[\u0300-\u036f]/g, '')  // y se va la tilde
+                .replace(/[^\w.\-]+/g, '_')       // espacios y demás -> _
+                .replace(/_{2,}/g, '_')
+                .replace(/^_+/, '');
         }
 
         // --- Imágenes: src, srcset, <source>, y url() en estilos en línea
@@ -1915,7 +1968,12 @@ function initMicrositio() {
             <body>${copia.body.innerHTML}</body></html>`;
 
         previewEmpty.classList.add('hidden');
+        // Ahora el iframe vive dentro de .preview-caja, que es la que lleva el
+        // ancho del aparato elegido; esconder el iframe suelto no bastaria.
         previewFrame.classList.remove('hidden');
+        const caja = document.getElementById('preview-caja');
+        if (caja) caja.classList.remove('hidden');
+        medirPrevia();
     }
 
     function escapar(s) {
@@ -2215,6 +2273,8 @@ function initMicrositio() {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') modal.classList.add('hidden');
     });
+
+    prepararAnchosPrevia();
 }
 
 // Si el script llega tarde (DOM ya listo) el evento nunca se dispara.

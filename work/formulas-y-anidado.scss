@@ -1,0 +1,102 @@
+/* ============================================================
+   ARREGLOS PARA conjunto_unificado.scss
+
+   Salen del recurso "Proporción y concentración de disoluciones",
+   pero aplican a cualquier página con fórmulas o a cualquier
+   micrositio de varias pantallas.
+
+   >>> Si ya pegaste una versión anterior de este archivo,
+       REEMPLAZA el bloque 1: cambió de forma importante.
+   ============================================================ */
+
+
+/* ------------------------------------------------------------
+   1) FÓRMULAS: salen en línea y desbordan en celular
+
+   Dos fallas distintas, las dos resueltas aquí:
+
+   a) EN LÍNEA. La hoja ya trae, más arriba, estas tres reglas:
+
+        .ms-convertido p:has(+ math) { display: inline !important; }
+        .ms-convertido math          { display: inline-block !important; }
+        .ms-convertido math + p      { display: inline !important; }
+
+      Se pusieron para que un párrafo partido por TinyMCE volviera a fluir,
+      pero fuerzan TODO a línea: el texto de antes, la fórmula y el texto de
+      después salen pegados en el mismo renglón.
+
+      Por eso el `!important` de abajo NO es opcional: sin él, la regla de
+      `.ms-convertido math` gana y la fórmula se queda en `inline-block`.
+      Con él gana esta, que además tiene más especificidad
+      (0,2,1 contra 0,1,1).
+
+      Medido con las tres reglas presentes: sin `!important` la fórmula sale
+      `inline-block` y nada se apila; con `!important` sale `block math` y
+      queda apilado, aunque los `<p>` sigan en `inline`.
+
+   b) DESBORDA. MathML no se encoge ni se parte: si la fórmula mide más que la
+      pantalla, empuja la página entera y sale scroll horizontal en TODO el
+      recurso. Medido a 375px: 329px de scroll sin esto, 0px con esto.
+
+      El desborde no lo causa el `<math>` —ese reporta 327px— sino su `<mrow>`
+      interno, que llegó a 537px; por eso el `overflow` va en el `<math>`, que
+      es quien puede recortarlo.
+
+   El selector engancha por la CLASE `.tml-display` y no solo por el atributo:
+   Moodle **borra** el `display="block"` al guardar, así que el atributo no
+   sobrevive. La clase sí.
+
+   OJO con el valor: tiene que ser `block math`, no `block` a secas. El
+   compilador de Moodle lo respeta —comprobado, la regla llega íntegra al CSS
+   servido—, así que no hace falta interpolarlo.
+   ------------------------------------------------------------ */
+
+.mainPlantilla23 math.tml-display,
+.mainPlantilla23 math[display="block"] {
+    display: block math !important;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    /* Centrada y con aire, como se ve en el micrositio. */
+    margin-left: auto;
+    margin-right: auto;
+    /* Un respiro para que la barra de scroll no tape el denominador. */
+    padding-bottom: 2px;
+}
+
+
+/* ------------------------------------------------------------
+   2) SUBTÍTULOS QUE SE CORREN A LA DERECHA
+
+   Un micrositio de varias pantallas trae un
+   `.container-fluid.mainPlantilla23` POR PANTALLA, y al
+   convertirlo quedan anidados unos dentro de otros. Cada
+   `.container-fluid` suma 12px de padding, así que cada nivel
+   corre el contenido 12px más a la derecha.
+
+   Medido en ese recurso: 26 contenedores —1 al nivel 0, 2 al
+   nivel 1 y 23 al nivel 2—. Los `<h2>` salían a x=24 y x=36;
+   con esta regla, los 8 quedan a x=12.
+
+   Solo se apaga el padding de los ANIDADOS; el de más afuera se
+   queda, que es el que da el margen de la página.
+   ------------------------------------------------------------ */
+
+.mainPlantilla23 .mainPlantilla23 {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+
+/* ------------------------------------------------------------
+   NOTA: lo de las "filas dentro de filas" NO necesita regla.
+
+   Algunas pantallas meten un `.row` dentro de otro `.row`. Da la
+   impresión de que hay que neutralizar el margen negativo del
+   anidado, pero **no**: ese margen es justo lo que cancela el
+   padding de la columna de adentro. Al quitarlo, el párrafo se
+   corre 12px a la DERECHA (medido: pasa de x=12 a x=24).
+
+   Con las dos reglas de arriba y sin tocar las filas, las dos
+   formas de pantalla quedan parejas en x=12.
+   ------------------------------------------------------------ */

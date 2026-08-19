@@ -626,3 +626,75 @@
     min-height: 90px;
     font-size: 12.5px;
 }
+
+/* ==========================================================================
+   Ancho de trabajo y vista previa por dispositivo
+
+   Mismo trato que Guion Instruccional: es una herramienta con vista previa, y
+   con los 1400px del resto la previa se quedaba por debajo de los 576px donde
+   la propia hoja de Moodle convierte las tablas en tarjetas — o sea que
+   "escritorio" mentía justo en lo que la herramienta produce.
+   ========================================================================== */
+.micro-app { max-width: 1760px; }
+
+.preview-barra {
+    display: flex; align-items: center; gap: 12px;
+    padding: 6px 8px; margin-bottom: 10px;
+    border-radius: 12px;
+    background: var(--control-bg);
+    border: 1px solid var(--control-border);
+    flex: none; flex-wrap: wrap;
+}
+.anchos { display: inline-flex; gap: 2px; }
+.ancho-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 0; background: transparent; color: var(--text-muted);
+    font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    padding: 7px 12px; border-radius: 8px; transition: all .18s ease;
+}
+.ancho-btn i { font-size: 17px; }
+.ancho-btn:hover { color: var(--text-main); }
+.ancho-btn.active { background: var(--surface-raised); color: var(--text-main); }
+.preview-nota { font-size: 12px; color: var(--text-muted); }
+.preview-medida {
+    margin-left: auto; flex-shrink: 0;
+    font-size: 11.5px; font-weight: 600; color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* La caja centra el iframe y le da el ancho del aparato. El hueco de los lados
+   es lo que hace leer "así de ancho es el celular" y no "la previa no llenó". */
+.preview-caja {
+    flex: 1; min-height: 0;
+    display: flex; justify-content: center;
+    overflow: auto;
+}
+.preview-caja.hidden { display: none; }
+/* `flex: none` no es opcional: `.preview-frame` trae `flex-grow: 1` de antes y
+   dentro de un contenedor flex el crecimiento manda sobre `width`, así que el
+   iframe se estiraba a todo el panel y los tres botones daban el mismo ancho. */
+.preview-caja iframe {
+    flex: none;
+    width: 100%; height: 100%;
+    border: 1px solid var(--control-border); border-radius: 12px;
+}
+.preview-caja[data-ancho="tableta"] iframe { width: 768px; max-width: 100%; }
+.preview-caja[data-ancho="celular"] iframe { width: 380px; max-width: 100%; }
+/* El hueco de los lados es lo que hace leer "así de ancho es el aparato". */
+.preview-caja[data-ancho="tableta"] iframe,
+.preview-caja[data-ancho="celular"] iframe { box-shadow: 0 8px 28px rgba(0, 0, 0, .16); }
+
+/* El panel de la izquierda es una lista de opciones: no necesita la mitad de la
+   pantalla. La derecha sí, que es donde está la vista previa y el HTML.
+   `shared.css` reparte 1fr 1fr para todas las herramientas y no se toca: se
+   acota aquí, colgando de .micro-app para no pisar a las demás. */
+/* Va DENTRO del mismo media query que usa shared.css para apilar (1024px de
+   ancho / 620px de alto). Suelta, esta regla gana por especificidad incluso
+   dentro de ese media query, y en una ventana angosta el panel derecho se
+   quedaba en 0px: las dos columnas seguían activas y a la izquierda le tocaban
+   sus 360px mínimos. Medido: 360px / 0px. */
+@media (min-width: 1025px) and (min-height: 621px) {
+    .micro-app .workspace {
+        grid-template-columns: clamp(360px, 34%, 520px) minmax(0, 1fr);
+    }
+}

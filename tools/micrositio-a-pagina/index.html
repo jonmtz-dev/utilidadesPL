@@ -34,7 +34,11 @@
         <div class="shape shape-3"></div>
     </div>
 
-    <main class="app-container glass-panel">
+    <!-- micro-app ensancha el contenedor igual que en Guion Instruccional: es una
+         herramienta con vista previa, y con los 1400px del resto la previa quedaba
+         por debajo de los 576px donde la propia hoja de Moodle convierte las tablas
+         en tarjetas, o sea que "escritorio" mentia justo en lo que se produce. -->
+    <main class="app-container glass-panel micro-app">
         <header class="app-header">
             <div class="logo logo--micrositio">
                 <i class="ph ph-package"></i>
@@ -137,6 +141,11 @@
                         <span class="label-text">Convertir <code>SVG</code> a <code>PNG</code> al descargar</span>
                     </label>
                     <label class="toggle-switch">
+                        <input type="checkbox" id="opt-nombres" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">Nombres de imagen sin acentos ni espacios <span class="etiqueta-reco">Moodle no los reconoce</span></span>
+                    </label>
+                    <label class="toggle-switch">
                         <input type="checkbox" id="opt-blindar" checked>
                         <span class="slider"></span>
                         <span class="label-text">Blindar colores contra Moodle <span class="etiqueta-reco">congela el look del micro</span></span>
@@ -168,12 +177,28 @@
                 </div>
 
                 <div class="tab-content active" id="preview-content">
+                    <!-- Los tres anchos, como en Guion Instruccional. El de celular
+                         es el que importa: ahi se ve si las tablas se vuelven
+                         tarjetas y si algo desborda a lo ancho. -->
+                    <div class="preview-barra">
+                        <div class="anchos" role="group" aria-label="Ancho de la vista previa">
+                            <button class="ancho-btn active" type="button" data-ancho="escritorio" title="Escritorio"><i class="ph ph-desktop"></i> <span>Escritorio</span></button>
+                            <button class="ancho-btn" type="button" data-ancho="tableta" title="Tableta"><i class="ph ph-device-tablet"></i> <span>Tableta</span></button>
+                            <button class="ancho-btn" type="button" data-ancho="celular" title="Celular"><i class="ph ph-device-mobile"></i> <span>Celular</span></button>
+                        </div>
+                        <span class="preview-nota">Asi se ve en Moodle</span>
+                        <!-- El ancho real en px: es la diferencia entre creer que se
+                             esta viendo un escritorio y verlo. -->
+                        <span class="preview-medida" id="preview-medida"></span>
+                    </div>
                     <div class="empty-state" id="preview-empty">
                         <i class="ph ph-package"></i>
                         <p>Suelta un micrositio para ver la vista previa</p>
                     </div>
-                    <iframe id="preview-frame" class="preview-frame hidden"
-                            sandbox="allow-same-origin" title="Vista previa del micrositio"></iframe>
+                    <div id="preview-caja" class="preview-caja hidden">
+                        <iframe id="preview-frame" class="preview-frame"
+                                sandbox="allow-same-origin" title="Vista previa del micrositio"></iframe>
+                    </div>
                 </div>
 
                 <div class="tab-content" id="code-content">

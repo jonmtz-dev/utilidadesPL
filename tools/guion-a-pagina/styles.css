@@ -1,3 +1,22 @@
+
+/* ==========================================================================
+   Tokens propios de esta herramienta
+
+   Van definidos en los DOS temas. Antes estos colores viajaban como respaldo
+   dentro de un var() con nombre inventado: en oscuro se veía bien de casualidad
+   y en claro el panel salía negro sobre fondo blanco, con las etiquetas
+   invisibles. Un respaldo hardcodeado es un color hardcodeado.
+   ========================================================================== */
+:root {
+    --chip-ventana-bg: rgba(255, 209, 64, .22);
+    --chip-ventana-borde: rgba(204, 156, 35, .45);
+    --chip-ventana-texto: #7a5c0a;
+}
+:root[data-theme="dark"] {
+    --chip-ventana-bg: rgba(255, 209, 64, .16);
+    --chip-ventana-borde: rgba(255, 209, 64, .32);
+    --chip-ventana-texto: #e0b95c;
+}
 /* ==========================================================================
    Guion Instruccional a Página — estilos propios.
    Los componentes compartidos (.glass-panel, .toggle-switch, .btn-*, .tabs…)
@@ -554,10 +573,10 @@
 /* Bloque de tipo desconocido: se dibuja para poder quitarlo, no para editarlo.
    Antes reventaba el lienzo entero y no había manera de llegar a su papelera. */
 .bloque-card--roto {
-    border-color: var(--peligro, #c0392b);
+    border-color: var(--danger);
     opacity: .85;
 }
-.bloque-card--roto .bloque-chip { color: var(--peligro, #c0392b); }
+.bloque-card--roto .bloque-chip { color: var(--danger); }
 
 /* ==========================================================================
    REDISEÑO: índice compacto + ficha lateral
@@ -570,13 +589,13 @@
 
 /* --- El renglón del índice --- */
 .bloque-card > .bloque-cabeza { cursor: pointer; }
-.bloque-card > .bloque-cabeza:hover { background: var(--hover, rgba(127, 127, 127, .08)); }
+.bloque-card > .bloque-cabeza:hover { background: var(--control-bg)); }
 
 /* Los hijos, indentados: es lo que enseña qué cuelga de qué. */
 .bloque-hijos {
     margin: 0 0 .35rem 1.1rem;
     padding-left: .7rem;
-    border-left: 2px solid var(--borde, rgba(127, 127, 127, .28));
+    border-left: 2px solid var(--control-border));
     display: flex;
     flex-direction: column;
     gap: .3rem;
@@ -607,7 +626,7 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    background: var(--panel, #1b1b22);
+    background: var(--surface-raised);
     border-radius: 12px;
 }
 .panel-bloque.hidden { display: none; }
@@ -616,7 +635,7 @@
     align-items: center;
     gap: .5rem;
     padding: .5rem .6rem;
-    border-bottom: 1px solid var(--borde, rgba(127, 127, 127, .28));
+    border-bottom: 1px solid var(--control-border));
     flex: none;
 }
 .panel-bloque-chip { display: inline-flex; opacity: .8; flex: none; }
@@ -649,11 +668,11 @@
 
 /* --- Arrastrar desde la paleta --- */
 .pieza--arrastrando { opacity: .45; }
-.lienzo--recibiendo { outline: 2px dashed var(--acento, #7aa2f7); outline-offset: -4px; border-radius: 10px; }
+.lienzo--recibiendo { outline: 2px dashed var(--accent); outline-offset: -4px; border-radius: 10px; }
 .raya-soltar {
     height: 3px;
     border-radius: 3px;
-    background: var(--acento, #7aa2f7);
+    background: var(--accent);
     margin: .15rem 0;
     flex: none;
 }
@@ -668,14 +687,14 @@
    la palabra de amarillo, así que se enseñan aparte—.
    ========================================================================== */
 
-.mini-btn--ventana { color: var(--resalte-fuerte, #b8860b); }
+.mini-btn--ventana { color: var(--chip-ventana-texto); }
 
 .ventana-form {
     margin-top: 8px;
     padding: 12px;
     border-radius: 10px;
-    border: 1px solid var(--borde, rgba(127, 127, 127, .3));
-    background: var(--panel-2, rgba(127, 127, 127, .08));
+    border: 1px solid var(--control-border));
+    background: var(--control-bg));
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -683,7 +702,7 @@
 .ventana-form-titulo { margin: 0 0 4px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; }
 .ventana-form .campo-etiqueta { margin: 6px 0 2px; font-size: 12px; }
 .ventana-form textarea.plain-input { resize: vertical; min-height: 60px; font-family: inherit; }
-.ventana-form-error { margin: 6px 0 0; font-size: 12.5px; color: var(--peligro, #c0392b); }
+.ventana-form-error { margin: 6px 0 0; font-size: 12.5px; color: var(--danger); }
 .ventana-form-error.hidden { display: none; }
 .ventana-form-pie { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 /* shared.css le da width:100% a .btn-primary; aquí son dos botones en fila. */
@@ -696,8 +715,8 @@
     display: inline-flex; align-items: center; gap: 4px;
     padding: 2px 8px; border-radius: 999px;
     font-size: 12px; cursor: help;
-    background: var(--resalte-suave, rgba(255, 209, 64, .22));
-    border: 1px solid var(--resalte-borde, rgba(255, 209, 64, .5));
+    background: var(--chip-ventana-bg));
+    border: 1px solid var(--chip-ventana-borde));
 }
 
 /* Qué hay dentro de una columna / apartado / ventana, visto desde el panel.
@@ -709,10 +728,10 @@
     padding: 4px 9px; border-radius: 999px; cursor: pointer;
     font-size: 12.5px; font-family: inherit;
     color: inherit;
-    background: var(--panel-2, rgba(127, 127, 127, .12));
-    border: 1px solid var(--borde, rgba(127, 127, 127, .28));
+    background: var(--control-bg));
+    border: 1px solid var(--control-border));
 }
-.hijo-chip:hover { border-color: var(--acento, #7aa2f7); }
+.hijo-chip:hover { border-color: var(--accent); }
 
 /* Traer HTML de Moodle: el área de código dejó de ser de solo lectura. */
 .code-traer { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
@@ -769,4 +788,4 @@
    El Resaltado sin palabras que abran ventana no se nota por ningún lado, y
    ahí parado se leía como un control que no sirve para nada. */
 .field-hint--activo { color: var(--accent); }
-.field-hint--alerta { color: var(--peligro, #c0392b); }
+.field-hint--alerta { color: var(--danger); }

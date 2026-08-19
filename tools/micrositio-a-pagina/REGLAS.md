@@ -541,3 +541,78 @@ un `<p>` hermano adyacente.
 | Imagen con `max-width: 800px` clavada a 500px | Misma historia que las figuras de tarjeta, pero la guarda del arreglo anterior era demasiado burda: metía en el mismo saco **cualquier** `max-width` inline, sin mirar su valor. `max-width: 800px` (un tope a algo que crece) se trataba igual que `max-width: none` (el autor apagando el tope). Y al arreglarlo apareció la segunda mitad: un tope en px no basta, porque el PNG sí tiene ancho propio y desbordaba los contenedores angostos (500px en uno de 400px) | Se lee el **valor**, no la presencia: `none` sale por el camino de siempre, un tope real es evidencia de fluidez. Y el tope absoluto se reescribe como `min(800px, 100%)`, reponiendo el tope de contenedor que el SVG tenía gratis. Ver §4-ter |
 | Filas de colores que salen blancas y grises | La tabla de "Metas SMART": cada fila es una `.card.bg-resalte-10` (crema) y en Moodle salía blanca. **El color sí llegaba** —`bg-resalte-10` está idéntica en las dos hojas—: se lo tapaban las dos columnas de dentro, `.bg-light-subtle` y `.bg-body-tertiary`, que **no existen en el Bootstrap 5.2.3 del micrositio** (ahí computan `rgba(0,0,0,0)` y dejan ver la tarjeta) pero **sí en el 5.3 de Moodle**, donde despiertan y pintan encima | `RE_BG_BS53`: lista cerrada de clases 5.3-only que se apagan inline con `background-color: transparent !important`, y solo si su fondo propio es transparente en el render. Ver §4-quater |
 | Scroll horizontal en pantallas medianas | `.mainPlantilla23 .table td { min-width: 200px }` (está en el CSS del micro **y** en la hoja de Moodle): 5 columnas × 200px = **1000px de ancho mínimo**, así que la tabla no podía encogerse y sacaba barra de desplazamiento entre los 576px de las tarjetas y el escritorio | `max-width: 100%` inline en la tabla **+** una regla `@media` en el complemento del tema que pone `min-width: 0` en las celdas (ver §6-ter). Al encoger la tabla, el título cuadra solo |
+
+## La vista previa tiene tres anchos
+
+Escritorio, tableta y celular, con el ancho real en px al lado — igual que en
+Guion Instruccional. Y el contenedor llega a **1760px** (`.micro-app`), no a los
+1400 del resto: con el reparto anterior la previa se quedaba por debajo de los
+576px donde la propia hoja de Moodle convierte las tablas en tarjetas, así que
+"escritorio" mentía justo en lo que la herramienta produce.
+
+> ⚠️ El iframe necesita **`flex: none`** dentro de `.preview-caja`.
+> `.preview-frame` trae `flex-grow: 1` de antes, y en un contenedor flex el
+> crecimiento manda sobre `width`: sin eso el iframe se estira a todo el panel y
+> los tres botones dan exactamente el mismo ancho. Se ve como si los botones no
+> hicieran nada.
+
+## Dos arreglos que van en la hoja de Moodle, no aquí
+
+Salieron del recurso *"Proporción y concentración de disoluciones"*. El bloque
+listo para pegar está en `work/formulas-y-anidado.scss`.
+
+### Las fórmulas desbordan en celular
+
+Se publican como MathML (`<math display="block">`, que genera Temml desde
+LaTeX). MathML **no se encoge ni se parte**: si la fórmula mide más que la
+pantalla, empuja la página entera y sale scroll horizontal en TODO el recurso.
+
+Medido a 375px: **329px de scroll horizontal** sin el arreglo, **0px** con él.
+El desborde no lo causa el `<math>` —ese ya reporta 327px— sino su `<mrow>`
+interno, que llegó a 537px; por eso el `overflow` va en el `<math>`, que es
+quien puede recortar a su contenido.
+
+### Los subtítulos se corren a la derecha
+
+Un micrositio de varias pantallas trae un `.container-fluid.mainPlantilla23`
+**por pantalla**, y al convertir quedan anidados. Cada uno suma 12px de padding,
+así que cada nivel corre el contenido 12px más.
+
+En ese recurso: **26 contenedores** —1 al nivel 0, 2 al nivel 1 y 23 al nivel 2—.
+Los `<h2>` salían a x=24 y x=36; con la regla, los 8 quedan a x=12.
+
+> La otra salida sería desanidarlos al convertir. Se prefirió la regla CSS
+> porque arregla también **lo ya publicado**, que es donde está el problema hoy.
+
+## Nombres de imagen: el acento descompuesto
+
+Los micrositios llegan de Mac —el zip trae carpetas `__MACOSX`— y ahí los
+acentos se guardan **descompuestos** (NFD): la `ó` no es un carácter, son dos —la
+`o` y una tilde suelta (U+0301)—. Al codificar la ruta, eso sale como
+`concentracio%CC%81n`.
+
+Al subir la imagen a Moodle, el navegador y Moodle suelen **recomponerla a NFC**
+(`%C3%B3`), así que el nombre del archivo deja de coincidir con el que pide el
+HTML y la imagen no carga. Se ve como *"las imágenes no jalan"*, sin más pista.
+
+La opción **Nombres de imagen sin acentos ni espacios** (encendida por omisión)
+lo resuelve con `nombreSeguro()`: descompone, quita las tildes y cambia espacios
+y símbolos por `_`. Sirve para las dos formas a la vez —NFC y NFD dan el mismo
+resultado, que es lo que hace que deje de importar cuál llegó—.
+
+> Funciona porque **el nombre de salida manda**: el zip de *Descargar imágenes*
+> usa el mismo `info.salida` que se escribió en el HTML, así que archivo y
+> referencia siguen casando. Si alguna vez se separan esos dos caminos, esto se
+> rompe en silencio.
+
+## El reparto de la pantalla
+
+El panel izquierdo es una lista de opciones y no necesita la mitad de la
+pantalla; el derecho sí, que es donde están la vista previa y el HTML. Queda en
+`clamp(360px, 34%, 520px)` contra `1fr` — medido, la derecha pasa de 50% a 65%.
+
+> ⚠️ La regla va **dentro** del mismo media query con que `shared.css` apila
+> (1024px de ancho / 620px de alto). Suelta, gana por especificidad incluso
+> dentro de ese media query, y en una ventana angosta las dos columnas seguían
+> activas: a la izquierda le tocaban sus 360px mínimos y **la derecha se quedaba
+> en 0px**. Medido: 360px / 0px.
