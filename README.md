@@ -720,6 +720,7 @@ de forma distinta. Las dos formas de hacerlo, con los casos que las motivaron:
 | Guion a Página necesitaba las tablas anidadas de una celda, en orden | Cambiar `lineas`/`texto` para que dejaran de aplanar | **Campo nuevo** `contenido`, con los párrafos y las tablas en el orden real. `lineas` y `texto` intactos |
 | Necesitaba los saltos de línea manuales (`w:br`) como `\n` | Devolverlos siempre | **Opción** `textoDeParrafoConNegritas(p, { saltos: true })`, apagada por omisión |
 | El QA de bibliografías necesitaba saber si el párrafo trae **sangría francesa** | Reinterpretar `sangria`, que ya leen tres herramientas como "cuánto se corre el párrafo" | **Campos nuevos** `sangriaColgante` (twips) y `sangriaFrancesa` (booleano), de `w:hanging` o de un `w:firstLine` negativo. `sangria` intacto |
+| El Integrador HTML necesitaba las **fórmulas** del Word, que se estaban perdiendo enteras | Devolver siempre el `$$…$$` dentro del texto | **Opción** `leerBloquesDeDocx(file, { latex: true })`, apagada por omisión: en el editor de rúbricas de Moodle esos signos se publicarían literales |
 
 El segundo caso enseña por qué: el Integrador HTML parte sus listas por renglón,
 así que un salto dentro de un elemento se habría convertido en **dos** elementos.
@@ -772,6 +773,22 @@ Cosas que ya costaron un rato; no las vuelvas a pisar.
   **publicada** como pie de la imagen. Antes de reutilizar un nombre de campo,
   revisa que ningún componente ya lo tenga como campo propio (ahora se llama
   `indicacion`).
+
+- **Dentro de una plantilla de texto, un acento grave la cierra — hasta en un
+  comentario.** Los verificadores de QA se arman como plantilla (`` return `…` ``)
+  y ahí un `// la `firma` es…` parte el archivo en dos: el navegador reporta un
+  `SyntaxError` en una línea que se ve perfecta y la herramienta entera queda sin
+  arrancar. Lo mismo vale para las barras invertidas: cada `\` del código
+  generado va **doble** en el fuente, así que un `/\s+/g` del verificador se
+  escribe `/\\s+/g`, y un `/\\[a-zA-Z]+/g` —el que busca una barra literal— se
+  escribe con cuatro. Al tocar un `scriptQA`, mira el código YA generado (la caja
+  de la pestaña QA), no solo el fuente.
+
+- **El Service Worker sirve la versión vieja mientras pruebas.** Si guardaste un
+  archivo con un error, esa copia rota se queda en la caché y sigue apareciendo
+  aunque ya lo hayas arreglado. Al depurar en local: quitar el registro
+  (`navigator.serviceWorker.getRegistrations()`) y vaciar `caches` antes de
+  recargar, o probar en una ventana de incógnito.
 
 - **Redibujar la vista previa por un clic la deja muerta.** En Guion a Página, el
   clic en la previa (para sincronizar con el lienzo) llamaba a `dibujarTodo()`,

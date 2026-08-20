@@ -24,6 +24,10 @@
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+// Las ecuaciones del editor de Word (OMML) viven en su propio espacio de
+// nombres, con sus propios runs (`m:r` con `m:t`). Por eso NO las veía nadie:
+// todo el lector busca `w:r`, y una fórmula no tiene ni uno solo.
+const M_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
 
 // No todos los DOM resuelven igual el selector con namespaces usado por
 // `closest('*|tbl')`. Recorrer los padres separa de forma estable las tablas
@@ -258,6 +262,185 @@ async function leerTablasDeDocx(file) {
     });
 }
 
+/* ==========================================================================
+   Fórmulas: OMML → LaTeX
+
+   Los guiones traen las ecuaciones como objetos del editor de Word (OMML) y,
+   al lado, un comentario de revisión "Código para producción: <latex>" con el
+   código que el área de producción escribió a mano. Hasta ahora el lector
+   perdía las dos cosas: el texto de una fórmula vive en `m:t` (espacio de
+   nombres de matemáticas) y ningún recorrido lo miraba, así que "el límite
+   cuando m→0, m→3 y m→6" llegaba a Moodle como "el límite cuando , y .".
+
+   Manda SIEMPRE el comentario: es el código autorizado. La conversión de aquí
+   es el respaldo para las fórmulas sin comentario —las variables sueltas en
+   medio de la prosa ("después de m minutos"), que nadie comenta y que se
+   estaban borrando— y por eso la herramienta avisa cuántas convirtió sola.
+   ========================================================================== */
+
+/* Word guarda el símbolo, no su comando. En LaTeX un "→" suelto no compila.
+   Solo están los que aparecen en guiones de cálculo y estadística; agregar
+   uno nuevo es una línea. */
+const SIMBOLOS_LATEX = {
+    '→': '\\rightarrow ', '←': '\\leftarrow ', '↔': '\\leftrightarrow ',
+    '⇒': '\\Rightarrow ', '⇐': '\\Leftarrow ', '⇔': '\\Leftrightarrow ',
+    '∞': '\\infty ', '≤': '\\leq ', '≥': '\\geq ', '≠': '\\neq ',
+    '≈': '\\approx ', '≡': '\\equiv ', '±': '\\pm ', '∓': '\\mp ',
+    '×': '\\times ', '÷': '\\div ', '·': '\\cdot ', '∙': '\\cdot ',
+    '∑': '\\sum ', '∏': '\\prod ', '∫': '\\int ', '∂': '\\partial ',
+    '∈': '\\in ', '∉': '\\notin ', '⊂': '\\subset ', '⊆': '\\subseteq ',
+    '∪': '\\cup ', '∩': '\\cap ', '∅': '\\emptyset ',
+    '∀': '\\forall ', '∃': '\\exists ', '…': '\\dots ', '°': '^{\\circ}',
+    'α': '\\alpha ', 'β': '\\beta ', 'γ': '\\gamma ', 'δ': '\\delta ',
+    'ε': '\\varepsilon ', 'θ': '\\theta ', 'λ': '\\lambda ', 'μ': '\\mu ',
+    'π': '\\pi ', 'ρ': '\\rho ', 'σ': '\\sigma ', 'τ': '\\tau ',
+    'φ': '\\phi ', 'ω': '\\omega ',
+    'Δ': '\\Delta ', 'Ω': '\\Omega ', 'Σ': '\\Sigma ', 'Π': '\\Pi '
+};
+
+function textoMatematicoALatex(texto) {
+    let salida = '';
+    for (const c of String(texto || '')) salida += (SIMBOLOS_LATEX[c] || c);
+    /* "1 440" es el separador de millares que teclea el elaborador. En LaTeX el
+       espacio normal se colapsa y saldría "1440"; `\,` es el espacio fino que
+       usan los códigos de producción escritos a mano ("1\,000m"). */
+    return salida.replace(/(\d)[\s ](?=\d)/g, '$1\\,');
+}
+
+/** Símbolo del operador grande de un `m:nary` (∑, ∏, ∫…) a su comando. */
+const NARY_LATEX = { '∑': '\\sum', '∏': '\\prod', '∫': '\\int', '∬': '\\iint', '∮': '\\oint', '⋃': '\\bigcup', '⋂': '\\bigcap' };
+
+/**
+ * Convierte un nodo OMML a LaTeX. Cubre lo que aparece en los guiones:
+ * fracciones, potencias, subíndices, raíces, paréntesis, sumatorias y
+ * límites. Lo que no reconoce se aplana concatenando sus hijos, que es peor
+ * que exacto pero mucho mejor que perder el texto.
+ */
+function omathALatex(nodo) {
+    if (!nodo || nodo.nodeType !== 1) return '';
+    // Un nodo de otro espacio de nombres dentro de la fórmula solo trae formato
+    // (`w:rPr`, `w:sz`): no aporta texto.
+    if (nodo.namespaceURI !== M_NS) return '';
+
+    const local = nodo.localName;
+    // Todo lo que termina en "Pr" son propiedades (m:fPr, m:ctrlPr, m:rPr…).
+    if (/Pr$/.test(local)) return '';
+    if (local === 't') return textoMatematicoALatex(nodo.textContent);
+
+    const hijos = [...nodo.childNodes].filter(n => n.nodeType === 1);
+    const unir = (lista) => lista.map(omathALatex).join('');
+    const parte = (nombre) => {
+        const n = hijos.find(x => x.namespaceURI === M_NS && x.localName === nombre);
+        return n ? unir([...n.childNodes].filter(c => c.nodeType === 1)) : '';
+    };
+    const atributo = (contenedor, nombre) => {
+        const pr = hijos.find(x => x.namespaceURI === M_NS && x.localName === contenedor);
+        const n = pr && [...pr.childNodes].find(c => c.nodeType === 1 && c.localName === nombre);
+        return n ? (n.getAttributeNS(M_NS, 'val') || '') : '';
+    };
+
+    if (local === 'f') return `\\frac{${parte('num')}}{${parte('den')}}`;
+    if (local === 'sSup') return `{${parte('e')}}^{${parte('sup')}}`;
+    if (local === 'sSub') return `{${parte('e')}}_{${parte('sub')}}`;
+    if (local === 'sSubSup') return `{${parte('e')}}_{${parte('sub')}}^{${parte('sup')}}`;
+    if (local === 'sPre') return `{}_{${parte('sub')}}^{${parte('sup')}}{${parte('e')}}`;
+    if (local === 'rad') {
+        const grado = parte('deg');
+        return grado ? `\\sqrt[${grado}]{${parte('e')}}` : `\\sqrt{${parte('e')}}`;
+    }
+    if (local === 'd') {
+        const abre = atributo('dPr', 'begChr') || '(';
+        const cierra = atributo('dPr', 'endChr') || ')';
+        const separa = atributo('dPr', 'sepChr') || ',';
+        const partes = hijos.filter(x => x.localName === 'e').map(e => unir([...e.childNodes].filter(c => c.nodeType === 1)));
+        // Las llaves son comando en LaTeX; el resto del par va tal cual.
+        const par = (c) => (c === '{' || c === '}' ? `\\${c}` : c);
+        return `\\left${par(abre)}${partes.join(separa)}\\right${par(cierra)}`;
+    }
+    if (local === 'nary') {
+        const chr = atributo('naryPr', 'chr') || '∑';
+        const sub = parte('sub'), sup = parte('sup');
+        return `${NARY_LATEX[chr] || textoMatematicoALatex(chr)}${sub ? `_{${sub}}` : ''}${sup ? `^{${sup}}` : ''}{${parte('e')}}`;
+    }
+    if (local === 'limLow' || local === 'limUpp') {
+        const base = parte('e').trim();
+        const limite = parte('lim');
+        // "lim" es una función, no tres letras multiplicadas: sin \lim saldría
+        // en cursiva y con el subíndice mal colocado.
+        const raiz = /^(lim|max|min|sup|inf)$/i.test(base) ? `\\${base.toLowerCase()}` : `{${base}}`;
+        return `${raiz}${local === 'limLow' ? '_' : '^'}{${limite}}`;
+    }
+    if (local === 'bar') return `\\overline{${parte('e')}}`;
+    if (local === 'acc') return `\\hat{${parte('e')}}`;
+
+    return unir(hijos);
+}
+
+/* La marca con que producción escribe el código de una fórmula en un
+   comentario del Word. Se comparte para que el Integrador pueda apartar esos
+   comentarios de las indicaciones de montaje: ya son contenido, no un recado. */
+const MARCA_LATEX_COMENTARIO = /^\s*c[oó]digo\s+para\s+producci[oó]n\s*:?\s*/i;
+
+/** ¿El comentario del Word es un código de fórmula y no una indicación? */
+function esComentarioDeLatex(texto) { return MARCA_LATEX_COMENTARIO.test(String(texto || '')); }
+
+/**
+ * Map<idDeComentario, latex> con los códigos de producción del Word.
+ * El id es el `w:id` del comentario, el mismo con que `w:commentRangeStart`
+ * señala la fórmula dentro del párrafo: así se sabe QUÉ ecuación describe cada
+ * comentario sin adivinar por el texto (el ancla de una fórmula sale vacía).
+ */
+async function leerLatexDeComentariosDocx(file) {
+    const mapa = new Map();
+    for (const c of await leerComentariosDeDocx(file)) {
+        if (!esComentarioDeLatex(c.texto)) continue;
+        const latex = c.texto.replace(MARCA_LATEX_COMENTARIO, '').trim();
+        if (latex) mapa.set(c.id, latex);
+    }
+    return mapa;
+}
+
+/**
+ * Las piezas de texto de un párrafo, en orden: `{ run }` para un `w:r` normal
+ * y `{ math, comentarios }` para una ecuación.
+ *
+ * Sin fórmulas se conserva EXACTAMENTE lo de siempre —todos los `w:r`
+ * descendientes— porque tres herramientas dependen de ese recorrido. Con
+ * fórmulas hay que bajar por el árbol en orden: un `getElementsByTagName` no
+ * dice si la ecuación va antes o después del texto que la rodea, y "cuando
+ * m→0, m→3 y m→6" depende justo de eso.
+ *
+ * `comentarios` son los ids abiertos (`w:commentRangeStart`) sobre la fórmula:
+ * ahí es donde el Word guarda el "Código para producción". Se rastrean dentro
+ * del párrafo, que es donde producción los ancla; un rango abierto en un
+ * párrafo anterior no se sigue, y entonces la fórmula cae en la conversión
+ * automática, que es el respaldo correcto.
+ */
+function unidadesDeParrafo(p, conLatex) {
+    if (!conLatex) return [...p.getElementsByTagNameNS(W_NS, 'r')].map(run => ({ run }));
+    const salida = [];
+    const abiertos = new Set();
+    const recorrer = (nodo) => {
+        for (const n of [...nodo.childNodes]) {
+            if (n.nodeType !== 1) continue;
+            if (n.namespaceURI === M_NS && n.localName === 'oMath') {
+                salida.push({ math: n, comentarios: [...abiertos] });
+                continue;
+            }
+            if (n.namespaceURI === W_NS) {
+                if (n.localName === 'r') { salida.push({ run: n }); continue; }
+                if (n.localName === 'commentRangeStart') { abiertos.add(n.getAttributeNS(W_NS, 'id')); continue; }
+                if (n.localName === 'commentRangeEnd') { abiertos.delete(n.getAttributeNS(W_NS, 'id')); continue; }
+                // Las propiedades del párrafo no traen texto y sí traen `w:rPr`.
+                if (n.localName === 'pPr') continue;
+            }
+            recorrer(n);
+        }
+    };
+    recorrer(p);
+    return salida;
+}
+
 /**
  * Texto de un párrafo conservando las negritas como marcas `**texto**` y, si se
  * piden, las cursivas como `*texto*` (una sola estrella, como en markdown).
@@ -283,8 +466,30 @@ function textoDeParrafoConNegritas(p, opciones) {
        guardar el archivo como "Apellidos_Nombre_SM02S1AA1", y con guiones bajos
        ese nombre se leería como una cursiva que nadie escribió. */
     const cursivas = Boolean(opciones && opciones.cursivas);
+    /* Las fórmulas también van APAGADAS por omisión, como los saltos y las
+       cursivas: quien no las pidió no espera ver `$$…$$` dentro de su texto, y
+       en el editor de rúbricas de Moodle esos signos se publicarían literales.
+       Lo pide quien genera HTML para una página (el Integrador 3.11). */
+    const conLatex = Boolean(opciones && opciones.latex);
+    const latexPorComentario = (opciones && opciones.latexPorComentario) || null;
     const segmentos = [];
-    for (const r of [...p.getElementsByTagNameNS(W_NS, 'r')]) {
+    for (const unidad of unidadesDeParrafo(p, conLatex)) {
+        if (unidad.math) {
+            /* El comentario manda: es el código que autorizó producción. La
+               conversión automática es el respaldo (`auto` deja que la
+               herramienta avise cuáles conviene revisar). */
+            let latex = '', auto = false;
+            for (const id of unidad.comentarios) {
+                const codigo = latexPorComentario && latexPorComentario.get(id);
+                if (codigo) { latex = codigo; break; }
+            }
+            if (!latex) { latex = omathALatex(unidad.math).trim(); auto = true; }
+            // Un `$$…$$` NUNCA se fusiona con el texto de al lado: si entrara al
+            // segmento vecino, las marcas `**` podrían acabar dentro del código.
+            if (latex) segmentos.push({ texto: `$$${latex}$$`, negrita: false, cursiva: false, math: true, auto });
+            continue;
+        }
+        const r = unidad.run;
         const texto = saltos
             ? [...r.childNodes]
                 .filter(n => n.nodeType === 1 && (n.localName === 't' || n.localName === 'br'))
@@ -301,7 +506,7 @@ function textoDeParrafoConNegritas(p, opciones) {
         const negrita = encendido(rPr && rPr.getElementsByTagNameNS(W_NS, 'b')[0]);
         const cursiva = cursivas && encendido(rPr && rPr.getElementsByTagNameNS(W_NS, 'i')[0]);
         const previo = segmentos[segmentos.length - 1];
-        if (previo && previo.negrita === negrita && previo.cursiva === cursiva) previo.texto += texto;
+        if (previo && !previo.math && previo.negrita === negrita && previo.cursiva === cursiva) previo.texto += texto;
         else segmentos.push({ texto, negrita, cursiva });
     }
     return segmentos.map(s => {
@@ -327,10 +532,16 @@ async function leerBloquesDeDocx(file, opciones) {
     const body = doc.getElementsByTagNameNS(W_NS, 'body')[0] || doc.documentElement;
     const formatosLista = await leerFormatosListaDocx(file);
     const sangriasDeEstilo = await leerSangriasDeEstilosDocx(file);
+    /* Con `opciones.latex` los códigos de producción del Word entran como un
+       campo más de las opciones del párrafo. Se leen aquí y no adentro porque
+       viven en otra parte del ZIP (word/comments.xml) y esto sí es async. */
+    const opcionesTexto = opciones && opciones.latex
+        ? Object.assign({}, opciones, { latexPorComentario: await leerLatexDeComentariosDocx(file) })
+        : opciones;
 
     const bloqueDesdeNodo = n => {
         if (n.localName === 'p') {
-            const texto = textoDeParrafoConNegritas(n, opciones)
+            const texto = textoDeParrafoConNegritas(n, opcionesTexto)
                 .replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').trim();
             const numPr = n.getElementsByTagNameNS(W_NS, 'numPr')[0];
             const ilvl = numPr && numPr.getElementsByTagNameNS(W_NS, 'ilvl')[0];

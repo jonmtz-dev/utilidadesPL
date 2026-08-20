@@ -49,6 +49,8 @@ herramienta expone `leerBloquesDeDocx()` en el mismo orden del documento.
   para no reiniciar en 1.
 - Las marcas de guía `<h2>` y `<Lista numerada; ...>` se descartan: son
   instrucciones de Word, no contenido publicable.
+- Las **fórmulas** entran como `$$…$$`, que es como Moodle 3.11 espera el TeX.
+  Ver más abajo.
 - Las **tablas reales de contenido** (más de una celda) se importan como
   bloques Tabla respetando lo que trae el Word: celdas combinadas
   (`gridSpan` → colspan), el color de sombreado del encabezado, una primera
@@ -66,6 +68,41 @@ se convierte a tabla HTML: queda como imagen (o se transcribe a mano en un
 bloque Tabla). El OCR experimental se retiró porque el navegador de escritorio
 no garantiza OCR nativo y el proyecto no incorpora dependencias ni servicios
 externos.
+
+## Fórmulas
+
+Antes se perdían **enteras**, sin avisar: el texto de una ecuación de Word vive
+en `m:t` (el espacio de nombres de matemáticas) y todo el lector busca `w:r`, así
+que un renglón como *"el límite de la función cuando m→0, m→3 y m→6"* llegaba a
+Moodle como *"el límite de la función cuando , y ."*. Había que teclear el TeX a
+mano en Moodle, después de pegar el HTML.
+
+Ahora salen como `$$…$$`, que es la notación que el filtro TeX de Moodle 3.11
+convierte en fórmula. De dónde sale el código, en este orden:
+
+1. **Del comentario del Word.** Producción escribe el código autorizado en una
+   nota de revisión anclada a la ecuación: *"Código para producción:
+   `C(m)=\frac{1\,000m}{m^{2}+m}`"*. Ese es el que manda. La nota se reconoce por
+   esa frase, y esas notas ya **no** aparecen entre las indicaciones de montaje
+   al generar: son contenido, no un recado pendiente.
+2. **De convertir el objeto de ecuación** (`omathALatex` en `assets/docx.js`):
+   fracciones, potencias, subíndices, raíces, paréntesis, sumatorias y límites,
+   más un mapa de símbolo a comando (`→` → `\rightarrow`, `∞` → `\infty`…). Es
+   el respaldo para las que nadie comenta: las variables sueltas en medio de la
+   prosa —*"después de m minutos"*—, que son justo las que se borraban sin que se
+   notara. El aviso de importación dice cuántas salieron por esta vía
+   ("2 sin código de producción: revísalas").
+
+En la vista previa el `$$…$$` se muestra destacado, con su código a la vista: la
+herramienta no renderiza matemáticas —eso rompería el trato de "sin
+dependencias"— así que la previa enseña exactamente lo que va a viajar a Moodle.
+
+Los `$$…$$` también se pueden teclear a mano en cualquier bloque de texto,
+sección o lista.
+
+**Lo que no cubre:** las fórmulas dentro de una celda de tabla. Ahí el lector
+sigue devolviendo solo el texto, así que hay que teclear el `$$…$$` en el bloque
+Tabla.
 
 ## Editor por bloques
 
@@ -154,6 +191,31 @@ Tres cosas que conviene no deshacer:
 No es arrastre a propósito: en la previa no hay dónde poner un asa sin ensuciar
 lo que se copia a Moodle.
 
+### Hacer clic en la previa abre esa tarjeta
+
+Con un Word largo son treinta bloques en la columna izquierda, y la mitad del
+tiempo se iba en buscar cuál de todos es el párrafo que se está leyendo. Ahora
+**la previa manda**: al hacer clic en un texto, el editor selecciona ese bloque,
+lo trae a la vista, enfoca su campo y deja el **cursor sobre ese mismo renglón**.
+Al revés, el bloque seleccionado queda enmarcado en la previa mientras se
+escribe. Es lo mismo que hace Guion Instruccional a Página, sin iframe de por
+medio.
+
+Tres detalles que conviene no deshacer:
+
+- **El campo depende de dónde se hizo clic**, no solo del tipo de bloque: la
+  barra de una sección abre su *título*; su contenido, el área de texto. En una
+  tabla, un encabezado abre `encabezados` y una celda, `filas`.
+- **El cursor se coloca comparando solo letras y números.** Las cadenas no se
+  pueden cotejar tal cual: el campo trae las marcas `**negritas**`, sus saltos de
+  renglón salieron como `<br>` (que no dejan ni un espacio en `textContent`) y la
+  previa colapsó los espacios. Se comparan las letras guardando de qué posición
+  del campo salió cada una (`ubicarEnCampo`). Con menos de tres letras no se
+  intenta: cualquier "de" daría un falso positivo.
+- **Un enlace de la previa no navega.** Apunta a Moodle y seguirlo se llevaría
+  por delante el trabajo sin guardar; aquí es una parte del bloque como
+  cualquier otra y abre su tarjeta.
+
 ## HTML generado
 
 La estructura base es:
@@ -175,6 +237,13 @@ viñetas respeten la jerarquía y no queden pegados al borde si Moodle restablec
 estilos por tema. El formato se fija en la salida (`disc`, `decimal`,
 `lower-alpha` o `lower-roman`), el tamaño se fija en 14 px y la familia
 tipográfica se deja heredada del contenido.
+
+**El `color` va también en el `<ul>`/`<ol>` y en cada `<li>`, no solo en el
+`<span>` de adentro.** La viñeta y el número no son texto: el navegador los pinta
+con el `color` del `<li>` (`::marker`), así que con el color solo en el `<span>`
+el texto salía negro y la viñeta heredaba el gris que el tema de Moodle le da a
+las listas. Va con `!important`, como el resto de esas reglas: la hoja de Moodle
+no se toca, se le gana desde aquí.
 
 ## QA de actividad
 
@@ -201,6 +270,31 @@ Si el título sí coincide, el QA revisa:
 El verificador muestra además un aviso para cotejar manualmente que las
 imágenes publicadas en Moodle correspondan con las imágenes adjuntas del Word.
 La comparación visual de imágenes no se automatiza.
+
+**Los párrafos con fórmula van en su propia lista, no entre los textos.** Moodle
+sustituye el `$$…$$` por la ecuación ya pintada, así que su texto visible nunca
+puede ser igual al generado y cotejarlo letra por letra solo produciría errores
+inventados. En su lugar:
+
+- se confirma que el párrafo llegó buscando su **trozo de texto más largo**
+  (el que queda entre fórmula y fórmula);
+- si el párrafo es **solo** la ecuación —las funciones centradas— no hay texto
+  que buscar, y se reconoce por la *huella* de la propia fórmula: el código sin
+  comandos ni llaves y sin espacios (`\frac{1\,440m}{9\,000+32m}` →
+  `1440m900032m`), que es lo que acaba viéndose. El filtro TeX decide solo dónde
+  deja huecos al pintar una fracción, y esa es la única diferencia imprevisible;
+- las fórmulas se listan para revisarlas a ojo, como las imágenes;
+- esas ecuaciones **no** se reportan como "texto extra en Moodle": son
+  exactamente el contenido esperado.
+
+Un párrafo con fórmula que no aparece sí es error. Uno que es solo ecuación y no
+se pudo ubicar sale en naranja ("compárala a ojo"), no en rojo: no había texto
+que cotejar.
+
+> ⚠️ El verificador se arma dentro de una **plantilla de texto**. Un acento grave
+> suelto —hasta en un comentario— la cierra y deja la herramienta entera sin
+> arrancar, y cada `\` del código generado va **doble** en el fuente. Al tocarlo,
+> revisa el código YA generado en la caja de la pestaña QA, no solo el fuente.
 
 Los elementos repetidos por Moodle (`li` con un `p` interno, o un párrafo
 partido en nodos) no se consideran texto extra: el QA compara también las
@@ -237,3 +331,14 @@ los textos y enlaces de ese estado exacto.
 10. Importar un Word con tabla pegada como imagen (AI4 de M17): debe crear un
    bloque Imagen con miniatura y descarga, y el HTML debe referenciarla como
    `@@PLUGINFILE@@/nombre`.
+11. Importar un Word con fórmulas (AI2 de M18): el aviso debe decir cuántas
+   entraron y cuántas van sin código de producción; el HTML debe traer el
+   `$$…$$` idéntico al comentario del Word, y las comentadas **no** deben
+   aparecer entre las indicaciones de montaje.
+12. Confirmar en el HTML que `<ul>`/`<ol>` y cada `<li>` llevan
+   `color: #000000 !important` (si no, la viñeta sale gris en Moodle).
+13. Hacer clic en un párrafo de la previa: debe abrirse su tarjeta con el cursor
+   sobre ese renglón. Probar también la barra de una sección (abre el título) y
+   un renglón con fórmula.
+14. Tras tocar `assets/docx.js`, importar el mismo Word en **Guion Instruccional
+   a Página**: no debe aparecer ni un `$$` (la opción va apagada por omisión).

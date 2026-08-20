@@ -118,5 +118,10 @@
 .previa-barra > button:disabled { opacity: .28; cursor: default; background: transparent; color: #333340; }
 
 /* El bloque señalado tras moverlo. Colores fijos por lo mismo de arriba. */
-.bloque-previa { scroll-margin: 24px; }
+.bloque-previa { scroll-margin: 24px; cursor: pointer; }
 .bloque-previa--senalado { outline: 2px solid #0066cc; outline-offset: 2px; border-radius: 4px; }
+/* El bloque cuya tarjeta está abierta en el editor. Más discreto que el
+   destello de "acabo de moverlo": este se queda puesto mientras se escribe. */
+.bloque-previa--activo { outline: 2px solid rgba(0, 102, 204, .45); outline-offset: 2px; border-radius: 4px; }
+/* La tarjeta a la que salta la previa no debe quedar pegada al borde de la lista. */
+.block { scroll-margin: 16px; }

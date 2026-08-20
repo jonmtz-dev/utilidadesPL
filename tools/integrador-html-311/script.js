@@ -10,6 +10,13 @@
     let serial = 0;
     let selectedBlockId = null;
     let comentariosMontaje = [];
+    /* Map<idDeComentario, latex> con los códigos que producción escribió a mano
+       en el Word. Sirve para distinguir la fórmula autorizada de la que el
+       lector convirtió solo desde el objeto de ecuación (esas se avisan para
+       revisarlas antes de publicar). */
+    let codigosDeProduccion = new Map();
+    // Toda fórmula que quedó en los bloques: `$$…$$` con su código.
+    const FORMULA = /\$\$([^$]+)\$\$/g;
     const $ = (s) => document.querySelector(s);
     const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const clean = (s) => String(s || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
@@ -37,6 +44,7 @@
         configurarImportador();
         prepararReparto();
         montarBarraPrevia();
+        conectarPrevia();
         // Deja una sección inicial para que el flujo sea evidente sin imponer contenido.
         agregar('text');
     }
@@ -93,8 +101,8 @@
         renderEditor(); actualizar();
         return true;
     }
-    function borrar(id) { blocks = blocks.filter(b => b.id !== id); if (selectedBlockId === id) selectedBlockId = null; renderEditor(); actualizar(); }
-    function seleccionarBloque(id) { selectedBlockId = id; renderEditor(); }
+    function borrar(id) { blocks = blocks.filter(b => b.id !== id); if (selectedBlockId === id) selectedBlockId = null; renderEditor(); actualizar(); marcarSeleccionEnPrevia(); }
+    function seleccionarBloque(id) { selectedBlockId = id; renderEditor(); marcarSeleccionEnPrevia(); }
     /* ---------------------------------------------------------------------
        Reparto de la pantalla
 
@@ -220,6 +228,101 @@
         if (rb.bottom < rp.top + 30 || rb.top > rp.bottom - 30) el.scrollIntoView({ block: 'center' });
     }
 
+    /* ---------------------------------------------------------------------
+       Ir y venir entre la previa y el editor
+
+       Con un Word largo son treinta bloques en la columna izquierda y la mitad
+       del tiempo se iba en buscar cuál de todos es el párrafo que se está
+       leyendo en la previa. Ahora la previa manda: se hace clic en el texto y
+       el editor abre esa tarjeta, la trae a la vista, enfoca su campo y deja el
+       cursor sobre ese mismo renglón. Al revés, el bloque seleccionado queda
+       enmarcado en la previa. Es la misma idea de Guion Instruccional a Página,
+       sin iframe de por medio: aquí la previa es HTML de esta misma página.
+       --------------------------------------------------------------------- */
+
+    function conectarPrevia() {
+        const previa = $('#preview');
+        previa.addEventListener('click', e => {
+            // Los botones de subir/bajar/quitar son de la barra, no del bloque.
+            if (barraPrevia && barraPrevia.contains(e.target)) return;
+            const marcado = e.target.closest('.bloque-previa');
+            if (!marcado) return;
+            /* Un enlace de la previa apunta a Moodle y seguirlo se llevaría por
+               delante el trabajo sin guardar. Aquí es una parte del bloque como
+               cualquier otra: abre su tarjeta. */
+            const enlace = e.target.closest('a');
+            if (enlace) e.preventDefault();
+            abrirTarjetaDe(Number(marcado.dataset.bq), e.target);
+        });
+    }
+
+    /** Enmarca en la previa el bloque seleccionado y, si se salió de la vista,
+        lo trae. Se rehace en cada repintado: `actualizar()` reescribe #preview
+        entero y la marca se va con él. */
+    function marcarSeleccionEnPrevia() {
+        const previa = $('#preview');
+        previa.querySelectorAll('.bloque-previa--activo').forEach(n => n.classList.remove('bloque-previa--activo'));
+        if (selectedBlockId == null) return;
+        const destino = previa.querySelector(`[data-bq="${selectedBlockId}"]`);
+        if (!destino) return;
+        destino.classList.add('bloque-previa--activo');
+        // Solo si NO se ve: centrarlo en cada tecla marearía.
+        const rp = previa.getBoundingClientRect(), rb = destino.getBoundingClientRect();
+        if (rb.bottom < rp.top + 30 || rb.top > rp.bottom - 30) destino.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+
+    /** Abre en el editor la tarjeta del bloque `id` y deja el cursor donde se
+        hizo clic en la previa. `nodo` es el elemento tocado, para saber qué
+        campo enfocar (el título de la sección no es su contenido) y qué
+        renglón señalar. */
+    function abrirTarjetaDe(id, nodo) {
+        const bloque = blocks.find(b => b.id === id);
+        if (!bloque) return;
+        seleccionarBloque(id);
+        const tarjeta = $(`.block[data-id="${id}"]`);
+        if (!tarjeta) return;
+        const campo = tarjeta.querySelector(`[data-field="${campoDelClic(bloque, nodo)}"]`);
+        if (campo) {
+            campo.focus();
+            const parrafo = nodo && nodo.closest && nodo.closest('p, li, td, th, h1, h2, h3');
+            const sitio = ubicarEnCampo(campo.value, (parrafo || nodo || {}).textContent || '');
+            // `select()` de todo el campo sería peor que nada: se pierde de vista
+            // cuál era el renglón. Sin coincidencia, se deja el foco y ya.
+            if (sitio && campo.setSelectionRange) campo.setSelectionRange(sitio.inicio, sitio.fin);
+        }
+        const lista = $('#blocks').getBoundingClientRect(), caja = tarjeta.getBoundingClientRect();
+        if (caja.top < lista.top || caja.bottom > lista.bottom) tarjeta.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+
+    function campoDelClic(bloque, nodo) {
+        if (bloque.tipo === 'section' && nodo && nodo.closest && nodo.closest('.subtema')) return 'titulo';
+        if (bloque.tipo === 'table') return nodo && nodo.closest && nodo.closest('th') ? 'encabezados' : 'filas';
+        if (bloque.tipo === 'image') return 'href';
+        return 'texto';
+    }
+
+    /* Dónde cae, dentro del campo de texto, lo que se leyó en la previa.
+       No se pueden comparar las cadenas tal cual: el campo trae las marcas
+       `**negritas**`, sus saltos de renglón salieron como <br> (que no dejan
+       ni un espacio en textContent) y `clean()` colapsó los espacios. Se
+       comparan solo letras y números, guardando de qué posición del campo salió
+       cada uno, y se devuelve el tramo original. */
+    function ubicarEnCampo(valor, buscado) {
+        const esLetra = (c) => /[\p{L}\p{N}]/u.test(c);
+        const posiciones = [], letras = [];
+        for (let i = 0; i < valor.length; i++) {
+            if (!esLetra(valor[i])) continue;
+            letras.push(valor[i].toLocaleLowerCase('es-MX'));
+            posiciones.push(i);
+        }
+        const aguja = [...String(buscado)].filter(esLetra).map(c => c.toLocaleLowerCase('es-MX')).join('');
+        // Con menos de tres letras cualquier "de" o "la" daría un falso positivo.
+        if (aguja.length < 3) return null;
+        const donde = letras.join('').indexOf(aguja);
+        if (donde < 0) return null;
+        return { inicio: posiciones[donde], fin: posiciones[donde + aguja.length - 1] + 1 };
+    }
+
     function renderEditor() {
         const holder = $('#blocks');
         if (!blocks.length) { holder.innerHTML = '<div class="empty-state"><i class="ph ph-plus-circle"></i><p>Agrega un bloque para empezar.</p></div>'; return; }
@@ -316,7 +419,12 @@
     }
     function contenidoBloque(b, paleta, paraPreview) {
         if (b.tipo === 'text' || b.tipo === 'section') return parrafos(b.texto, b.alineacion, b.sangria);
-        if (b.tipo === 'list') { const nivel = Math.max(0, Math.min(3, Number(b.nivelLista) || 0)); const tag = b.tipoLista === 'vinetas' ? 'ul' : 'ol'; const estilo = b.tipoLista === 'vinetas' ? 'disc' : (b.tipoLista === 'letras' ? 'lower-alpha' : (b.tipoLista === 'romana' ? 'lower-roman' : 'decimal')); const reglas = [`padding-left: ${38 + nivel * 38}px`, `list-style-type: ${estilo} !important`, 'font-family: inherit !important', 'font-size: 14px !important', 'line-height: inherit !important']; const estiloElemento = 'font-family: inherit !important; font-size: 14px !important; line-height: inherit !important;'; const estiloTexto = 'color: #000000; font-size: 14px !important;'; const start = tag === 'ol' && Number(b.inicioLista) > 1 ? ` start="${Number(b.inicioLista)}"` : ''; return `<${tag}${start} style="${reglas.join('; ')};">${String(b.texto || '').split('\n').map(clean).filter(Boolean).map(x => `<li style="${estiloElemento}"><span style="${estiloTexto}">${negritas(esc(x))}</span></li>`).join('')}</${tag}>`; }
+        /* La viñeta (y el número) NO son texto: el navegador los pinta con el
+           `color` del <li>, no con el del <span> de adentro. Sin `color` en el
+           <li> heredaban el gris que el tema de Moodle le da a las listas y
+           quedaban de otro color que su propio texto. Va con !important, como
+           el resto: la hoja de Moodle no se toca, se gana desde aquí. */
+        if (b.tipo === 'list') { const nivel = Math.max(0, Math.min(3, Number(b.nivelLista) || 0)); const tag = b.tipoLista === 'vinetas' ? 'ul' : 'ol'; const estilo = b.tipoLista === 'vinetas' ? 'disc' : (b.tipoLista === 'letras' ? 'lower-alpha' : (b.tipoLista === 'romana' ? 'lower-roman' : 'decimal')); const reglas = [`padding-left: ${38 + nivel * 38}px`, `list-style-type: ${estilo} !important`, 'color: #000000 !important', 'font-family: inherit !important', 'font-size: 14px !important', 'line-height: inherit !important']; const estiloElemento = 'color: #000000 !important; font-family: inherit !important; font-size: 14px !important; line-height: inherit !important;'; const estiloTexto = 'color: #000000; font-size: 14px !important;'; const start = tag === 'ol' && Number(b.inicioLista) > 1 ? ` start="${Number(b.inicioLista)}"` : ''; return `<${tag}${start} style="${reglas.join('; ')};">${String(b.texto || '').split('\n').map(clean).filter(Boolean).map(x => `<li style="${estiloElemento}"><span style="${estiloTexto}">${negritas(esc(x))}</span></li>`).join('')}</${tag}>`; }
         if (b.tipo === 'table') return tablaHTML(b, paleta);
         if (b.tipo === 'image') {
             // Sin URL manual, una imagen importada del Word sale como
@@ -339,10 +447,19 @@
         }).join('\n');
         return `<div class="prepa-M${m}-body">\n<div class="prepa-M${m}-Tema">\n<h1 class="prepa-M${m}-tituloTema"><span>${esc(titulo)}</span></h1>\n</div>\n${cuerpo}\n</div>`;
     }
+    /* SOLO para la previa: el `$$…$$` se destaca para poder contarlas de un
+       vistazo. Aquí no se renderiza la fórmula —eso lo hace el filtro TeX de
+       Moodle, y meter una biblioteca de matemáticas rompería el trato de "sin
+       dependencias"—, así que la previa enseña el código tal cual viaja.
+       Colores fijos, como todo lo que se inyecta en la isla clara. */
+    function marcarFormulas(html) {
+        return String(html || '').replace(FORMULA, (_, latex) =>
+            `<span style="background:#eef3fb;border:1px dashed #7d9bc4;border-radius:4px;padding:0 3px;font-family:Consolas,monospace;font-size:.92em;" title="Moodle 3.11 lo publica como fórmula">$$${latex}$$</span>`);
+    }
     function previewHTML() {
         const m = $('#modulo').value, p = MODULOS[m], title = esc(clean($('#titulo').value) || 'Título de la actividad');
         const cuerpo = blocks.map(b => {
-            const content = contenidoBloque(b, p, true); if (!content && !(b.tipo === 'section' && clean(b.titulo))) return '';
+            const content = marcarFormulas(contenidoBloque(b, p, true)); if (!content && !(b.tipo === 'section' && clean(b.titulo))) return '';
             const head = b.tipo === 'section' && clean(b.titulo) ? `<h2 class="subtema" style="background:${p[1]}">${esc(clean(b.titulo))}</h2>` : '';
             /* La envoltura marcada es SOLO de la previa (buildHTML no la lleva):
                una sección son dos hermanos —el <h2> y su .content— y la barra
@@ -357,6 +474,7 @@
         $('#preview').innerHTML = previewHTML();
         $('#preview').classList.toggle('hidden', !hay); $('#preview-empty').classList.toggle('hidden', hay);
         refrescarBarraPrevia();
+        marcarSeleccionEnPrevia();
     }
     function copiarHTML() { const c = $('#code'); if (!c.value.trim()) return; navigator.clipboard.writeText(c.value).then(() => { const i=$('#btn-copy i'); i.className='ph ph-check'; setTimeout(()=>i.className='ph ph-copy',1200); }).catch(()=>{c.focus();c.select();}); }
 
@@ -370,11 +488,18 @@
     async function importarWord(file) {
         if (!/\.docx$/i.test(file.name)) return infoImport('El archivo debe ser .docx.', false);
         try {
-            const fuente = await leerBloquesDeDocx(file);
+            /* Con `latex` las ecuaciones del Word entran como `$$…$$`, que es
+               como Moodle 3.11 espera el TeX. Antes se perdían enteras: el
+               texto de una fórmula no vive en un `w:r`, así que "el límite
+               cuando m→0, m→3 y m→6" llegaba como "el límite cuando , y .". */
+            const fuente = await leerBloquesDeDocx(file, { latex: true });
             const imagenesWord = await leerImagenesDeDocx(file);
+            codigosDeProduccion = await leerLatexDeComentariosDocx(file);
             // Las notas de revisión del Word son indicaciones de montaje (dónde
-            // vincular un PDF o imagen): no son enlaces reales, se recuerdan al generar.
-            comentariosMontaje = await leerComentariosDeDocx(file);
+            // vincular un PDF o imagen): no son enlaces reales, se recuerdan al
+            // generar. Los "Código para producción" ya viajan dentro del texto
+            // como $$…$$: son contenido, no un recado pendiente.
+            comentariosMontaje = (await leerComentariosDeDocx(file)).filter(c => !esComentarioDeLatex(c.texto));
             // El inicio no es una "página" (Word no guarda páginas fiables): es la primera
             // tabla de una celda, que es exactamente la primera barra gris del formato de actividades.
             const inicio = fuente.findIndex(x => x.tipo === 'tabla' && x.celdas === 1 && x.texto);
@@ -432,7 +557,13 @@
             $('#dropzone').classList.add('dropzone--loaded');
             const tablas = blocks.filter(b => b.tipo === 'table').length;
             const imagenes = blocks.filter(b => b.tipo === 'image').length;
-            const extras = [tablas ? `${tablas} tabla(s)` : '', imagenes ? `${imagenes} imagen(es): descárgalas y arrástralas al editor de Moodle` : ''].filter(Boolean).join(' · ');
+            const formulas = formulasDeBloques();
+            const convertidas = formulas.filter(f => f.auto).length;
+            const extras = [
+                tablas ? `${tablas} tabla(s)` : '',
+                imagenes ? `${imagenes} imagen(es): descárgalas y arrástralas al editor de Moodle` : '',
+                formulas.length ? `${formulas.length} fórmula(s) como $$…$$${convertidas ? `, ${convertidas} sin código de producción: revísalas` : ''}` : ''
+            ].filter(Boolean).join(' · ');
             infoImport(`${file.name}: ${blocks.length} bloque(s) creados${extras ? ` (${extras})` : ''}. Revisa tablas, imágenes y enlaces antes de generar.`, true);
         } catch (e) { console.error(e); infoImport(`No se pudo importar: ${e.message}`, false); }
     }
@@ -461,14 +592,46 @@
     }
     function infoImport(msg, ok) { const el=$('#import-info'); el.textContent=msg; el.classList.remove('hidden'); el.style.color=ok?'var(--success)':'var(--danger)'; }
 
+    /* Las fórmulas que hay ahora mismo en los bloques: `[{ latex, auto }]`.
+       `auto` marca las que NO traían "Código para producción" en el Word y salió
+       de convertir el objeto de ecuación: se ven bien casi siempre, pero es lo
+       único de la importación que conviene mirar con ojo antes de publicar.
+       Se recalcula al vuelo (y no se guarda en el bloque) porque el usuario
+       puede teclear o corregir un `$$…$$` a mano después de importar. */
+    function formulasDeBloques() {
+        const autorizados = new Set([...codigosDeProduccion.values()].map(clean));
+        const salida = [];
+        blocks.forEach(b => {
+            [b.texto, b.titulo, b.filas, b.encabezados, b.tituloTabla].forEach(campo => {
+                for (const m of String(campo || '').matchAll(FORMULA)) {
+                    const latex = m[1].trim();
+                    salida.push({ latex, auto: !autorizados.has(latex) });
+                }
+            });
+        });
+        return salida;
+    }
+
     function datosQA() {
-        const textos = [], links = [];
+        const textos = [], links = [], formulas = [];
+        /* Un párrafo con fórmula NO se puede cotejar letra por letra: Moodle
+           sustituye el `$$…$$` por la ecuación ya pintada (imagen o MathJax),
+           así que el texto visible nunca coincidirá con lo generado. Se aparta
+           a su propia lista: el QA confirma que el párrafo esté ahí buscando su
+           trozo de texto más largo, y deja las fórmulas para revisión visual,
+           igual que ya hace con las imágenes. */
+        const anotar = (item) => {
+            if (!item.texto.includes('$$')) { textos.push(item); return; }
+            const codigos = [...item.texto.matchAll(FORMULA)].map(m => m[1].trim());
+            const fragmento = item.texto.split(/\$\$[^$]*\$\$/).map(clean).sort((a, b) => b.length - a.length)[0] || '';
+            formulas.push({ etiqueta: item.etiqueta, texto: item.texto, codigos, fragmento });
+        };
         if (clean($('#titulo').value)) textos.push({ etiqueta:'Título', texto:clean($('#titulo').value), selector:'h1' });
         blocks.forEach((b, n) => {
             const etiqueta = b.tipo === 'section' ? (clean(b.titulo) || `Sección ${n+1}`) : `${nombre(b.tipo)} ${n+1}`;
             if (b.tipo === 'section' && clean(b.titulo)) textos.push({etiqueta:`Encabezado: ${etiqueta}`,texto:clean(b.titulo),selector:'h2'});
-            if (b.tipo === 'text' || b.tipo === 'section') String(b.texto||'').split(/\n\s*\n/).map(clean).filter(Boolean).forEach(t => textos.push({etiqueta,texto:sinMarcas(t),selector:'p'}));
-            if (b.tipo === 'list') String(b.texto||'').split('\n').map(clean).filter(Boolean).forEach(t => textos.push({etiqueta,texto:sinMarcas(t),selector:'li'}));
+            if (b.tipo === 'text' || b.tipo === 'section') String(b.texto||'').split(/\n\s*\n/).map(clean).filter(Boolean).forEach(t => anotar({etiqueta,texto:sinMarcas(t),selector:'p'}));
+            if (b.tipo === 'list') String(b.texto||'').split('\n').map(clean).filter(Boolean).forEach(t => anotar({etiqueta,texto:sinMarcas(t),selector:'li'}));
             if (b.tipo === 'table') { if (clean(b.tituloTabla)) textos.push({etiqueta:`Tabla ${n+1}`,texto:clean(b.tituloTabla),selector:'th,td'}); celdas(b.encabezados).filter(Boolean).forEach(t=>textos.push({etiqueta:`Tabla ${n+1}`,texto:t,selector:'th,td'})); String(b.filas||'').split('\n').flatMap(celdas).filter(Boolean).forEach(t=>textos.push({etiqueta:`Tabla ${n+1}`,texto:t,selector:'td,th'})); }
             if (b.tipo === 'link' && (clean(b.texto)||clean(b.href))) links.push({etiqueta, texto:clean(b.texto||b.href), href:clean(b.href)});
         });
@@ -477,7 +640,7 @@
         // (p. ej. M1_S1_AA1_Rubrica), también se compara con el href.
         const archivoDeNota = (nota) => { const m = String(nota||'').match(/[A-Za-z0-9]+(?:[_-][A-Za-z0-9]+)+(?:\.[A-Za-z0-9]+)?/); return m ? m[0] : ''; };
         const montaje = comentariosMontaje.filter(c => clean(c.ancla)).map(c => ({ ancla:clean(c.ancla), nota:clean(c.texto), archivo:archivoDeNota(c.texto) }));
-        return { modulo:$('#modulo').value, textos, links, montaje };
+        return { modulo:$('#modulo').value, textos, links, montaje, formulas };
     }
     /* MUERTA v1: NO se usa. Solo corre la última scriptQA de este archivo (una
        declaración de función posterior sustituye a la anterior). Renombrada para
@@ -504,7 +667,7 @@
     if(links.length) html+='<h4 style="margin:12px 0 5px;color:#c62828">Enlaces con problema ('+links.length+')</h4>'+links.map(function(x){return '<div style="border-left:3px solid #c62828;padding:5px 8px;margin:5px 0;background:#fff5f5"><strong>'+esc(x.error)+': '+esc(x.item.texto)+'</strong><br>Esperado: '+esc(x.item.href)+(x.pagina?'<br>En página: '+esc(x.pagina):'')+'</div>';}).join('');
     panel.innerHTML=html;document.body.appendChild(panel);document.getElementById('integrador-qa-cerrar').onclick=function(){Array.prototype.slice.call(document.querySelectorAll('.integrador-qa-marca')).forEach(function(n){n.style.outline='';n.classList.remove('integrador-qa-marca');});panel.remove();};var primera=document.querySelector('.integrador-qa-marca');if(primera)primera.scrollIntoView({behavior:'smooth',block:'center'});
 })();`; }
-    function generarQA() { const data=datosQA(); if(!data.textos.length && !data.links.length && !data.montaje.length){alert('Agrega contenido antes de generar el QA.');return;} const code=scriptQA(data), bookmark='javascript:'+encodeURIComponent(code); $('#qa-empty').classList.add('hidden'); const out=$('#qa-result'); out.classList.remove('hidden'); out.innerHTML=`<div class="qa-aviso"><strong>Verificador de solo lectura.</strong> En Moodle, abre la actividad ya guardada y ejecútelo desde la consola (F12). Compara bloque por bloque y revisa los enlaces. No escribe ni guarda nada.</div><div class="opcion-entrega"><h3><i class="ph ph-bookmark-simple"></i> Marcador</h3><p class="field-hint">Arrástralo a tus marcadores y ejecútalo en la actividad publicada.</p><a class="btn-secondary btn-chico bookmarklet-link" href="${esc(bookmark)}" onclick="return false;">Verificar actividad</a></div><div class="opcion-entrega"><h3><i class="ph ph-terminal-window"></i> Consola</h3><p class="field-hint">F12 → Console. Copia este código; no modifica el contenido.</p><div class="code-wrapper"><button class="btn-icon js-copy-qa" title="Copiar"><i class="ph ph-copy"></i></button><textarea class="code-output" readonly>${esc(code)}</textarea></div><button class="btn-secondary btn-chico js-copy-qa"><i class="ph ph-copy"></i> Copiar verificador</button></div>`; out.querySelectorAll('.js-copy-qa').forEach(b=>b.addEventListener('click',()=>{const ta=out.querySelector('textarea');navigator.clipboard.writeText(ta.value).then(()=>{const i=b.querySelector('i');i.className='ph ph-check';setTimeout(()=>i.className='ph ph-copy',1200);}).catch(()=>{ta.focus();ta.select();});})); activarTab('qa'); }
+    function generarQA() { const data=datosQA(); if(!data.textos.length && !data.links.length && !data.montaje.length && !data.formulas.length){alert('Agrega contenido antes de generar el QA.');return;} const code=scriptQA(data), bookmark='javascript:'+encodeURIComponent(code); $('#qa-empty').classList.add('hidden'); const out=$('#qa-result'); out.classList.remove('hidden'); out.innerHTML=`<div class="qa-aviso"><strong>Verificador de solo lectura.</strong> En Moodle, abre la actividad ya guardada y ejecútelo desde la consola (F12). Compara bloque por bloque y revisa los enlaces. No escribe ni guarda nada.</div><div class="opcion-entrega"><h3><i class="ph ph-bookmark-simple"></i> Marcador</h3><p class="field-hint">Arrástralo a tus marcadores y ejecútalo en la actividad publicada.</p><a class="btn-secondary btn-chico bookmarklet-link" href="${esc(bookmark)}" onclick="return false;">Verificar actividad</a></div><div class="opcion-entrega"><h3><i class="ph ph-terminal-window"></i> Consola</h3><p class="field-hint">F12 → Console. Copia este código; no modifica el contenido.</p><div class="code-wrapper"><button class="btn-icon js-copy-qa" title="Copiar"><i class="ph ph-copy"></i></button><textarea class="code-output" readonly>${esc(code)}</textarea></div><button class="btn-secondary btn-chico js-copy-qa"><i class="ph ph-copy"></i> Copiar verificador</button></div>`; out.querySelectorAll('.js-copy-qa').forEach(b=>b.addEventListener('click',()=>{const ta=out.querySelector('textarea');navigator.clipboard.writeText(ta.value).then(()=>{const i=b.querySelector('i');i.className='ph ph-check';setTimeout(()=>i.className='ph ph-copy',1200);}).catch(()=>{ta.focus();ta.select();});})); activarTab('qa'); }
     /* Versión estricta del QA. Se declara después de la primera para sustituirla:
        la identidad de la actividad (H1) es requisito previo, no una coincidencia
        más entre muchos fragmentos de texto. */
@@ -559,6 +722,28 @@
     function buscar(item){var candidatos=nodos.filter(function(x){return !x.usado;}),esperado=limpiar(item.texto);var x=candidatos.find(function(x){return igualTexto(x.t,esperado);});if(x)x.usado=true;return x;}
     var faltan=[],correctos=0,coincidencias=[];
     DATA.textos.forEach(function(item){var x=buscar(item);if(x){correctos++;coincidencias.push({item:item,nodo:x});}else{var parecido=nodos.find(function(n){return !n.usado&&firma(n.t)===firma(item.texto);});faltan.push(Object.assign({},item,{actual:parecido?parecido.t:''}));}});
+    // Párrafos con fórmula: Moodle sustituye el $$…$$ por la ecuación ya
+    // pintada (filtro TeX o MathJax), así que su texto visible NUNCA será igual
+    // al generado y cotejarlo letra por letra solo produce errores inventados.
+    // Se confirma que el párrafo llegó, buscando su trozo de texto más largo, y
+    // la fórmula se lista para revisarla con los ojos, como las imágenes.
+    // "huella" es la firma sin espacios: el filtro TeX decide solo dónde deja
+    // huecos al pintar una fracción, y esa es la única diferencia que no se
+    // puede prever. "huellaLatex" quita comandos y llaves del código para
+    // dejar los mismos números y letras que acabarán viéndose.
+    function huella(s){return firma(s).replace(/\\s+/g,'');}
+    function huellaLatex(s){return huella(String(s||'').replace(/\\\\[a-zA-Z]+/g,' ').replace(/\\\\./g,' ').replace(/[{}]/g,' '));}
+    var formulas=[];
+    (DATA.formulas||[]).forEach(function(item){
+        var f=firma(item.fragmento),soloFormula=f.length<=8,x=null;
+        if(!soloFormula)x=nodos.find(function(n){return !n.usado&&n.f.indexOf(f)!==-1;});
+        // Un párrafo que es SOLO la ecuación no tiene texto que buscar (aquí
+        // pasa dos veces: las dos funciones centradas). Se reconoce por la
+        // huella de la propia fórmula.
+        if(!x&&soloFormula){var hs=item.codigos.map(huellaLatex).join('');if(hs.length>3)x=nodos.find(function(n){return !n.usado&&huella(n.t)===hs;});}
+        if(x)x.usado=true;
+        formulas.push({item:item,nodo:x||null,soloFormula:soloFormula});
+    });
     var titulo=(DATA.textos.filter(function(x){return x.etiqueta==='Título';})[0]||{});var tituloCoincide=coincidencias.some(function(x){return x.item===titulo;});
     var proporcion=DATA.textos.length?correctos/DATA.textos.length:0;
     // Menos de 55% Y sin título reconocido significa otro contenido. Una página
@@ -579,13 +764,15 @@
     // <li> y su <p> son DOS nodos con el mismo texto, y como buscar() marca solo
     // uno, el otro salía como "extra" aunque la viñeta sí estaba en el Word.
     // Comparar por firma (no por etiqueta) los descarta.
-    var firmasEsperadas=DATA.textos.map(function(x){return firma(x.texto);}).filter(function(x){return x.length>2;});
-    var sobrantes=nodos.filter(function(x){return !x.usado&&x.t&&!firmasEsperadas.some(function(f){return f===x.f||(x.f.length>12&&f.indexOf(x.f)!==-1)||(f.length>12&&x.f.indexOf(f)!==-1);});});
+    var firmasEsperadas=DATA.textos.map(function(x){return firma(x.texto);}).concat(formulas.filter(function(x){return x.nodo;}).map(function(x){return x.nodo.f;})).filter(function(x){return x.length>2;});
+    var huellasFormula=(DATA.formulas||[]).reduce(function(a,x){return a.concat(x.codigos.map(huellaLatex));},[]).filter(function(x){return x.length>3;});
+    var sobrantes=nodos.filter(function(x){return !x.usado&&x.t&&huellasFormula.indexOf(huella(x.t))===-1&&!firmasEsperadas.some(function(f){return f===x.f||(x.f.length>12&&f.indexOf(x.f)!==-1)||(f.length>12&&x.f.indexOf(f)!==-1);});});
     [].slice.call(document.querySelectorAll('.integrador-qa-marca')).forEach(function(n){n.style.outline='';n.classList.remove('integrador-qa-marca');});var viejo=document.getElementById('integrador-qa-panel');if(viejo)viejo.remove();
     if(paginaDistinta)nodos.forEach(function(x){x.n.style.outline='3px solid #c62828';x.n.classList.add('integrador-qa-marca');});
     else faltan.forEach(function(item){var n=nodos.find(function(x){return !x.usado&&item.actual&&firma(x.t)===firma(item.actual);})||nodos.find(function(x){return !x.usado;});if(n){n.n.style.outline='3px solid #f4c400';n.n.classList.add('integrador-qa-marca');}});
     if(tituloActividadDistinto&&infoTitulo.nodo){infoTitulo.nodo.style.outline='3px solid #f4c400';infoTitulo.nodo.classList.add('integrador-qa-marca');}
-    var error=paginaDistinta||faltan.length||links.length||montaje.length||tituloActividadDistinto,estado=paginaDistinta?'PÁGINA DISTINTA':(error?'ERRORES':'TODO CORRECTO'),color=error?'#c62828':'#2e7d32';
+    var formulasPerdidas=formulas.filter(function(x){return !x.nodo&&!x.soloFormula;});
+    var error=paginaDistinta||faltan.length||links.length||montaje.length||formulasPerdidas.length||tituloActividadDistinto,estado=paginaDistinta?'PÁGINA DISTINTA':(error?'ERRORES':'TODO CORRECTO'),color=error?'#c62828':'#2e7d32';
     function resaltar(s){return '<mark style="background:#ffeb3b;padding:0 2px;border-radius:2px;">'+esc(s)+'</mark>';}
     function diferencia(esperado,actual){esperado=limpiar(esperado);actual=limpiar(actual);var inicio=0,finE=esperado.length,finA=actual.length;while(inicio<finE&&inicio<finA&&esperado[inicio]===actual[inicio])inicio++;while(finE>inicio&&finA>inicio&&esperado[finE-1]===actual[finA-1]){finE--;finA--;}return {esperado:esc(esperado.slice(0,inicio))+resaltar(esperado.slice(inicio,finE))+esc(esperado.slice(finE)),actual:esc(actual.slice(0,inicio))+resaltar(actual.slice(inicio,finA))+esc(actual.slice(finA))};}
     function bloqueDiferencia(etiqueta,esperado,actual){var d=diferencia(esperado,actual);return '<div style="border-left:3px solid #f4c400;padding:7px 8px;margin:5px 0;background:#fffde7"><strong>'+esc(etiqueta)+'</strong><div style="white-space:pre-wrap;margin-top:3px"><strong>Esperado:</strong> '+d.esperado+'<br><strong>En Moodle:</strong> '+(actual?d.actual:resaltar('no aparece'))+'</div></div>';}
@@ -597,6 +784,7 @@
     else if(!tituloCoincide)html+='<div style="margin-top:10px;background:#fff4e5;border-left:3px solid #ef6c00;padding:9px;border-radius:5px"><strong>Aviso de título:</strong> Moodle cambió o no expuso su etiqueta, pero la huella del contenido coincide ('+Math.round(proporcion*100)+'%).</div>';
     if(!error)html+='<div style="margin-top:10px;background:#e8f5e9;border-left:3px solid #2e7d32;padding:9px;border-radius:5px">Textos y enlaces coinciden con lo generado.</div>';
     if(faltan.length)html+='<h4 style="margin:12px 0 5px;color:#c62828">Textos faltantes o distintos ('+faltan.length+')</h4>'+faltan.map(function(x){return bloqueDiferencia(x.etiqueta,x.texto,x.actual);}).join('');
+    if(formulas.length)html+='<h4 style="margin:12px 0 5px;color:'+(formulasPerdidas.length?'#c62828':'#ef6c00')+'">Fórmulas: revisión visual ('+formulas.length+')</h4>'+'<div style="background:#eef3fb;border-left:3px solid #7d9bc4;padding:9px;border-radius:5px;margin-bottom:6px">Moodle publica el $$…$$ ya pintado, así que ese texto no se puede cotejar. Se comprueba que el párrafo llegó; mira tú que la fórmula se vea bien.</div>'+formulas.map(function(x){var ok=Boolean(x.nodo);if(ok){x.nodo.n.style.outline='2px dashed #7d9bc4';x.nodo.n.classList.add('integrador-qa-marca');}var grave=!ok&&!x.soloFormula;return '<div style="border-left:3px solid '+(ok?'#7d9bc4':(grave?'#c62828':'#ef6c00'))+';padding:5px 8px;margin:5px 0;background:'+(ok?'#f7faff':(grave?'#fff5f5':'#fff9ed'))+'"><strong>'+esc(x.item.etiqueta)+(ok?'':(grave?' — no encontré el párrafo en Moodle':' — no pude ubicarla: compárala a ojo'))+'</strong><br>'+esc(x.item.texto)+'<br><span style="color:#555">Código: '+x.item.codigos.map(esc).join(' · ')+'</span></div>';}).join('');
     if(!paginaDistinta&&sobrantes.length)html+='<h4 style="margin:12px 0 5px;color:#ef6c00">Texto extra en Moodle ('+sobrantes.length+')</h4>'+sobrantes.slice(0,20).map(function(x){return '<div style="border-left:3px solid #ef6c00;padding:5px 8px;margin:5px 0;background:#fff9ed">'+esc(x.t)+'</div>';}).join('')+(sobrantes.length>20?'<p>Se muestran los primeros 20.</p>':'');
     if(links.length)html+='<h4 style="margin:12px 0 5px;color:#c62828">Enlaces con problema ('+links.length+')</h4>'+links.map(function(x){return '<div style="border-left:3px solid #c62828;padding:5px 8px;margin:5px 0;background:#fff5f5"><strong>'+esc(x.error)+': '+esc(x.item.texto)+'</strong><br>Esperado: '+esc(x.item.href)+(x.pagina?'<br>En Moodle: '+esc(x.pagina):'')+'</div>';}).join('');
     panel.innerHTML=html;document.body.appendChild(panel);document.getElementById('integrador-qa-cerrar').onclick=function(){[].slice.call(document.querySelectorAll('.integrador-qa-marca')).forEach(function(n){n.style.outline='';n.classList.remove('integrador-qa-marca');});panel.remove();};var primero=document.querySelector('.integrador-qa-marca');if(primero)primero.scrollIntoView({behavior:'smooth',block:'center'});
