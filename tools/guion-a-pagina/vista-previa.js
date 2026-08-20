@@ -188,6 +188,13 @@ caption { caption-side: top; padding: .5rem; }
 .p-3 { padding: 1rem; }
 .p-4 { padding: 1.5rem; }
 .pb-3 { padding-bottom: 1rem; }
+/* El !important NO es adorno ni copia distraída: esta hoja carga ANTES que la
+   del tema, y la regla .mainPlantilla23 (padding-bottom: 100px) tiene la misma
+   especificidad, así que sin él ganaría la del tema y la previa enseñaría el
+   hueco que la salida "solo el título" viene justo a quitar. En Moodle el
+   pb-0 de Bootstrap sí lo lleva; aquí se reproduce igual.
+   (Y sin acentos graves: esta hoja vive dentro de una plantilla de texto.) */
+.pb-0 { padding-bottom: 0 !important; }
 .mb-4 { margin-bottom: 1.5rem; }
 .no-gutters { margin-left: 0; margin-right: 0; }
 .align-items-center { align-items: center; }

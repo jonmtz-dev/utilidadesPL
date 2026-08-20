@@ -107,7 +107,7 @@ tools/
     README.md                Qué se coteja, qué se perdona y por qué
     index.html · script.js · verificador.js · styles.css
   bibliografias-margarita/  Word de fuentes → página 5.1, y QA de lo ya montado
-    index.html · script.js · qa.js · styles.css
+    index.html · script.js · qa.js · verificador.js · styles.css
 .claude/launch.json         Config del servidor local para previsualizar
 ```
 
@@ -480,12 +480,32 @@ distintas a propósito:
 2. **Corregir HTML pegado** — la lógica original: a los `<a>` de YouTube les
    agrega `class="nomediaplugin"`. **No se cambió a `nolink`**: hay páginas
    montadas con esa marca y cambiarla les reescribiría el criterio a media obra.
-3. **Revisar lo montado (QA)** — se sube el Word y se pega el HTML de la página
-   ya publicada; el informe dice qué no coincide. El motor vive en `qa.js` y
-   devuelve datos, así que se puede probar solo:
-   `QaBibliografia.revisar({ fuentes, html })`. **Tiene su propia tarjeta en el
-   panel**, dentro de Revisión · QA ("QA de Bibliografías"): es esta misma
-   herramienta abierta con `?modo=qa`.
+3. **Revisar lo montado (QA)** — se sube el Word y sale un **marcador**
+   (bookmarklet) que se ejecuta sobre la página de Moodle: enmarca ahí mismo lo
+   que no cuadra, dibuja su panel y genera la evidencia en PDF, igual que las
+   otras dos herramientas de QA. Como alternativa —revisar antes de publicar, o
+   desde otra máquina— el mismo cotejo corre sobre un HTML pegado.
+   **Tiene su propia tarjeta en el panel**, dentro de Revisión · QA ("QA de
+   Bibliografías"): es esta misma herramienta abierta con `?modo=qa`.
+
+   El reparto de archivos importa:
+
+   | Archivo | Qué es | ¿Viaja a Moodle? |
+   |---|---|---|
+   | `qa.js` → `MOTOR_QA_BIBLIO(DATOS, raiz)` | **El cotejo.** Recibe las fuentes y un nodo del DOM; devuelve hallazgos | **Sí**, serializado con `toString()` |
+   | `qa.js` → `QaBibliografia` | Envoltorio de la página: lee el Word y llama al motor sobre el HTML pegado | No |
+   | `verificador.js` | Dónde mirar dentro de Moodle, el enmarcado y el panel | **Sí** |
+   | `assets/evidencia-qa.js` | La evidencia imprimible, compartida con los otros QA | **Sí**, como argumento |
+
+   **El motor es uno solo a propósito.** El marcador y el modo de pegar el HTML
+   aplican exactamente las mismas reglas; con dos copias, la primera corrección
+   en una dejaba mintiendo a la otra. Llamado sin `raiz` el motor entrega sus
+   utilidades en vez de un informe, y de ahí salen también los lectores del
+   Word: así los regex que deciden qué es una fuente y qué es una marca del
+   guion existen **una vez**.
+
+   Se puede probar sin Moodle:
+   `QaBibliografia.revisar({ fuentes, html })`.
 
 #### Qué revisa el modo QA
 
@@ -505,10 +525,15 @@ distintas a propósito:
 
 Tres decisiones que conviene no deshacer:
 
-- **Se pide el HTML pegado, no un marcador que corra en Moodle** como en las
-  otras dos herramientas de QA. Lo que hay que revisar está en el CÓDIGO —el
-  `target`, el `span.nolink`, la clase `fuente`—, y eso se lee tal cual en el
-  editor de la Página sin ejecutar nada.
+- **El marcador ve cosas que el HTML pegado no.** En la página viva ya
+  corrieron los filtros de Moodle: si a un enlace de YouTube le faltó el
+  `span.nolink`, ahí se ve **el reproductor ya incrustado** —y así se reporta—,
+  mientras que en el código del editor no había nada raro que mirar.
+- **El marcador no revisa la página entera.** Entra por `#fuentes`, y si no
+  está, por `.mainPlantilla23` o por el contenido de `#region-main`. Tomando
+  `document.body` el menú del curso y el pie —llenos de `<a>` sin `target`—
+  metían cien errores que no son de la bibliografía. El modo de pegar el HTML
+  elige la raíz igual, por si pegan la página completa.
 - **Los dos formatos de guion entran igual.** El que solo manda las fuentes y el
   que las manda detrás de una hoja de control (módulo, elaboradores,
   indicaciones para producción). Esa hoja vive en TABLAS, y como `docx.js` no

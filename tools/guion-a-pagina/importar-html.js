@@ -348,6 +348,18 @@
             if (bloques.length && bloques[0].tipo === 'separador') bloques.shift();
         }
 
+        /* `pb-0` en el envoltorio es la firma de la salida "solo el título" (es
+           lo que mata el `padding-bottom: 100px` de la hoja). Solo se lee como
+           modo cuando de verdad no venía nada más que el título: en una página
+           con bloques, cambiar el modo los sacaría de la salida sin avisar, así
+           que ahí `pb-0` se queda como clase del contenedor y ya. */
+        const soloTitulo = raiz.classList.contains('pb-0') && Boolean(titulo) && !bloques.length;
+        if (soloTitulo) {
+            const i = clasesExtra.indexOf('pb-0');
+            if (i >= 0) clasesExtra.splice(i, 1);
+            avisos.push('Traía pb-0 y solo el título: se leyó como salida «Solo el título».');
+        }
+
         /* La cuenta va HACIA ABAJO: los crudos de dentro de un acordeón son los
            más frecuentes, y contando solo el primer nivel el aviso salía en cero
            justo cuando más falta hacía. */
@@ -368,7 +380,7 @@
         if (clasesExtra.length) {
             avisos.push(`Se conservaron las clases del contenedor: ${clasesExtra.join(', ')}.`);
         }
-        return { bloques, paleta, titulo, clasesExtra, avisos };
+        return { bloques, paleta, titulo, clasesExtra, salida: soloTitulo ? 'titulo' : 'completa', avisos };
     }
 
     global.importarHTML = importarHTML;

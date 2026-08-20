@@ -13,7 +13,7 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.50.0';
+const VERSION = '1.52.0';
 const CACHE = `panel-herramientas-v${VERSION}`;
 
 // Rutas relativas a propósito: en GitHub Pages la app vive en un subdirectorio
@@ -69,6 +69,7 @@ const APP_SHELL = [
     'tools/bibliografias-margarita/index.html',
     'tools/bibliografias-margarita/script.js',
     'tools/bibliografias-margarita/qa.js',
+    'tools/bibliografias-margarita/verificador.js',
     'tools/bibliografias-margarita/styles.css',
     'tools/guion-a-pagina/index.html',
     'tools/guion-a-pagina/script.js',

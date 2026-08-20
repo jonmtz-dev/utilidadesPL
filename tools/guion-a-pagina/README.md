@@ -707,6 +707,60 @@ Lo resuelve `conAnchoCompleto()`, que se enciende solo mientras se arma el cuerp
 de una ventana ancha. Es un contexto, no un campo del bloque: la misma tabla
 puede estar suelta o dentro de una ventana y no tiene por qué saberlo.
 
+## Salida: página completa o solo el título
+
+El mismo envoltorio, con un problema distinto en cada extremo. La hoja le da a
+`.mainPlantilla23` un `padding-bottom: 100px`:
+
+```css
+.mainPlantilla23 {
+    background-color: transparent;
+    min-height: 100%;
+    padding-bottom: 100px;
+}
+```
+
+En una **página** ese aire es el final del contenido y está bien. En un **recurso
+con archivo** (Archivo/PDF, Carpeta, URL, video) la descripción lleva **solo el
+título**: el contenedor cierra ahí mismo y esos 100px no son el final de nada
+—quedan colgando **entre el título y el PDF** que Moodle pinta debajo—. Es el
+hueco que se ve en los recursos ya publicados.
+
+De ahí el selector **Salida**, en *Ajustes de la página*:
+
+| Salida | Qué genera | Envoltorio |
+|---|---|---|
+| **Página completa** | El título y todo el lienzo | `container-fluid mainPlantilla23 <paleta>` |
+| **Solo el título** | El título y su `<hr>`, nada más | …`<paleta> pb-0` |
+
+Tres decisiones que no son obvias:
+
+- **El envoltorio se queda en los dos casos.** Es tentador soltar el título
+  pelado, pero el color y la rayita salen de `.mainPlantilla23 .tituloUnidad h1`
+  y de `--primary-40`, que define la clase del aula sobre ese mismo div
+  (`.mainPlantilla23.M01`). Sin envoltorio el título sale gris y sin barra.
+- **La línea `<hr>` se queda.** Es la regla del montaje —bajo la barra del título
+  va una línea— y ahí separa el título del archivo.
+- **`pb-0` y no `pb-3`.** Es utilidad de Bootstrap, así que lleva `!important` y
+  le gana a la hoja del tema, que no lo lleva. El único respiro que queda es el
+  margen del `<hr>`, que es justo lo que se quería.
+
+Los bloques del lienzo **no se borran** al cambiar a *Solo el título*: siguen
+ahí y vuelven al elegir *Página completa*. Lo que sí pasa es que dejan de
+publicarse, y eso se dice tres veces —bajo el selector (*"N bloques del lienzo no
+salen"*, en rojo), en *Antes de subir* como pendiente, y en los pasos de subida,
+que en ese modo hablan de editar la **Descripción del recurso** y no de crear una
+Página—. Callarlo sería que la herramienta pareciera haber perdido el trabajo.
+
+En *Antes de subir* ese modo tampoco revisa el lienzo: pedir que se suban las
+imágenes de bloques que no se publican es mandar a hacer trabajo que no va a
+salir (`bloquesQueSalen` en `dibujarRevision()`).
+
+> Y al **traer una página de vuelta**: `pb-0` en el envoltorio se lee como
+> *Solo el título*, pero **solo si de verdad no venía nada más que el título**.
+> En una página con bloques cambiar el modo los sacaría de la salida sin avisar,
+> así que ahí `pb-0` se conserva como clase del contenedor y ya.
+
 ## Texto sin HTML
 
 En cualquier campo de texto, la barrita inserta las marcas:
@@ -802,6 +856,7 @@ están**: un control que no puede hacer nada no ocupa sitio. Lo decide
 | Ajuste | Cuándo se ve |
 |---|---|
 | **Paleta del aula** | Siempre — toda página tiene una |
+| **Salida** | Siempre — todo recurso es una cosa o la otra |
 | **Resaltado** | Solo si la página ya tiene alguna palabra que abre ventana |
 | **Título** | Siempre, **salvo** que haya un bloque Presentación y el campo esté vacío |
 
@@ -1099,6 +1154,13 @@ y ajustar aquí: es una sola función por componente en `componentes.js`.
    mostrar su encabezado (viene del `data-label`).
 7. Cambiar la paleta del aula: el color del acordeón abierto debe cambiar en la
    previa sin regenerar nada.
+7. bis. **Salida en *Solo el título***: el HTML debe salir con `pb-0` y sin
+   ningún bloque, la previa debe medir `padding-bottom: 0px` en el contenedor
+   (y 100px al volver a *Página completa*), y con bloques en el lienzo tienen
+   que aparecer los dos avisos —el rojo bajo el selector y el de *Antes de
+   subir*—. Pegando ese mismo HTML en *Traer de Moodle*, la salida debe volver
+   sola a *Solo el título* y el `pb-0` **no** debe duplicarse en las clases del
+   contenedor.
 8. Con la ventana a 1366×700, el panel no debe scrollear ni recortar tarjetas.
 9. En celular (≈390px de ancho): la pantalla de inicio no debe encimarse con la
    paleta, y en un bloque anidado la cabecera y la ruta de la imagen deben

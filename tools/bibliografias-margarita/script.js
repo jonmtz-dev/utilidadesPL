@@ -11,9 +11,12 @@
    2. **Corregir HTML pegado** — la lógica original de esta herramienta, intacta:
       a los <a> de YouTube les agrega `class="nomediaplugin"`. NO se cambió a
       span.nolink a propósito: hay páginas ya montadas que dependen de ella.
-   3. **Revisar lo montado** — el QA: coteja el Word contra el HTML que ya está
-      en Moodle. El motor vive en `qa.js`; aquí solo se lee el Word, se pide la
-      revisión y se dibuja el informe.
+   3. **Revisar lo montado** — el QA. Del Word sale un MARCADOR que se ejecuta
+      sobre la página de Moodle y enmarca ahí mismo lo que no cuadra, igual que
+      las otras dos herramientas de QA; y, para cuando eso no se puede, el mismo
+      cotejo sobre un HTML pegado. El motor del cotejo es UNO (`qa.js`) y viaja
+      serializado dentro del marcador: los dos caminos aplican las mismas
+      reglas.
 
    Que los dos primeros modos usen marcas distintas es deliberado, no un
    descuido.
@@ -302,6 +305,7 @@ ${parrafos}
             avisoQa(`${file.name} — ${fuentes.length} fuente(s), ${conSangria} con sangría francesa` +
                 (descartados.length ? `, ${descartados.length} encabezado(s) omitido(s)` : '') +
                 (estado.qa.hipervinculos !== null ? `. El guion declara ${estado.qa.hipervinculos} hipervínculo(s)` : '') + '.', true);
+            dibujarVerificador();
             revisarSiSePuede();
         } catch (e) {
             console.error('[biblio] docx qa:', e);
@@ -486,6 +490,42 @@ ${parrafos}
         });
     }
 
+    /* ------------------------------------------------------- El marcador
+
+       Se manda a Moodle el motor del cotejo (`qa.js`), el generador de
+       evidencia (`assets/evidencia-qa.js`) y el verificador, los tres con
+       `toString()`; los dos primeros van como argumento y NO se cuelgan de
+       `window` para no dejar rastro en la página revisada. Es el mismo armado
+       que usan QA de Actividad y QA de Cuestionario. */
+    function codigoVerificador() {
+        const paquete = {
+            fuentes: estado.qa.fuentes,
+            hipervinculos: estado.qa.hipervinculos,
+            archivo: estado.qa.archivo,
+            // Da nombre al PDF de la evidencia: QA_<nombre del Word>.
+            clave: (estado.qa.archivo || 'bibliografia').replace(/\.docx$/i, '')
+        };
+        return 'void (function () {\n'
+            + 'var motor = ' + window.MOTOR_QA_BIBLIO.toString() + ';\n'
+            + 'var evidencia = ' + window.EVIDENCIA_QA.toString() + ';\n'
+            + '(' + window.VERIFICADOR_BIBLIO.toString() + ')('
+            + JSON.stringify(paquete) + ', motor, evidencia);\n'
+            + '}());';
+    }
+
+    function dibujarVerificador() {
+        const hay = estado.qa.fuentes.length > 0;
+        $('#verificador-vacio').classList.toggle('hidden', hay);
+        $('#verificador-caja').classList.toggle('hidden', !hay);
+        if (!hay) return;
+        const codigo = codigoVerificador();
+        $('#codigo-verificador').value = codigo;
+        $('#marcador').setAttribute('href', 'javascript:' + encodeURIComponent(codigo));
+        // El texto del enlace es el nombre que toma el favorito al arrastrarlo.
+        $('#marcador-nombre').textContent = 'QA_' + (estado.qa.archivo || 'bibliografia').replace(/\.docx$/i, '');
+        if (window.actualizarPistas) window.actualizarPistas();
+    }
+
     /* ---------------------------------------------------------------- UI */
 
     function activarTab(nombre) {
@@ -510,7 +550,7 @@ ${parrafos}
             t.classList.toggle('hidden', modos.length > 0 && !modos.includes(modo));
         });
         if (modo === 'word') { refrescarSalida(); activarTab('preview'); }
-        else if (modo === 'qa') activarTab('qa');
+        else if (modo === 'qa') activarTab(estado.qa.informe ? 'qa' : 'verificador');
         else activarTab('code');
     }
 
@@ -584,6 +624,15 @@ ${parrafos}
         $('#btn-process').addEventListener('click', corregirPegado);
 
         // Modo QA.
+        $('#btn-copiar-verificador').addEventListener('click', () => {
+            const ta = $('#codigo-verificador');
+            if (!ta.value.trim()) return;
+            const i = $('#btn-copiar-verificador i');
+            navigator.clipboard.writeText(ta.value).then(() => {
+                i.className = 'ph ph-check';
+                setTimeout(() => { i.className = 'ph ph-copy'; }, 2000);
+            }).catch(() => { ta.focus(); ta.select(); });
+        });
         $('#input-montado').addEventListener('input', revisarSiSePuede);
         $('#btn-revisar').addEventListener('click', revisar);
         $('#btn-evidencia').addEventListener('click', generarEvidencia);

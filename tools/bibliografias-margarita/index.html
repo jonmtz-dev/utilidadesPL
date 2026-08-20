@@ -117,9 +117,11 @@
                 <!-- ---------- Modo 3: QA de lo ya montado ---------- -->
                 <div id="modo-qa" class="modo-panel">
                     <p class="field-hint">
-                        Coteja la página montada contra el Word: que estén todas las fuentes y bien
-                        escritas, que los enlaces abran en pestaña nueva, que los de YouTube estén
-                        protegidos y que la sangría francesa sea la del documento.
+                        Sube el Word y sale un <strong>marcador</strong> para arrastrar a la barra del
+                        navegador: se pulsa estando en la página de Moodle y ahí mismo enmarca lo que
+                        no cuadra. Revisa que estén todas las fuentes y bien escritas, que los enlaces
+                        abran en pestaña nueva, que los de YouTube estén protegidos y que la sangría
+                        francesa sea la del documento.
                     </p>
 
                     <div class="dropzone" id="zona-word-qa" tabindex="0" role="button"
@@ -131,15 +133,17 @@
                     </div>
                     <p class="field-hint" id="qa-docx-info"></p>
 
+                    <!-- El camino de siempre es el marcador. Esto queda para cuando no
+                         se puede usar: revisar antes de publicar, o desde otra máquina. -->
                     <label class="campo-etiqueta" for="input-montado">
-                        <i class="ph ph-code"></i> HTML de la página montada
-                        <span class="campo-ayuda">en Moodle: editar la Página → editor de texto → <code>&lt;/&gt;</code> código fuente</span>
+                        <i class="ph ph-code"></i> O pega el HTML, sin ir a Moodle
+                        <span class="campo-ayuda">editar la Página → editor de texto → <code>&lt;/&gt;</code> código fuente</span>
                     </label>
                     <textarea id="input-montado" class="plain-input code-input"
                               placeholder="Pega aquí el HTML tal como está en Moodle…"></textarea>
 
                     <button id="btn-revisar" class="btn-primary mt-4" disabled>
-                        <i class="ph ph-shield-check"></i> Revisar el montaje
+                        <i class="ph ph-shield-check"></i> Revisar el HTML pegado
                     </button>
                 </div>
             </section>
@@ -157,7 +161,8 @@
                     <button class="tab-btn active" data-target="preview" data-modos="word"><i class="ph ph-eye"></i> Vista previa</button>
                     <button class="tab-btn" data-target="code" data-modos="word pegar"><i class="ph ph-code"></i> HTML</button>
                     <button class="tab-btn" data-target="links" data-modos="word pegar"><i class="ph ph-link"></i> Enlaces detectados</button>
-                    <button class="tab-btn" data-target="qa" data-modos="qa"><i class="ph ph-shield-check"></i> Revisión</button>
+                    <button class="tab-btn" data-target="verificador" data-modos="qa"><i class="ph ph-bookmark-simple"></i> Marcador</button>
+                    <button class="tab-btn" data-target="qa" data-modos="qa"><i class="ph ph-shield-check"></i> Informe</button>
                 </div>
 
                 <div id="preview-content" class="tab-content active">
@@ -204,10 +209,44 @@
                     <ul id="links-list" class="links-list hidden"></ul>
                 </div>
 
+                <div class="tab-content" id="verificador-content">
+                    <div class="empty-state" id="verificador-vacio">
+                        <i class="ph ph-bookmark-simple"></i>
+                        <p>Sube el Word para generar el marcador</p>
+                    </div>
+                    <div id="verificador-caja" class="verificador-caja scroll-sin-barra scroll-difuso hidden" data-pista-scroll>
+                        <div class="opcion-entrega">
+                            <h3><i class="ph ph-bookmark-simple"></i> Marcador</h3>
+                            <p class="field-hint">Arrástralo a la barra de marcadores y púlsalo estando
+                                en la página de la bibliografía, ya guardada.</p>
+                            <a class="btn-secondary btn-chico bookmarklet-link" id="marcador" href="#"
+                               onclick="return false;">
+                                <i class="ph ph-shield-check"></i> <span id="marcador-nombre">QA bibliografía</span>
+                            </a>
+                        </div>
+                        <div class="opcion-entrega">
+                            <h3><i class="ph ph-terminal-window"></i> Consola</h3>
+                            <p class="field-hint">F12 → Console. Pega y ejecuta; no modifica la página.</p>
+                            <div class="code-wrapper">
+                                <button id="btn-copiar-verificador" class="btn-icon" title="Copiar verificador"><i class="ph ph-copy"></i></button>
+                                <textarea id="codigo-verificador" class="code-output" readonly></textarea>
+                            </div>
+                        </div>
+                        <div class="check-bloque">
+                            <h3><i class="ph ph-list-numbers"></i> Cómo se lee</h3>
+                            <p class="check-nota">El panel sale arriba a la derecha y lo que no cuadra
+                                queda enmarcado en la propia página: <span class="punto punto--error"></span>
+                                rojo lo que hay que corregir, <span class="punto punto--aviso"></span>
+                                naranja lo que solo hay que mirar. "Cerrar" quita los marcos; la
+                                revisión no escribe nada en Moodle.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="tab-content" id="qa-content">
                     <div class="empty-state" id="qa-empty">
                         <i class="ph ph-shield-check"></i>
-                        <p>Sube el Word y pega el HTML montado para ver aquí el informe</p>
+                        <p>Aquí sale el informe si pegas el HTML en vez de usar el marcador</p>
                     </div>
                     <div id="qa-informe" class="qa-informe hidden">
                         <div class="qa-veredicto" id="qa-veredicto"></div>
@@ -231,6 +270,7 @@
     <script src="../micrositio-a-pagina/hoja-moodle-default.js"></script>
     <!-- El motor del QA y la evidencia imprimible que comparten las de revisión. -->
     <script src="qa.js"></script>
+    <script src="verificador.js"></script>
     <script src="../../assets/evidencia-qa.js"></script>
     <script src="../../assets/scroll-pista.js" defer></script>
     <script src="script.js"></script>

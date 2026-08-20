@@ -1,11 +1,21 @@
 /* ==========================================================================
    QA de bibliografías (Moodle 5.1) — el motor de la revisión.
 
-   Coteja el Word de fuentes contra el HTML de la página YA MONTADA en Moodle y
-   devuelve datos; no dibuja nada. Quien pinta el informe es `script.js`, y así
-   esta parte se puede probar sola desde la consola:
+   Aquí viven DOS cosas y la separación importa:
 
-       QaBibliografia.revisar({ fuentes: [...], html: '<div…>' })
+   1. `window.MOTOR_QA_BIBLIO(DATOS, raiz)` — el cotejo. Recibe las fuentes del
+      Word y un nodo del DOM, y devuelve hallazgos. **Se serializa con
+      `toString()` y viaja dentro del marcador**, igual que los verificadores de
+      las otras dos herramientas de QA, así que NO puede depender de nada de
+      fuera: todo lo que usa va dentro de la función. Llamado sin `raiz` entrega
+      sus utilidades en vez de un informe: así la página de la herramienta, que
+      también lee el Word, no necesita una segunda copia de estas reglas.
+   2. `window.QaBibliografia` — el envoltorio para la página de la herramienta.
+
+   Que el motor sea uno solo es el punto: el marcador que corre dentro de Moodle
+   y el modo de "pegar el HTML" aplican EXACTAMENTE las mismas reglas. Con dos
+   copias, la primera corrección en una dejaba mintiendo a la otra —que es como
+   se nos quedó vivo el hex #d8a7b6 duplicado durante meses—.
 
    Qué se revisa, y por qué justo eso:
 
@@ -30,7 +40,7 @@
    por nombre en `fuentesDeBloques()`.
    ========================================================================== */
 
-window.QaBibliografia = (function () {
+window.MOTOR_QA_BIBLIO = function (DATOS, raiz) {
     'use strict';
 
     /* Encabezados que el Word trae al inicio y NO son una fuente. Misma lista
@@ -133,8 +143,9 @@ window.QaBibliografia = (function () {
             const texto = limpiar(b.texto);
             if (!texto) return;
             const pelado = limpiar(sinMarcasDeFormato(texto));
-            if (RE_MARCA.test(pelado)) { descartados.push(pelado); return; }
-            if (RE_TITULO.test(pelado) && !urlsDe(pelado).length) { descartados.push(pelado); return; }
+            // Las mismas dos preguntas que el motor le hace a lo montado: una
+            // marca del guion y el título de la sección no son una fuente.
+            if (esMarcaDeGuion(texto) || esTituloDeSeccion(texto)) { descartados.push(pelado); return; }
             fuentes.push({
                 texto,
                 // Campo nuevo de assets/docx.js: `w:hanging` (o un `w:firstLine`
@@ -169,7 +180,31 @@ window.QaBibliografia = (function () {
         return valor;
     }
 
+    const esMarcaDeGuion = (s) => RE_MARCA.test(limpiar(sinMarcasDeFormato(s)));
+
+    const esTituloDeSeccion = (s) => {
+        const pelado = limpiar(sinMarcasDeFormato(s));
+        return RE_TITULO.test(pelado) && !urlsDe(pelado).length;
+    };
+
+    /* Sin `raiz` no hay página que revisar: se están pidiendo las utilidades.
+       Es la puerta que usa la página de la herramienta para leer el Word con
+       las mismas reglas, sin duplicarlas. Serializado a Moodle, esta rama
+       simplemente no se usa. */
+    if (!raiz) {
+        return {
+            limpiar, planchar, urlsDe, sinMarcasDeFormato,
+            esMarcaDeGuion, esTituloDeSeccion,
+            fuentesDeBloques, hipervinculosDeclarados
+        };
+    }
+
     /* --------------------------------------------- Moodle: lo ya montado */
+
+    /* `raiz` puede SER el bloque buscado —el marcador entrega ya el contenedor
+       de la bibliografía— o contenerlo —el HTML pegado llega dentro de un
+       body—. Las dos formas tienen que funcionar con el mismo selector. */
+    const dentro = (sel) => (raiz.matches && raiz.matches(sel)) ? raiz : raiz.querySelector(sel);
 
     /** ¿Este párrafo lleva sangría francesa? */
     function conSangria(nodo) {
@@ -180,15 +215,14 @@ window.QaBibliografia = (function () {
     }
 
     /** Los párrafos de la página montada, en orden. */
-    function parrafosDeHtml(doc) {
-        const nodos = [...doc.body.querySelectorAll('p, li')]
+    function parrafosDeRaiz() {
+        const nodos = [...raiz.querySelectorAll('p, li')]
             // Un <li> con <p> adentro se contaría dos veces.
             .filter(n => !n.querySelector('p, li'));
         return nodos.map((n, i) => ({
             indice: i,
             nodo: n,
             texto: limpiar(n.textContent),
-            html: n.innerHTML,
             sangria: conSangria(n),
             enlaces: [...n.querySelectorAll('a[href]')]
         }));
@@ -279,28 +313,26 @@ window.QaBibliografia = (function () {
         return /\(\s*(s\.\s*f\.?|\d{4})/i.test(texto) || urlsDe(texto).length > 0;
     }
 
-    function revisar(datos) {
+    function revisar() {
         const informe = nuevoInforme();
-        const fuentes = (datos && datos.fuentes) || [];
-        const html = (datos && datos.html) || '';
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const parrafos = parrafosDeHtml(doc);
+        const fuentes = (DATOS && DATOS.fuentes) || [];
+        const parrafos = parrafosDeRaiz();
         const conTexto = parrafos.filter(p => p.texto);
 
         /* ---------- Estructura: solo se informa, no se juzga ----------
            A veces se pega la página entera y a veces solo el bloque de fuentes.
            Decir "falta el envoltorio" en el segundo caso sería mentir. */
-        const contenedor = doc.querySelector('.mainPlantilla23');
+        const contenedor = dentro('.mainPlantilla23');
         const paleta = contenedor
             ? [...contenedor.classList].find(c => /^(M\d{2}|MM|reg)$/.test(c)) || ''
             : '';
-        const h1 = doc.querySelector('.tituloUnidad h1, h1');
+        const h1 = dentro('.tituloUnidad h1') || dentro('h1');
         informe.resumen.estructura = {
             envoltorio: Boolean(contenedor),
             paleta,
             titulo: h1 ? limpiar(h1.textContent) : '',
-            columnas: Boolean(doc.querySelector('.text-multicol')),
-            lineaEntreColumnas: Boolean(doc.querySelector('.text-multicol-rule'))
+            columnas: Boolean(dentro('.text-multicol')),
+            lineaEntreColumnas: Boolean(dentro('.text-multicol-rule'))
         };
 
         /* ---------------------- Las fuentes ---------------------- */
@@ -331,14 +363,14 @@ window.QaBibliografia = (function () {
             const actual = planchar(x.parrafo.texto);
             if (esperado === actual) { iguales++; return; }
             if (firmaBlanda(esperado) === firmaBlanda(actual)) {
-                puntuacion.items.push({ esperado, actual });
+                puntuacion.items.push({ esperado, actual, nodo: x.parrafo.nodo });
                 return;
             }
-            distintas.items.push({ esperado, actual });
+            distintas.items.push({ esperado, actual, nodo: x.parrafo.nodo });
         });
 
         sobrantes.forEach(p => {
-            (pareceFuente(p.texto) ? invasoras : coladas).items.push({ esperado: '', actual: p.texto });
+            (pareceFuente(p.texto) ? invasoras : coladas).items.push({ esperado: '', actual: p.texto, nodo: p.nodo });
         });
 
         // Repetidas: se cuentan sobre lo montado, contra lo que trae el Word.
@@ -347,14 +379,15 @@ window.QaBibliografia = (function () {
         const vecesMoodle = new Map();
         conTexto.forEach(p => {
             const k = clave(p.texto);
-            if (!vecesMoodle.has(k)) vecesMoodle.set(k, { veces: 0, texto: p.texto });
+            if (!vecesMoodle.has(k)) vecesMoodle.set(k, { veces: 0, texto: p.texto, nodo: p.nodo });
             vecesMoodle.get(k).veces++;
         });
         vecesMoodle.forEach((dato, k) => {
             if (dato.veces > 1 && dato.veces > (vecesWord.get(k) || 0)) {
                 repetidas.items.push({
                     esperado: (vecesWord.get(k) || 0) + ' vez/veces en el Word',
-                    actual: dato.veces + ' veces en Moodle · ' + dato.texto
+                    actual: dato.veces + ' veces en Moodle · ' + dato.texto,
+                    nodo: dato.nodo
                 });
             }
         });
@@ -373,7 +406,7 @@ window.QaBibliografia = (function () {
         }
 
         /* ---------------------- Los enlaces ---------------------- */
-        const anclas = [...doc.body.querySelectorAll('a[href]')];
+        const anclas = [...raiz.querySelectorAll('a[href]')];
         const sinPestana = anotar(informe, 'error', 'Enlaces', 'No abren en pestaña nueva',
             'Les falta target="_blank": el enlace se lleva al estudiante fuera del curso.');
         const sinProteger = anotar(informe, 'error', 'Enlaces', 'YouTube sin proteger',
@@ -387,7 +420,11 @@ window.QaBibliografia = (function () {
         const urlRota = anotar(informe, 'aviso', 'Enlaces', 'La dirección viene partida en el Word',
             'Trae un espacio en medio: el enlace montado no llevará a ningún lado. Se corrige en el Word.');
 
+        const incrustados = anotar(informe, 'error', 'Enlaces', 'Ya quedó incrustado el reproductor',
+            'Moodle cambió el enlace por un video embebido: la ficha perdió su dirección.');
+
         sinPestana.etiquetas = ['Debe llevar', 'El enlace'];
+        incrustados.etiquetas = ['', 'En la página'];
         sinNoopener.etiquetas = ['Debe llevar', 'El enlace'];
         sinProteger.etiquetas = ['Debe ser', 'En la página'];
         textoDistinto.etiquetas = ['Dice', 'Lleva a'];
@@ -400,26 +437,49 @@ window.QaBibliografia = (function () {
             const href = a.getAttribute('href') || '';
             const visible = limpiar(a.textContent);
             if ((a.getAttribute('target') || '') !== '_blank') {
-                sinPestana.items.push({ esperado: 'target="_blank"', actual: visible || href });
+                sinPestana.items.push({ esperado: 'target="_blank"', actual: visible || href, nodo: a });
             }
             if (RE_YOUTUBE.test(href)) {
                 youtube++;
                 const protegido = a.querySelector('.nolink, .nomediaplugin')
                     || (a.classList.contains('nomediaplugin'));
                 if (!protegido) {
-                    sinProteger.items.push({ esperado: '<span class="nolink">' + href + '</span>', actual: visible || href });
+                    sinProteger.items.push({
+                        esperado: '<span class="nolink">' + href + '</span>',
+                        actual: visible || href, nodo: a
+                    });
                 }
             }
             if (!(a.getAttribute('rel') || '').includes('noopener')) {
-                sinNoopener.items.push({ esperado: 'rel="noopener"', actual: visible || href });
+                sinNoopener.items.push({ esperado: 'rel="noopener"', actual: visible || href, nodo: a });
             }
             // Solo cuando el texto visible ES una dirección: en las fichas se
             // escribe la URL completa, pero un enlace sobre una palabra es
             // legítimo y no hay nada que comparar.
             if (/^(https?:\/\/|www\.)\S+$/i.test(visible) && urlNormal(visible) !== urlNormal(href)) {
-                textoDistinto.items.push({ esperado: visible, actual: href });
+                textoDistinto.items.push({ esperado: visible, actual: href, nodo: a });
             }
         });
+
+        /* Esto SOLO se ve corriendo el marcador sobre la página viva: el filtro
+           de multimedia de Moodle ya cambió el enlace por un reproductor y en el
+           HTML del editor no hay nada raro que mirar. Es la razón de peso para
+           revisar dentro de Moodle y no solo sobre el código pegado. */
+        const yaAvisados = new Set();
+        [...raiz.querySelectorAll('iframe[src*="youtube"], iframe[src*="youtu.be"], .mediaplugin, video')]
+            .forEach(n => {
+                // El reproductor son varios nodos anidados (`.mediaplugin` con
+                // su <iframe> dentro): sin el Set, la misma ficha salía dos
+                // veces en el informe.
+                const padre = (n.closest && n.closest('p, li')) || n;
+                if (yaAvisados.has(padre)) return;
+                yaAvisados.add(padre);
+                incrustados.items.push({
+                    esperado: '',
+                    actual: limpiar(padre.textContent) || 'reproductor incrustado',
+                    nodo: padre
+                });
+            });
 
         /* Las URL que el Word trae y que en la página no quedaron enlazadas. Se
            mira dentro de la fuente que le toca, no en toda la página: una misma
@@ -429,7 +489,7 @@ window.QaBibliografia = (function () {
             const hrefs = x.parrafo.enlaces.map(a => urlNormal(a.getAttribute('href')));
             urlsDe(x.fuente.texto).forEach(u => {
                 if (!hrefs.includes(urlNormal(u))) {
-                    noEnlazadas.items.push({ esperado: u, actual: x.parrafo.texto });
+                    noEnlazadas.items.push({ esperado: u, actual: x.parrafo.texto, nodo: x.parrafo.nodo });
                 }
             });
         });
@@ -486,7 +546,8 @@ window.QaBibliografia = (function () {
             if (x.parrafo.sangria !== mayoria) {
                 sangriaMal.items.push({
                     esperado: mayoria ? '<p class="fuente">' : '<p>',
-                    actual: x.parrafo.texto
+                    actual: x.parrafo.texto,
+                    nodo: x.parrafo.nodo
                 });
             }
         });
@@ -496,7 +557,7 @@ window.QaBibliografia = (function () {
             'Texto de producción que no debía llegar a la página.');
         marcas.etiquetas = ['', 'En la página'];
         conTexto.forEach(p => {
-            if (RE_MARCA.test(p.texto)) marcas.items.push({ esperado: '', actual: p.texto });
+            if (esMarcaDeGuion(p.texto)) marcas.items.push({ esperado: '', actual: p.texto, nodo: p.nodo });
         });
         const vacios = parrafos.length - conTexto.length;
         if (vacios) {
@@ -505,7 +566,7 @@ window.QaBibliografia = (function () {
         }
 
         /* ------------------ El conteo de producción ------------------ */
-        const declarados = datos && datos.hipervinculos;
+        const declarados = DATOS && DATOS.hipervinculos;
         if (typeof declarados === 'number') {
             const enWord = fuentes.reduce((n, f) => n + urlsDe(f.texto).length, 0);
             if (declarados !== anclas.length || declarados !== enWord) {
@@ -537,11 +598,35 @@ window.QaBibliografia = (function () {
         return informe;
     }
 
+    return revisar();
+};
+
+
+/* --------------------------------------------------------------------------
+   EL ENVOLTORIO DE LA PÁGINA DE LA HERRAMIENTA. Esto no viaja a Moodle.
+
+   `revisar({ fuentes, html })` para el modo de pegar el código, y los lectores
+   del Word, que salen del propio motor para no tener dos versiones de las
+   reglas que deciden qué es una fuente.
+   -------------------------------------------------------------------------- */
+window.QaBibliografia = (function () {
+    'use strict';
+
+    const utiles = window.MOTOR_QA_BIBLIO({}, null);
+
     return {
-        revisar,
-        fuentesDeBloques,
-        hipervinculosDeclarados,
-        // Se exponen para poder probarlas desde la consola.
-        _internas: { clave, firmaBlanda, similitud, urlsDe, planchar }
+        utiles,
+        fuentesDeBloques: utiles.fuentesDeBloques,
+        hipervinculosDeclarados: utiles.hipervinculosDeclarados,
+        revisar: (datos) => {
+            const doc = new DOMParser().parseFromString((datos && datos.html) || '', 'text/html');
+            /* La misma elección de raíz que hace el marcador dentro de Moodle:
+               si pegaron la página entera, el menú y el pie traen enlaces sin
+               `target` que no son de la bibliografía y salían como errores. */
+            const raiz = doc.querySelector('#fuentes')
+                || doc.querySelector('.mainPlantilla23')
+                || doc.body;
+            return window.MOTOR_QA_BIBLIO(datos || {}, raiz);
+        }
     };
 })();

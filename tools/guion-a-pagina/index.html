@@ -70,6 +70,17 @@
                         <input id="titulo-pagina" class="plain-input" placeholder="El encabezado grande de la página" title="El encabezado grande con la barra de color, hasta arriba de la página. Déjalo vacío si usas el bloque Presentación, que ya trae el suyo.">
                         <p id="titulo-aviso" class="field-hint hidden"></p>
                     </div>
+                    <!-- Qué se genera. No es adorno del contenedor: en un
+                         recurso con archivo (PDF, video) la descripción lleva
+                         SOLO el título, el contenedor cierra ahí mismo y el
+                         padding-bottom: 100px de .mainPlantilla23 queda
+                         colgando entre el título y el archivo que pinta Moodle
+                         debajo. Ese modo cierra con pb-0. -->
+                    <div class="campo-titulo" id="campo-salida">
+                        <span class="campo-etiqueta" title="Si el recurso es una página entera o solo la barra del título de un archivo (PDF, video). Cambia el HTML que sale."><i class="ph ph-export"></i> Salida</span>
+                        <div id="salida-pagina" class="opciones" role="radiogroup" aria-label="Qué se genera"></div>
+                        <p id="salida-aviso" class="field-hint"></p>
+                    </div>
                     <!-- Intensidad del resaltado de las palabras que abren una
                          ventana. Va por página y no por palabra: en los montajes
                          del equipo cada recurso usa un nivel y lo usa parejo. -->

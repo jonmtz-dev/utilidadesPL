@@ -28,7 +28,7 @@
        Estado
        --------------------------------------------------------------------- */
 
-    const pagina = { paleta: 'M01', titulo: '', resalte: 'bg-resalte-30', clasesExtra: [], bloques: [] };
+    const pagina = { paleta: 'M01', titulo: '', resalte: 'bg-resalte-30', salida: 'completa', clasesExtra: [], bloques: [] };
     let seleccion = null;          // id del bloque seleccionado
     let contadorId = 0;
     let indicaciones = [];         // marcas del guion que no se supo traducir
@@ -103,6 +103,7 @@
         pagina.paleta = datos.pagina.paleta;
         pagina.titulo = datos.pagina.titulo;
         pagina.resalte = datos.pagina.resalte;
+        pagina.salida = datos.pagina.salida || 'completa';
         pagina.clasesExtra = datos.pagina.clasesExtra || [];
         pagina.bloques = datos.pagina.bloques;
         contadorId = datos.contadorId;
@@ -119,6 +120,7 @@
         reiniciarIds();
         marcarBloques(Boolean(paraPrevia));
         resalteDeVentana(pagina.resalte);
+        const salida = SALIDAS.find(s => s.v === pagina.salida) || SALIDAS[0];
         const cuerpo = [];
         if ((pagina.titulo || '').trim()) {
             cuerpo.push(COMPONENTES.titulo.html({ nivel: 'h1', texto: pagina.titulo }, 1));
@@ -126,7 +128,11 @@
             // <hr> pelado, no el .espacio-fino del separador manual.
             cuerpo.push(`${'    '}<hr>`);
         }
-        const bloques = htmlDeBloques(pagina.bloques, 1);
+        /* En "solo el título" los bloques del lienzo NO salen: el recurso es el
+           título y, debajo, el archivo que pinta Moodle. No se borran —siguen
+           en el lienzo y vuelven en cuanto se elige "página completa"—, y
+           Pendientes avisa de cuántos se están quedando fuera. */
+        const bloques = salida.v === 'titulo' ? '' : htmlDeBloques(pagina.bloques, 1);
         marcarBloques(false);
         if (bloques) cuerpo.push(bloques);
         if (!cuerpo.length) return '';
@@ -150,13 +156,18 @@
            utilidades de Bootstrap sí lo llevan: `pb-3` le gana y deja el fondo
            en 16px. En la presentación de referencia da igual, pero aquí saldría
            en TODAS las páginas, recortándoles el aire de abajo —justo lo
-           contrario del problema que se vino a arreglar—. */
+           contrario del problema que se vino a arreglar—.
+
+           La excepción es la salida "solo el título" (`SALIDAS`): ahí el
+           contenedor cierra justo después del título, así que esos 100px no
+           son el final de nada —quedan colgando entre el título y el PDF que
+           Moodle pinta debajo—. Ese modo, y solo ese, los mata con `pb-0`. */
         /* Las clases extra que traía una página importada (`ms-convertido`, la
            que pone Micrositio a Página) se conservan: la hoja del tema tiene
            reglas propias colgadas de ellas y perderlas cambia cómo se ve la
            página entera, sin avisar. */
         const extra = (pagina.clasesExtra || []).length ? ' ' + pagina.clasesExtra.join(' ') : '';
-        return `<div class="container-fluid mainPlantilla23 ${pagina.paleta}${extra}" style="max-width: 100% !important;">\n${cuerpo.join('\n')}\n</div>`;
+        return `<div class="container-fluid mainPlantilla23 ${pagina.paleta}${salida.pb}${extra}" style="max-width: 100% !important;">\n${cuerpo.join('\n')}\n</div>`;
     }
 
     /* ---------------------------------------------------------------------
@@ -538,6 +549,12 @@ document.addEventListener('click', function (e) {
         const caja = $('#check-lista');
         const avisos = [];
         const imagenes = new Set();
+        /* En "solo el título" el lienzo no se publica, así que revisarlo sería
+           mandar a hacer trabajo que no va a salir: imágenes que nadie tiene
+           que subir, acordeones que no existen. Se revisa lo que SÍ se publica
+           y se avisa aparte de lo que se queda fuera. */
+        const soloTitulo = pagina.salida === 'titulo';
+        const bloquesQueSalen = soloTitulo ? [] : pagina.bloques;
 
         const recorrer = lista => (lista || []).forEach(b => {
             [b.src, b.icono, ...(b.items || []).map(i => i.img)].forEach(u => {
@@ -559,10 +576,20 @@ document.addEventListener('click', function (e) {
             recorrer(b.hijos);
             (b.items || []).forEach(i => recorrer(i.hijos));
         });
-        recorrer(pagina.bloques);
+        recorrer(bloquesQueSalen);
 
         if (!(pagina.titulo || '').trim()) {
-            avisos.push({ tono: 'aviso', texto: 'La página no tiene título.' });
+            avisos.push(soloTitulo
+                ? { tono: 'error', texto: 'La salida está en «Solo el título» y el título está vacío: no se genera nada.' }
+                : { tono: 'aviso', texto: 'La página no tiene título.' });
+        }
+        if (soloTitulo && pagina.bloques.length) {
+            const n = pagina.bloques.length;
+            avisos.push({
+                tono: 'aviso',
+                texto: `La salida está en «Solo el título»: ${n} bloque${n === 1 ? '' : 's'} del lienzo ` +
+                    `no se publica${n === 1 ? '' : 'n'}. Cambia a «Página completa» si sí deben salir.`
+            });
         }
 
         /* Los resaltes por categoría (bg-marca-1…6) todavía NO están en la hoja
@@ -582,7 +609,15 @@ document.addEventListener('click', function (e) {
 
         const partes = [];
 
-        partes.push(`
+        partes.push(soloTitulo ? `
+            <div class="check-bloque">
+                <h3><i class="ph ph-numbered-list"></i> Cómo se sube</h3>
+                <ol class="pasos">
+                    <li>Abre en Moodle el recurso que ya tiene el archivo (Archivo, Carpeta, URL…) y edita su <strong>Descripción</strong>.</li>
+                    <li>Abre <strong>código fuente</strong> <code>&lt;/&gt;</code>, borra todo y pega el HTML de la pestaña HTML.</li>
+                    <li>Guarda y revisa: el archivo tiene que quedar pegado al título, sin el hueco de abajo.</li>
+                </ol>
+            </div>` : `
             <div class="check-bloque">
                 <h3><i class="ph ph-numbered-list"></i> Cómo se sube</h3>
                 <ol class="pasos">
@@ -606,7 +641,9 @@ document.addEventListener('click', function (e) {
                 }).join('')}</ul>
                        ${delGuion.length ? '<button id="btn-zip" class="btn-secondary btn-chico"><i class="ph ph-download-simple"></i> Descargar imágenes (.zip)</button>' : ''}
                        <p class="check-nota">Súbelas al editor con <strong>ese mismo nombre</strong>: el HTML las llama por nombre con <code>@@PLUGINFILE@@</code>. Con el .zip las arrastras todas de un jalón.</p>`
-                : '<p class="check-nota">Ninguna: la página no usa imágenes propias.</p>'}
+                : `<p class="check-nota">${soloTitulo
+                    ? 'Ninguna: el título no lleva imágenes, y el archivo lo pone Moodle.'
+                    : 'Ninguna: la página no usa imágenes propias.'}</p>`}
             </div>`);
 
         const conteo = { acordeon: 0, modal: 0, tabla: 0, pestanas: 0 };
@@ -616,7 +653,7 @@ document.addEventListener('click', function (e) {
             contar(b.hijos);
             (b.items || []).forEach(i => contar(i.hijos));
         });
-        contar(pagina.bloques);
+        contar(bloquesQueSalen);
         // Los tooltips en línea no son bloques (viven dentro de un párrafo), así
         // que se cuentan sobre el HTML ya generado.
         const tooltips = (html.match(/details-modal-title/g) || []).length;
@@ -642,7 +679,7 @@ document.addEventListener('click', function (e) {
             juntarNotas(b.hijos);
             (b.items || []).forEach(i => juntarNotas(i.hijos));
         });
-        juntarNotas(pagina.bloques);
+        juntarNotas(bloquesQueSalen);
 
         if (pedidos.length || indicaciones.length) {
             partes.push(`
@@ -691,6 +728,8 @@ document.addEventListener('click', function (e) {
         // Deshacer puede cambiar el nivel del resaltado: los botones lo siguen.
         document.querySelectorAll('#resalte-pagina .opcion').forEach(b =>
             b.classList.toggle('activa', b.dataset.nivel === pagina.resalte));
+        document.querySelectorAll('#salida-pagina .opcion').forEach(b =>
+            b.classList.toggle('activa', b.dataset.salida === pagina.salida));
         dibujarPaletaAula();
         const lienzo = $('#lienzo');
         lienzo.innerHTML = '';
@@ -984,6 +1023,22 @@ document.addEventListener('click', function (e) {
              · Presentación y el campo CON texto -> se queda, en rojo: la página
                saldría con dos títulos y hay que arreglarlo. Esconderlo ahí sería
                ocultar el problema en vez de resolverlo. */
+        /* --- Salida: decir en voz alta lo que se está quedando fuera ---
+           En "solo el título" el lienzo puede estar lleno y no publicarse nada
+           de él. Sin este renglón parecería que la herramienta perdió el
+           trabajo, que es justo el susto que no debe darse. */
+        const avisoSalida = $('#salida-aviso');
+        if (avisoSalida) {
+            const soloTitulo = pagina.salida === 'titulo';
+            const cuantos = pagina.bloques.length;
+            const fuera = soloTitulo && cuantos > 0;
+            avisoSalida.textContent = !soloTitulo ? ''
+                : fuera
+                    ? `${cuantos} bloque${cuantos === 1 ? '' : 's'} del lienzo no sale${cuantos === 1 ? '' : 'n'}.`
+                    : 'Sale el título y nada más.';
+            avisoSalida.classList.toggle('field-hint--alerta', fuera);
+        }
+
         const cajaTitulo = $('#campo-titulo');
         if (cajaTitulo) {
             const conPresentacion = lista => (lista || []).some(b => b.tipo === 'presentacion' ||
@@ -2925,6 +2980,26 @@ document.addEventListener('click', function (e) {
             cajaResalte.appendChild(b);
         });
 
+        /* Página completa o solo la barra del título. Va aquí arriba y no en la
+           ficha de un bloque porque no es de un bloque: decide qué se publica
+           del recurso entero. */
+        const cajaSalida = $('#salida-pagina');
+        SALIDAS.forEach(s => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'opcion';
+            b.dataset.salida = s.v;
+            b.title = s.ayuda;
+            b.innerHTML = `<i class="ph ph-${s.icono}"></i><span>${s.etiqueta}</span>`;
+            b.addEventListener('click', () => {
+                guardarHistorial();
+                pagina.salida = s.v;
+                dibujarLienzo();
+                refrescarSalida();
+            });
+            cajaSalida.appendChild(b);
+        });
+
         /* Traer una página de Moodle de vuelta. Pisa lo que haya armado, así
            que guarda historial primero: es lo que hace que un pegado por
            equivocación no cueste el trabajo de la tarde. */
@@ -2943,6 +3018,7 @@ document.addEventListener('click', function (e) {
             pagina.titulo = leido.titulo || pagina.titulo;
             if (leido.paleta) pagina.paleta = leido.paleta;
             pagina.clasesExtra = leido.clasesExtra || [];
+            pagina.salida = leido.salida || 'completa';
             seleccion = null;
             cerrarFicha();
             dibujarTodo();

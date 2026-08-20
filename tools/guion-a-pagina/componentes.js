@@ -263,6 +263,25 @@ const NIVELES_RESALTE = [
     { v: 'bg-resalte-40', etiqueta: 'Muy fuerte', muestra: '#cc9c23' }
 ];
 
+/* Qué se genera. No es un detalle del contenedor: cambia QUÉ se publica.
+   En una PÁGINA el envoltorio abraza todo el contenido y el
+   `padding-bottom: 100px` que la hoja le da a `.mainPlantilla23` es el aire
+   del final. En un recurso con archivo (PDF, video) la descripción lleva SOLO
+   el título: el contenedor cierra ahí y esos 100px quedan colgando entre el
+   título y el archivo que Moodle pinta debajo —el hueco que se ve en los
+   recursos ya publicados—. `pb-0` es utilidad de Bootstrap (lleva
+   `!important`) y le gana a la hoja del tema, que no lo lleva. */
+const SALIDAS = [
+    {
+        v: 'completa', etiqueta: 'Página completa', icono: 'article', pb: '',
+        ayuda: 'El título y todo lo que hay en el lienzo, dentro del contenedor de la plantilla.'
+    },
+    {
+        v: 'titulo', etiqueta: 'Solo el título', icono: 'file-pdf', pb: ' pb-0',
+        ayuda: 'Solo la barra del título, sin el aire de abajo: para recursos donde Moodle pinta el archivo debajo (PDF, video, carpeta).'
+    }
+];
+
 /**
  * HTML de una lista de bloques (recursivo: acordeones, modales, pestañas).
  *
