@@ -167,7 +167,16 @@
         // Una ventana con tabla dentro no cabe en la marca de texto: el nodo
         // entero se va a crudo antes que publicarse a medias.
         if (conVentanaCompleja(col)) return null;
-        return { tipo: 'texto', texto: parrafosDe(col), destacado: false, centrado: false };
+        /* La alineación se lee de los propios <p>. Antes entraba siempre en
+           "izquierda", así que importar un texto centrado y volver a generarlo
+           lo devolvía a la izquierda sin avisar. Solo cuenta si TODOS los
+           párrafos coinciden: con una mezcla no hay un valor de bloque que la
+           represente y se deja el default. */
+        const clases = hijos.map(h => h.className || '');
+        const todos = (re) => hijos.length && clases.every(c => re.test(c));
+        const alineacion = todos(/\btext-center\b/) ? 'centro'
+            : todos(/\btext-end\b/) ? 'derecha' : 'izquierda';
+        return { tipo: 'texto', texto: parrafosDe(col), destacado: false, alineacion };
     }
 
     function leerTabla(el) {

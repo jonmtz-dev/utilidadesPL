@@ -1480,19 +1480,29 @@ document.addEventListener('click', function (e) {
             const input = document.createElement('input');
             input.type = 'checkbox';
             input.checked = Boolean(bloque[campo.k]);
-            /* Si algún campo del componente depende de este interruptor
-               (`siOculta`), hay que volver a dibujar el lienzo: los campos se
-               filtran al dibujarlos, así que sin esto apagar el recuadro de la
+            /* Si algo del componente depende de este interruptor hay que volver
+               a dibujar la FICHA: los campos se filtran al dibujarlos
+               (`siOculta`), así que sin esto apagar el recuadro de la
                presentación —o marcar "destacado" en un Texto— dejaba a la vista
-               campos que ya no aplican. Es `dibujarLienzo()`, nunca
-               `dibujarTodo()`: la previa se regenera sola en refrescarSalida y
-               con dibujarTodo se cerraría el acordeón que se acaba de abrir. */
-            const gatilla = (COMPONENTES[bloque.tipo].campos || []).some(c => c.siOculta);
+               controles que ya no aplican.
+
+               ⚠️ Es `dibujarFicha()`, no `dibujarLienzo()`. Lo era cuando los
+               campos vivían dentro de la tarjeta del lienzo; desde que el
+               rediseño los movió al panel de la derecha, `dibujarLienzo()` ya no
+               los toca y el arreglo había dejado de servir en silencio: medido,
+               apagar "Recuadro de contenidos" dejaba sus tres campos en pantalla.
+               Nunca `dibujarTodo()`: la previa se regenera sola en
+               refrescarSalida y con dibujarTodo se cerraría la ficha abierta.
+
+               `alineaTexto` entra en la cuenta porque sus botones viven en la
+               barra del campo, no en `campos`. */
+            const gatilla = (COMPONENTES[bloque.tipo].campos || []).some(c => c.siOculta)
+                || !!COMPONENTES[bloque.tipo].alineaTexto;
             input.addEventListener('change', () => {
                 guardarHistorial();
                 bloque[campo.k] = input.checked;
                 refrescarSalida();
-                if (gatilla) dibujarLienzo();
+                if (gatilla) { dibujarFicha(); dibujarLienzo(); }
             });
             const s = document.createElement('span');
             s.className = 'slider';
@@ -1574,6 +1584,47 @@ document.addEventListener('click', function (e) {
             });
             barra.appendChild(b);
         });
+
+        /* Alineación, para los componentes que la ofrecen (`alineaTexto` dice en
+           qué campo). Va AQUÍ y no como campo suelto porque es donde la busca
+           quien viene del editor de Moodle: es la misma fila de botones del
+           TinyMCE. A diferencia de los de arriba no inserta marcas en el texto
+           —no es una marca, es una clase del párrafo—, así que aplica al bloque
+           entero. Por eso los botones muestran cuál está puesto.
+
+           Con `destacado` encendido no se dibujan: ese patrón ya es "centrado y
+           en negritas" y ofrecer otra alineación ahí no haría nada. */
+        const comp = COMPONENTES[bloque.tipo] || {};
+        if (comp.alineaTexto === k && !bloque.destacado) {
+            const sep = document.createElement('span');
+            sep.className = 'barra-sep';
+            barra.appendChild(sep);
+            const actual = () => ALINEACION[bloque.alineacion]
+                ? bloque.alineacion
+                : (bloque.centrado === true ? 'centro' : 'izquierda');
+            const alineaciones = [
+                { v: 'izquierda', i: 'text-align-left', t: 'Alinear a la izquierda' },
+                { v: 'centro', i: 'text-align-center', t: 'Centrar' },
+                { v: 'derecha', i: 'text-align-right', t: 'Alinear a la derecha' }
+            ];
+            const botones = alineaciones.map(a => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'mini-btn' + (actual() === a.v ? ' activa' : '');
+                b.title = a.t;
+                b.innerHTML = `<i class="ph ph-${a.i}"></i>`;
+                b.addEventListener('click', () => {
+                    guardarHistorial();
+                    bloque.alineacion = a.v;
+                    // `centrado` era el valor viejo; al elegir aquí deja de mandar.
+                    delete bloque.centrado;
+                    botones.forEach(otro => otro.classList.toggle('activa', otro === b));
+                    refrescarSalida();
+                });
+                barra.appendChild(b);
+                return b;
+            });
+        }
 
         /* La palabra resaltada que abre una ventana NO se teclea: se llena un
            formulario. Antes el botón insertaba `{{palabra|Título|Explicación}}`

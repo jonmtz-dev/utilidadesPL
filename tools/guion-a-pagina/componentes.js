@@ -213,6 +213,25 @@ const ALINEACION = {
 };
 function alineacionDe(valor) { return ALINEACION[valor] || ALINEACION.centro; }
 
+/**
+ * Alineación de un bloque de Texto, con el valor viejo entendido.
+ *
+ * El campo era una casilla `centrado` (sí/no) y ahora son tres valores. Se
+ * normaliza aquí en vez de migrar los bloques: un `centrado: true` de antes
+ * sigue significando centro.
+ *
+ * `destacado` manda sobre todo: ese patrón de la página real —la pregunta que
+ * abre el apartado— va centrado y en negritas por definición.
+ *
+ * Y el valor por omisión es **izquierda**, no el `centro` de `alineacionDe()`:
+ * ese default es para botones, que sí van centrados; un párrafo no.
+ */
+function alineacionTexto(b) {
+    if (b.destacado) return 'centro';
+    if (!b.alineacion && b.centrado === true) return 'centro';
+    return ALINEACION[b.alineacion] ? b.alineacion : 'izquierda';
+}
+
 /* El campo, tal cual, para los componentes que lo ofrecen. */
 const CAMPO_ALINEACION = {
     k: 'alineacion', tipo: 'opciones', etiqueta: 'Alineación', ops: [
@@ -511,12 +530,15 @@ const COMPONENTES = {
         ayuda: 'Párrafos con negritas, enlaces y ventanas emergentes',
         icono: 'text-align-left',
         mini: MINI.texto,
-        nuevo: () => ({ texto: '', destacado: false, centrado: false }),
+        nuevo: () => ({ texto: '', destacado: false, alineacion: 'izquierda' }),
         resumen: b => (b.texto || '').replace(/\s+/g, ' '),
+        /* La alineación va en la BARRA del campo, no como campo aparte: es
+           donde la busca quien viene del editor de Moodle. Lo dice este campo y
+           lo dibuja barraDeMarcas(); el valor vive en `b.alineacion`. */
+        alineaTexto: 'texto',
         campos: [
             { k: 'texto', tipo: 'rico', etiqueta: 'Texto', filas: 4, marcador: 'Escribe aquí. Una línea en blanco separa párrafos.' },
-            { k: 'destacado', tipo: 'check', etiqueta: 'Centrado y en negritas (la pregunta que abre el apartado)' },
-            { k: 'centrado', tipo: 'check', etiqueta: 'Centrado, sin forzar negritas (nomenclaturas, ejemplos)', siOculta: b => b.destacado }
+            { k: 'destacado', tipo: 'check', etiqueta: 'Centrado y en negritas (la pregunta que abre el apartado)' }
         ],
         html: (b, n, desnudo) => {
             if (!(b.texto || '').trim()) return '';
@@ -525,8 +547,14 @@ const COMPONENTES = {
             /* Dentro de un <li> los párrafos van pelados: así los publica la
                página real ("Apellidos_Nombre_SM02S1AA1" centrado dentro del paso
                "Guarda el archivo…"). Un .row.bloque ahí rompería la lista. */
+            const alin = alineacionTexto(b);
+            /* Izquierda NO escribe `text-start`: es el default del navegador y
+               ponerlo cambiaría el HTML de todos los bloques que ya salían bien
+               sin ganar nada. Solo se escribe la clase cuando desvía. */
+            const claseAlin = alin === 'izquierda' ? '' : ALINEACION[alin].texto;
+
             if (desnudo) {
-                const clase = (b.centrado || b.destacado) ? ' class="text-center"' : '';
+                const clase = claseAlin ? ` class="${claseAlin}"` : '';
                 return trozos.map(p => `${ind(n)}<p${clase}>${b.destacado
                     ? `<strong>${marcas(p)}</strong>` : marcas(p).replace(/\n/g, '<br>')}</p>`).join('\n');
             }
@@ -542,8 +570,8 @@ const COMPONENTES = {
                     `${ind(n)}</div>`
                 ].join('\n');
             }
-            const cuerpo = b.centrado
-                ? trozos.map(p => `${ind(n + 2)}<p class="text-center">${marcas(p).replace(/\n/g, '<br>')}</p>`)
+            const cuerpo = claseAlin
+                ? trozos.map(p => `${ind(n + 2)}<p class="${claseAlin}">${marcas(p).replace(/\n/g, '<br>')}</p>`)
                 : parrafos(b.texto, n + 2);
             return [
                 `${ind(n)}<div class="row bloque">`,
