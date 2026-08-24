@@ -338,6 +338,25 @@ const MINI = {
    El catálogo
    ------------------------------------------------------------------------- */
 
+/**
+ * Tono de la primera columna de una tabla. Tres valores y una historia:
+ *
+ * · `'alternado'` — rosa/verde fila por fila. Es lo que hace el montaje de las
+ *   tablas normales del equipo (y el Convertidor de Tablas), por eso el
+ *   importador de Word lo enciende.
+ * · `'plano'` — `bg-secondary-10` en TODAS las filas. Es lo que trae la Tabla 1
+ *   de la presentación de la semana en las páginas publicadas (cotejado con un
+ *   montaje de MM y otro de M03: las dos filas llevan el mismo tono).
+ * · `'no'` — sin color.
+ *
+ * El campo era una casilla y guardaba `true`/`false`. Se normaliza aquí en vez
+ * de migrar los bloques: un `true` viejo sigue significando alternado.
+ */
+function tonoPrimeraColumna(b) {
+    if (b.colorear === true) return 'alternado';
+    return (b.colorear === 'alternado' || b.colorear === 'plano') ? b.colorear : 'no';
+}
+
 const COMPONENTES = {
 
     /* ---- Presentación de la semana ----
@@ -372,7 +391,8 @@ const COMPONENTES = {
                 banda: 'Contenido de Aprendizaje 1',
                 encabezados: ['Semana', 'Nombre', 'Propósito formativo', 'Contenidos formativos', 'Contenido del ámbito de formación socioemocional'],
                 filas: [['1', '', '', '', ''], ['2', '', '', '', '']],
-                colorear: true, encabezadoColor: true
+                // 'plano': las dos filas de la Tabla 1 publicada llevan el mismo tono.
+                colorear: 'plano', encabezadoColor: true
             })]
         }),
         resumen: b => b.titulo,
@@ -753,7 +773,7 @@ const COMPONENTES = {
         nuevo: () => ({
             encabezados: ['Columna 1', 'Columna 2'],
             filas: [['', ''], ['', '']],
-            colorear: false, tarjetas: true, titulo: '', encabezadoColor: false, banda: ''
+            colorear: 'no', tarjetas: true, titulo: '', encabezadoColor: false, banda: ''
         }),
         resumen: b => `${(b.filas || []).length} filas × ${(b.encabezados || []).length} columnas`,
         campos: [
@@ -772,7 +792,15 @@ const COMPONENTES = {
                 k: 'tarjetas', tipo: 'check',
                 etiqueta: 'En celular, cada fila como tarjeta (recomendado)'
             },
-            { k: 'colorear', tipo: 'check', etiqueta: 'Colorear la primera columna (alternado)' },
+            {
+                k: 'colorear', tipo: 'opciones', etiqueta: 'Color de la primera columna',
+                ops: [
+                    { v: 'no', etiqueta: 'Sin color', icono: 'minus' },
+                    { v: 'alternado', etiqueta: 'Alternado', icono: 'rows' },
+                    { v: 'plano', etiqueta: 'Un solo tono', icono: 'square' }
+                ],
+                ayuda: '«Alternado» va cambiando de tono fila por fila: es lo que hacen las tablas normales del equipo. «Un solo tono» pinta todas las filas del segundo color, que es lo que trae la Tabla 1 de la presentación de la semana en las páginas publicadas. Los dos colores salen de la paleta del aula, nunca de un hex.'
+            },
             {
                 k: 'encabezadoColor', tipo: 'check',
                 etiqueta: 'Encabezado con el color del aula',
@@ -783,7 +811,12 @@ const COMPONENTES = {
             const enc = (b.encabezados || []);
             const filas = b.filas || [];
             if (!enc.length) return '';
-            const clases = ['table', 'table-bordered'];
+            /* MW-auto no es decorativa: la hoja pone
+               `.mainPlantilla23 .table td { min-width: 200px }`, o sea 1000px de
+               ancho mínimo en una tabla de cinco columnas, y ahí la tabla ya no
+               puede encoger. `.table.MW-auto td { min-width: auto }` lo suelta.
+               El montaje publicado la trae siempre. */
+            const clases = ['table', 'table-bordered', 'MW-auto'];
             if (b.tarjetas) clases.push('tabla-responsive-cards');
 
             // Envoltorio cotejado con la página publicada: .mt-3 y .col-10
@@ -820,16 +853,31 @@ const COMPONENTES = {
                ahí NO se ve: Bootstrap pinta el fondo en cada celda y la tapa. Para
                que el encabezado salga de color hay que repetir la clase en los
                <th>. Va como opción y apagada por omisión, para no separar las
-               tablas nuevas de las páginas ya publicadas. El color lo resuelve
-               --primary-20, así que sigue a la paleta del aula sin tocar nada. */
-            const claseTh = 'text-center align-middle' + (b.encabezadoColor ? ' bg-primary-20' : '');
+               tablas nuevas de las páginas ya publicadas.
+
+               ⚠️ La clase que va aquí es `bg-primary-10`, NO la `bg-primary-20`
+               del <thead>. Cotejado con dos montajes publicados (uno de MM, otro
+               de M03): la banda del colspan lleva el -20 y la fila de títulos el
+               -10, que es un tono más claro. Repetir el -20 dejaba la banda y los
+               títulos del mismo color, y en MM eso se nota muchísimo (el -20 es
+               el rosa fuerte #d8a7b6 y el -10 casi blanco). El color no se
+               escribe: sale de --primary-10 y sigue a la paleta del aula.
+
+               La clase `thead` en el <th> también es del montaje. No pinta nada
+               —la hoja no la declara—, pero se conserva para que el HTML siga
+               siendo comparable línea por línea con la página publicada. */
+            const claseTh = 'thead text-center align-middle' + (b.encabezadoColor ? ' bg-primary-10' : '');
             enc.forEach(t => partes.push(`${ind(n + 6)}<th scope="col" class="${claseTh}">${marcas(t)}</th>`));
             partes.push(`${ind(n + 5)}</tr>`, `${ind(n + 4)}</thead>`, `${ind(n + 4)}<tbody>`);
 
+            const tono = tonoPrimeraColumna(b);
             filas.forEach((fila, i) => {
                 partes.push(`${ind(n + 5)}<tr class="align-middle">`);
                 enc.forEach((titulo, c) => {
-                    const clase = b.colorear && c === 0 ? ` class="${i % 2 === 0 ? 'bg-primary-10' : 'bg-secondary-10'}"` : '';
+                    const color = tono === 'plano'
+                        ? 'bg-secondary-10'
+                        : (i % 2 === 0 ? 'bg-primary-10' : 'bg-secondary-10');
+                    const clase = tono !== 'no' && c === 0 ? ` class="${color}"` : '';
                     partes.push(`${ind(n + 6)}<td${clase} data-label="${escapar(titulo)}">${marcas(fila[c] || '')}</td>`);
                 });
                 partes.push(`${ind(n + 5)}</tr>`);

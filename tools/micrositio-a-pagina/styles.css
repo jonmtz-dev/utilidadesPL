@@ -9,6 +9,55 @@
     box-shadow: 0 4px 12px rgba(112, 72, 232, 0.35);
 }
 
+/* ------------------------------------------------------------------ Modos
+   Dos entradas al mismo motor: el micrositio (.zip/carpeta) y el HTML ya
+   montado en Moodle que hay que poner al día. Mismo riel que .tabs de
+   shared.css, pero más chico: no es la navegación principal del panel. */
+.modo-tabs {
+    display: flex;
+    gap: 6px;
+    background: var(--control-bg);
+    padding: 4px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    flex-shrink: 0;
+}
+
+.modo-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    padding: 8px;
+    border-radius: 7px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.modo-btn:hover { color: var(--text-main); }
+
+.modo-btn.active {
+    background: var(--surface-raised);
+    color: var(--text-main);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* La visibilidad va por atributo en el <body>, no por .hidden: varias de estas
+   opciones ya tienen su propia lógica de .hidden (la fila de páginas aparece
+   sola cuando el zip trae más de un .html) y togglear la misma clase desde dos
+   lados la habría dejado visible al volver del modo corrección. */
+body[data-modo="correccion"] #panel-micrositio,
+body[data-modo="correccion"] .solo-micrositio,
+body:not([data-modo="correccion"]) #panel-correccion,
+body:not([data-modo="correccion"]) .solo-correccion { display: none; }
+
 /* Zona para soltar el zip */
 .dropzone {
     flex-grow: 1;
@@ -410,6 +459,43 @@
     border-color: var(--accent);
     background: var(--input-bg-focus);
 }
+
+/* Campos de texto largos (el HTML a corregir, la hoja de Moodle). La base
+   faltaba: el textarea de la hoja salía con el estilo del navegador, fuera del
+   tema. Va aquí y no en shared.css porque cada herramienta tiene la suya. */
+.plain-input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    background: var(--input-bg);
+    color: var(--text-main);
+    border: 1px solid var(--input-border);
+    font-family: inherit;
+    font-size: 13.5px;
+    line-height: 1.5;
+    resize: vertical;
+    transition: all 0.2s ease;
+}
+
+.plain-input::placeholder { color: var(--text-muted); }
+
+.plain-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--input-bg-focus);
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.12);
+}
+
+.plain-input--html {
+    min-height: 220px;
+    max-height: 380px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12.5px;
+    white-space: pre;
+    overflow: auto;
+}
+
+.mt-2 { margin-top: 12px; }
 
 /* Comparación de CSS */
 .plain-input--css {

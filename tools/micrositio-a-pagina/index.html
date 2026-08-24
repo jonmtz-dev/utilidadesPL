@@ -27,7 +27,7 @@
     <!-- El botón de volver: regresa a la plataforma con la que se entró. -->
     <script src="../../assets/volver.js" defer></script>
 </head>
-<body>
+<body data-modo="micrositio">
     <div class="background-mesh">
         <div class="shape shape-1"></div>
         <div class="shape shape-2"></div>
@@ -55,6 +55,21 @@
         <div class="workspace">
             <!-- Columna Izquierda -->
             <section class="panel-section glass-panel">
+                <!-- Dos entradas para el mismo motor. "Desde micrositio" es el flujo
+                     de siempre (zip/carpeta). "Corregir HTML" es para las páginas que
+                     ya se montaron con una versión vieja de la herramienta y de las
+                     que ya no queda el micrositio: se pega el HTML de Moodle y salen
+                     los mismos arreglos de montaje, sin tocar rutas ni imágenes. -->
+                <div class="modo-tabs" role="group" aria-label="Modo de trabajo">
+                    <button class="modo-btn active" type="button" data-modo="micrositio">
+                        <i class="ph ph-file-zip"></i> Desde micrositio
+                    </button>
+                    <button class="modo-btn" type="button" data-modo="correccion">
+                        <i class="ph ph-bandaids"></i> Corregir HTML
+                    </button>
+                </div>
+
+                <div id="panel-micrositio">
                 <div class="section-header">
                     <h2><i class="ph ph-file-zip"></i> 1. Suelta el micrositio</h2>
                 </div>
@@ -78,22 +93,52 @@
                 </div>
 
                 <div id="zip-info" class="zip-info hidden"></div>
+                </div><!-- /panel-micrositio -->
+
+                <div id="panel-correccion">
+                    <div class="section-header">
+                        <h2><i class="ph ph-clipboard-text"></i> 1. Pega el HTML ya montado</h2>
+                    </div>
+
+                    <div class="aviso aviso-info">
+                        <i class="ph ph-info"></i>
+                        <span><strong>Para páginas viejas.</strong> Toma el HTML de una página que ya
+                        está en Moodle —convertida cuando la herramienta aún no tenía todos los
+                        arreglos— y le aplica los que faltan. <strong>No toca rutas ni imágenes:</strong>
+                        salen tal como entraron.</span>
+                    </div>
+
+                    <textarea id="input-html-viejo" class="plain-input plain-input--html"
+                              spellcheck="false" autocomplete="off"
+                              placeholder="Abre la página en Moodle, entra al editor, pulsa &lt;/&gt; y pega aquí todo el HTML…"></textarea>
+
+                    <p class="campo-nota" id="nota-correccion">
+                        El arreglo grande es la marca <code>.ms-convertido</code>: sin ella, las reglas
+                        de tu tema (acordeones abiertos, hover de botones) no aplican y la página se ve
+                        descolorida. Revisa en la pestaña <strong>CSS</strong> que tu tema ya tenga el
+                        complemento.
+                    </p>
+
+                    <button id="btn-corregir" class="btn-primary mt-2" type="button">
+                        <i class="ph ph-bandaids"></i> Corregir HTML
+                    </button>
+                </div>
 
                 <div class="options-group mt-4">
                     <h3><i class="ph ph-sliders"></i> Opciones</h3>
 
-                    <div class="field-row hidden" id="fila-html">
+                    <div class="field-row hidden solo-micrositio" id="fila-html">
                         <label for="select-html"><i class="ph ph-file-html"></i> Página</label>
                         <select id="select-html"></select>
                     </div>
 
-                    <label class="toggle-switch">
+                    <label class="toggle-switch solo-micrositio">
                         <input type="checkbox" id="opt-pluginfile" checked>
                         <span class="slider"></span>
                         <span class="label-text">Rutas de imagen a <code>@@PLUGINFILE@@</code></span>
                     </label>
 
-                    <div class="campo-draft">
+                    <div class="campo-draft solo-micrositio">
                         <label for="input-draft">
                             <i class="ph ph-link"></i> URL de borrador <span class="etiqueta-reco">recomendado</span>
                         </label>
@@ -105,17 +150,17 @@
                             hace el resto solo al guardar.
                         </p>
                     </div>
-                    <label class="toggle-switch">
+                    <label class="toggle-switch solo-micrositio">
                         <input type="checkbox" id="opt-solo-body" checked>
                         <span class="slider"></span>
                         <span class="label-text">Solo el contenido del <code>&lt;body&gt;</code></span>
                     </label>
-                    <label class="toggle-switch">
+                    <label class="toggle-switch solo-micrositio">
                         <input type="checkbox" id="opt-quitar-css" checked>
                         <span class="slider"></span>
                         <span class="label-text">Quitar <code>&lt;link&gt;</code> y <code>&lt;style&gt;</code></span>
                     </label>
-                    <label class="toggle-switch">
+                    <label class="toggle-switch solo-micrositio">
                         <input type="checkbox" id="opt-quitar-js" checked>
                         <span class="slider"></span>
                         <span class="label-text">Quitar <code>&lt;script&gt;</code> (Moodle los borra igual)</span>
@@ -135,12 +180,12 @@
                         <span class="slider"></span>
                         <span class="label-text">Colorear encabezado <span class="etiqueta-reco">solo si la tabla viene sin color</span></span>
                     </label>
-                    <label class="toggle-switch">
+                    <label class="toggle-switch solo-micrositio">
                         <input type="checkbox" id="opt-svg-png" checked>
                         <span class="slider"></span>
                         <span class="label-text">Convertir <code>SVG</code> a <code>PNG</code> al descargar</span>
                     </label>
-                    <label class="toggle-switch">
+                    <label class="toggle-switch solo-micrositio">
                         <input type="checkbox" id="opt-nombres" checked>
                         <span class="slider"></span>
                         <span class="label-text">Nombres de imagen sin acentos ni espacios <span class="etiqueta-reco">Moodle no los reconoce</span></span>
@@ -148,9 +193,9 @@
                     <label class="toggle-switch">
                         <input type="checkbox" id="opt-blindar" checked>
                         <span class="slider"></span>
-                        <span class="label-text">Blindar colores contra Moodle <span class="etiqueta-reco">congela el look del micro</span></span>
+                        <span class="label-text">Blindar colores contra Moodle <span class="etiqueta-reco solo-micrositio">congela el look del micro</span><span class="etiqueta-reco solo-correccion">repone lo que Moodle pinta distinto</span></span>
                     </label>
-                    <label class="toggle-switch">
+                    <label class="toggle-switch solo-micrositio">
                         <input type="checkbox" id="opt-preview-moodle">
                         <span class="slider"></span>
                         <span class="label-text">Vista previa con tu CSS de Moodle <span class="etiqueta-reco">pega tu CSS en la pestaña CSS</span></span>
@@ -161,7 +206,7 @@
                      se dispara sola al soltar el micrositio y se repite en cada
                      cambio (opciones, página, URL de borrador, fila de títulos),
                      así que pulsarlo solo repetía lo que ya estaba en pantalla. -->
-                <button id="btn-pasos" class="btn-secondary mt-4" type="button">
+                <button id="btn-pasos" class="btn-secondary mt-4 solo-micrositio" type="button">
                     <i class="ph ph-list-numbers"></i> Ver pasos en Moodle
                 </button>
             </section>

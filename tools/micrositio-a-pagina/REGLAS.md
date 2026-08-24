@@ -542,6 +542,88 @@ un `<p>` hermano adyacente.
 | Filas de colores que salen blancas y grises | La tabla de "Metas SMART": cada fila es una `.card.bg-resalte-10` (crema) y en Moodle salía blanca. **El color sí llegaba** —`bg-resalte-10` está idéntica en las dos hojas—: se lo tapaban las dos columnas de dentro, `.bg-light-subtle` y `.bg-body-tertiary`, que **no existen en el Bootstrap 5.2.3 del micrositio** (ahí computan `rgba(0,0,0,0)` y dejan ver la tarjeta) pero **sí en el 5.3 de Moodle**, donde despiertan y pintan encima | `RE_BG_BS53`: lista cerrada de clases 5.3-only que se apagan inline con `background-color: transparent !important`, y solo si su fondo propio es transparente en el render. Ver §4-quater |
 | Scroll horizontal en pantallas medianas | `.mainPlantilla23 .table td { min-width: 200px }` (está en el CSS del micro **y** en la hoja de Moodle): 5 columnas × 200px = **1000px de ancho mínimo**, así que la tabla no podía encogerse y sacaba barra de desplazamiento entre los 576px de las tarjetas y el escritorio | `max-width: 100%` inline en la tabla **+** una regla `@media` en el complemento del tema que pone `min-width: 0` en las celdas (ver §6-ter). Al encoger la tabla, el título cuadra solo |
 
+## 10. Modo "Corregir HTML" — poner al día una página ya montada
+
+Hay páginas que se convirtieron cuando la herramienta aún no tenía todo esto y
+**de las que ya no queda el micrositio**: lo único recuperable es el HTML que
+está en Moodle. El modo "Corregir HTML" lo toma pegado, le aplica lo que falta y
+lo devuelve. Se ve en la página real: el acordeón abierto sale rosa pálido en vez
+del rojo del módulo, porque a esa página le falta la marca `.ms-convertido` y las
+reglas de estado del tema no la alcanzan.
+
+### Qué sí se puede rehacer sin el micrositio
+
+Todo lo que es **transformación pura de DOM**. Por eso esos bloques se sacaron de
+`convertir()` a `arreglosDeMontaje()`: los dos modos llaman a la misma función y
+no hay dos copias que se desincronicen (§6-0).
+
+| Arreglo | Función |
+|---|---|
+| Marca `.ms-convertido` | `marcarConvertido()` |
+| `<button href="#id">` → `data-bs-target`, listas sin `<li>` | `sanearParaTinyMCE()` (§4-bis) |
+| `.card-deck`, `flex-shrink` de íconos, anchos de tabla y de su barra de título, `.text-decoration-none`, `<math>` en línea | `arreglosDeMontaje()` |
+| `tabla-responsive-cards` + `data-label` por columna **real** | `aplicarResponsive()` (§6-0) |
+| `.card` blanca con borde, clases 5.3 apagadas, celdas del `<thead>` | `blindarLigero()` |
+
+### Qué NO se puede, y por qué
+
+- **Los tamaños de las imágenes que eran SVG.** `medidasSVG()` necesita el
+  archivo para leer su `viewBox` (§4-ter). Si una imagen se ve chica o gigante,
+  esa página hay que rehacerla desde el micrositio.
+- **Las rutas.** Llegan ya resueltas y **no se tocan**: salen tal como entraron.
+- **Las reglas perdidas del micro** (`.texto-titulo` y compañía, §6). Sin la hoja
+  del micrositio no hay con qué compararla.
+
+### `blindarLigero()`: por qué NO es `blindar()` con la hoja de Moodle
+
+Es la trampa obvia y **no funciona**. `blindar()` rinde el cuerpo en un iframe con
+el CSS de referencia y copia colores computados; funciona porque ese iframe carga
+**solo** el `estilos.css` del micro, **sin Bootstrap**. La hoja de Moodle puede
+ser el CSS compilado de `styles.php`, que **sí trae** el Bootstrap de Moodle: ahí
+una `.card` computa el **gris** de Moodle y un `<th>` computa el gris que tapa al
+`<thead>`. Reusar `blindar()` congelaría **justo el look que queremos evitar**.
+
+Y para las utilidades de tema tampoco hace falta medirlas: en la hoja son
+`!important`, así que ningún default de Bootstrap les gana y fijar su color inline
+**no cambia nada**… salvo que deja el color de ESE módulo clavado, y entonces
+cambiar el `M03` del wrapper por `MM` ya no repinta (mismo daño que el hex de
+§6-bis). Por eso `blindarLigero()` solo repone lo que de verdad se pierde:
+
+1. **`.card`**: blanco y borde fino. Son defaults de **Bootstrap**, no de la
+   hoja: valen igual en cualquier módulo y no hay nada que medir.
+   ⚠️ "Trae color propio" significa una `bg-*` que **de verdad pinta en el
+   micrositio**. Una clase 5.3-only (§4-quater) no cuenta: allá no pintaba nada
+   y la tarjeta se veía blanca. Confundirlas dejaba transparente una
+   `.card.bg-body-tertiary` que debía salir blanca —y por eso el `.card` se
+   resuelve **antes** y esas tarjetas ya no pasan por el apagado de clases 5.3—.
+2. **Clases 5.3-only**: se apagan igual que en la conversión normal.
+3. **Celdas del `<thead>`**: lo único que necesita un render, y solo para leer el
+   color del **propio `<thead>`**, que lleva la clase `!important` y por eso sí es
+   de fiar. De ahí se estampa en sus `th` **y** `td` (§9).
+
+**Nunca pisa un inline que ya esté puesto.** Es la regla que hace seguro el modo:
+una página convertida a medias ya trae parte del blindaje, medido contra el
+micrositio de verdad, y ese valor manda. Medido con un `<thead>` que traía el
+rosa de MM inline en una página marcada `M03`: el `<thead>` y su primer `<th>`
+conservan `rgb(216,167,182)`, y el `<th>` que no tenía inline recibe **ese
+mismo** color (el render lo lee del inline del `<thead>`), no el de M03. La
+salida es **idempotente**: correrlo dos y tres veces devuelve exactamente el
+mismo texto.
+
+### La vista previa usa tu hoja de Moodle
+
+Sin micrositio no hay `estilos.css` que mostrar, así que la previa se fuerza a
+"modo Moodle" (`pintarPreview(..., { forzarMoodle: true })`). Las imágenes
+apuntan a URLs absolutas del servidor: si no se ven, es la red, no la conversión.
+
+### El HTML pegado se envuelve en un documento completo
+
+`DOMParser` con el fragmento pelado deja el comentario que abre estas páginas
+—`CAMBIA AQUÍ EL TEMA`— **fuera del `<body>`**: el parser sigue en modo "antes
+del html" y ese comentario cuelga del documento, así que `body.innerHTML` lo
+perdería sin decir nada. Por eso se parsea envuelto en
+`<html><head>…</head><body>` + el pegado.
+
 ## La vista previa tiene tres anchos
 
 Escritorio, tableta y celular, con el ancho real en px al lado — igual que en

@@ -2840,7 +2840,7 @@ document.addEventListener('click', function (e) {
                    celdas en "auto") pero el montaje publicado SIEMPRE alterna la
                    primera columna en rosa/verde. Se apaga con el toggle si esta
                    tabla no lo lleva. */
-                colorear: true,
+                colorear: 'alternado',
                 titulo: titulo || ''
             });
         }

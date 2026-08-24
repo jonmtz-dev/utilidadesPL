@@ -615,6 +615,118 @@ async function blindar(doc, cssMicro) {
     }
 }
 
+/** ¿El elemento ya trae esa propiedad (o una variante suya) escrita inline? */
+function tieneInline(el, prop) {
+    const estilo = el.getAttribute('style') || '';
+    return new RegExp('(^|;)\\s*' + prop + '(-[a-z]+)*\\s*:', 'i').test(estilo);
+}
+
+/**
+ * Blindaje del modo "Corregir HTML": el mismo objetivo que blindar(), pero
+ * cuando ya no existe el micrositio y lo único a la mano es la hoja de Moodle.
+ *
+ * ⚠️ NO se puede reusar blindar() pasándole la hoja de Moodle, y esta es la
+ * razón: esa hoja puede ser el CSS compilado de `styles.php`, que TRAE el
+ * Bootstrap de Moodle. En ese render una `.card` computa el GRIS de Moodle y un
+ * `<th>` computa el gris que tapa al `<thead>`; congelaríamos justo el look que
+ * queremos evitar. El iframe de blindar() funciona porque carga SOLO el
+ * `estilos.css` del micro, sin Bootstrap.
+ *
+ * Y tampoco hace falta: contra la hoja de Moodle, congelar un `bg-primary-20`
+ * con el color que la propia hoja le da **no cambia nada** —esas utilidades son
+ * `!important` ahí, ningún default de Bootstrap les gana— y sí hace daño: deja
+ * el color de ESTE módulo clavado, así que cambiar el `M03` del wrapper por
+ * `MM` ya no repinta nada (REGLAS §6-bis). Por eso aquí solo se repone lo que de
+ * verdad se pierde en Moodle:
+ *
+ *  1. `.card`: blanco y borde fino. Son defaults de **Bootstrap**, no de la
+ *     hoja, así que valen igual en cualquier módulo y no hay nada que medir.
+ *  2. Clases de fondo que solo existen en Bootstrap 5.3 (REGLAS §4-quater).
+ *  3. Las celdas del `<thead>` coloreado: el color vive en el `<thead>` y el
+ *     Bootstrap de Moodle lo tapa pintando el fondo de cada celda encima. Este
+ *     es el único que necesita un render, y solo para leer el color del propio
+ *     `<thead>` —que lleva la clase `!important` y por eso sí es de fiar—.
+ *
+ * Nunca pisa un inline existente: una página convertida a medias ya trae parte
+ * del blindaje, y ese valor —medido contra el micrositio de verdad— manda.
+ */
+async function blindarLigero(doc, cssMoodle) {
+    if (!doc.body) return null;
+    const cuenta = { tarjetas: 0, bs53: 0, encabezados: 0 };
+    const clases = (el) => ' ' + (typeof el.className === 'string' ? el.className : '') + ' ';
+
+    // --- Tarjetas. Moodle las pinta grises y les quita el borde.
+    doc.querySelectorAll('.card').forEach(card => {
+        const cls = clases(card);
+        // "Color propio" es una utilidad `bg-*` que de verdad pinta en el
+        // micrositio. Una clase que SOLO existe en Bootstrap 5.3 no cuenta: allá
+        // no pintaba nada y la tarjeta se veía con el blanco default. Confundir
+        // los dos casos dejaba transparente una tarjeta que debería ser blanca.
+        const bgPropio = /(^|\s)bg-/.test(cls) && !(RE_BG_BS53.test(cls) && !RE_BG.test(cls));
+        if (!tieneInline(card, 'background') && !bgPropio) {
+            card.style.setProperty('background-color', 'rgb(255, 255, 255)', 'important');
+            cuenta.tarjetas++;
+        }
+        if (!tieneInline(card, 'border') && !RE_BD.test(cls)) {
+            card.style.setProperty('border', '1px solid rgba(0, 0, 0, 0.176)', 'important');
+        }
+    });
+
+    // --- Clases de fondo que solo existen en Bootstrap 5.3: en el micrositio no
+    // pintaban nada y dejaban ver el color de abajo; en Moodle despiertan y lo
+    // tapan. Se apagan reproduciendo lo que el micro HACE: nada.
+    doc.querySelectorAll('[class*="bg-body-"], [class*="-subtle"]').forEach(el => {
+        const cls = clases(el);
+        if (!RE_BG_BS53.test(cls)) return;
+        if (RE_BG.test(cls)) return;              // trae además un bg del tema: ese sí es real
+        if (/(^|\s)card(\s|$)/.test(cls)) return;  // ya se resolvió arriba, con su blanco
+        if (tieneInline(el, 'background')) return;
+        el.style.setProperty('background-color', 'transparent', 'important');
+        cuenta.bs53++;
+    });
+
+    // --- Encabezados de tabla. Lo único que hay que medir.
+    const theads = [...doc.querySelectorAll('thead')].filter(t => RE_BG.test(clases(t)));
+    const cssRef = (cssMoodle || '').trim();
+    if (!theads.length || !cssRef) return cuenta;
+
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.cssText = 'position:absolute;left:-99999px;top:0;width:1200px;height:20px;border:0;visibility:hidden';
+    document.body.appendChild(iframe);
+    try {
+        const idoc = iframe.contentDocument;
+        idoc.open();
+        // data-bs-theme="light" prende los tokens de tema claro de la hoja: sin
+        // eso las variables --prepa-* no existen y todo computa transparente.
+        idoc.write('<!doctype html><html data-bs-theme="light"><head><meta charset="utf-8"><style>' +
+            cssRef + '</style></head><body>' + doc.body.innerHTML + '</body></html>');
+        idoc.close();
+        await new Promise(r => setTimeout(r, 30));
+
+        const src = [...idoc.querySelectorAll('thead')].filter(t => RE_BG.test(clases(t)));
+        if (src.length !== theads.length) return cuenta;   // estructuras desalineadas: no arriesgamos
+
+        for (let i = 0; i < src.length; i++) {
+            const bg = getComputedStyle(src[i]).backgroundColor;
+            if (esTransparente(bg)) continue;
+            if (!tieneInline(theads[i], 'background')) {
+                theads[i].style.setProperty('background-color', bg, 'important');
+            }
+            // th O td: hay micrositios que arman el encabezado con <td>, y lo que
+            // decide no es la etiqueta sino la posición (REGLAS §9).
+            theads[i].querySelectorAll('th, td').forEach(celda => {
+                if (tieneInline(celda, 'background')) return;
+                celda.style.setProperty('background-color', bg, 'important');
+                cuenta.encabezados++;
+            });
+        }
+    } finally {
+        iframe.remove();
+    }
+    return cuenta;
+}
+
 /**
  * Conserva en cada <math> el tamaño que realmente tenía en el micrositio.
  *
@@ -667,6 +779,131 @@ function preservarTamanoMath(doc, cssMicro) {
  * sobre el wrapper .mainPlantilla23 (ancestro de todo); si no existe, envuelve el
  * contenido del body. Idempotente.
  */
+/**
+ * Arreglos de MONTAJE: lo que hay que reponer en el HTML para que se vea en
+ * Moodle como se veía en el micrositio, sin depender del micrositio.
+ *
+ * Son transformaciones puras de DOM —no leen el .zip, ni el CSS del micro, ni
+ * rinden nada—, así que sirven igual para una conversión nueva y para poner al
+ * día una página que ya se montó con una versión vieja de la herramienta (el
+ * modo "Corregir HTML"). Por eso viven aquí y no dentro de convertir(): tener
+ * dos copias es exactamente el error que dejó vivo el hex #d8a7b6 durante meses.
+ *
+ * Devuelve el conteo de lo que tocó, para el reporte.
+ */
+function arreglosDeMontaje(doc) {
+    // --- Contenedores flex de íconos que colapsaban.
+    // Los micrositios ponen íconos en un contenedor flex (clase align-self-*,
+    // que solo existe en un ítem flex) cuyo "no encogerse" vivía en el CSS del
+    // micrositio (que se quita). Contra tu Moodle ese contenedor se encoge a 0
+    // y el ícono desaparece. Como la hoja de Moodle no se debe tocar, lo
+    // resolvemos aquí: flex-shrink:0 inline en cada contenedor con align-self-*
+    // que envuelva una imagen. Es inofensivo si el elemento no es ítem flex
+    // (la propiedad se ignora) y respeta lo que ya trae en style.
+    doc.querySelectorAll('[class*="align-self-"]').forEach(el => {
+        if (!el.querySelector('img')) return;
+        const estilo = (el.getAttribute('style') || '').trim();
+        if (/flex-shrink/i.test(estilo)) return;
+        el.setAttribute('style', estilo
+            ? `${estilo.replace(/;?$/, ';')} flex-shrink: 0;`
+            : 'flex-shrink: 0;');
+    });
+
+    // --- Tabla w-auto: el título de arriba no abarcaba el ancho de la tabla.
+    // Cuando la tabla es `w-auto` (se encoge a su contenido), el micrositio la
+    // envuelve en un padre flex (`d-flex justify-content-center`) que hace que
+    // el .table-responsive TAMBIÉN se encoja; así el contenedor del título
+    // (container-fluid, 100% del padre) mide exactamente lo que la tabla.
+    // Si ese envoltorio no sobrevive, el .table-responsive ocupa el 100% y el
+    // título queda de otro ancho. Lo resolvemos aquí sin depender del padre:
+    // fit-content encoge a la tabla, y los márgenes auto la centran igual.
+    doc.querySelectorAll('.table-responsive').forEach(cont => {
+        const tabla = cont.querySelector('table');
+        if (!tabla || !/(^|\s)w-auto(\s|$)/.test(tabla.className)) return;
+        const estilo = (cont.getAttribute('style') || '').trim();
+        if (/(^|;)\s*width\s*:/i.test(estilo)) return;   // ya trae ancho propio
+        cont.setAttribute('style', (estilo ? `${estilo.replace(/;?$/, ';')} ` : '') +
+            'width: fit-content; margin-left: auto; margin-right: auto;');
+    });
+
+    // --- Barra del título de tabla (el .container-fluid que va sobre la tabla).
+    // Moodle constriñe .container-fluid (max-width y márgenes auto) porque la usa
+    // para el layout de la página; eso deja la barra del título más angosta que la
+    // tabla y centrada. En el micrositio ese div mide el 100% de su contenedor.
+    // Lo forzamos inline para que ningún default de Moodle lo encoja.
+    doc.querySelectorAll('.table-responsive > .container-fluid').forEach(cap => {
+        cap.style.setProperty('width', '100%', 'important');
+        cap.style.setProperty('max-width', '100%', 'important');
+        cap.style.setProperty('margin-left', '0', 'important');
+        cap.style.setProperty('margin-right', '0', 'important');
+    });
+
+    // --- Que la tabla se ENCOJA en vez de sacar scroll horizontal.
+    // Una tabla `w-auto` mantiene su ancho natural: en pantallas medianas (más
+    // anchas que el corte de 576px donde entran las tarjetas) no cabía y salía
+    // barra de desplazamiento. Con `max-width: 100%` la tabla se ajusta al
+    // contenedor y el texto de las celdas se acomoda en varias líneas.
+    // Combinado con el `fit-content` del .table-responsive, el título siempre
+    // mide lo mismo que la tabla: si cabe, ambos = ancho de la tabla; si no
+    // cabe, ambos = ancho disponible. Sin scroll y sin desalineación.
+    doc.querySelectorAll('.table-responsive > table').forEach(tabla => {
+        tabla.style.setProperty('max-width', '100%', 'important');
+    });
+
+    // --- Enlaces que NO deben ir subrayados.
+    // Moodle subraya los <a> por accesibilidad con una regla más específica
+    // que la clase `.text-decoration-none` de Bootstrap, así que el subrayado
+    // reaparecía en los enlaces-botón del micrositio (los de <mark>, modales…).
+    // Lo forzamos inline SOLO en lo que ya pedía no tener decoración: el resto
+    // de los enlaces conserva su subrayado, que sí debe estar.
+    doc.querySelectorAll('.text-decoration-none').forEach(el => {
+        el.style.setProperty('text-decoration', 'none', 'important');
+    });
+
+    // --- Fórmulas MathML en línea.
+    // La herramienta SÍ conserva el <math> dentro del <p> (comprobado), pero al
+    // pegar, TinyMCE no lo reconoce como contenido en línea: parte el <p> en dos
+    // y le pone display:block, así que la fórmula salta de renglón a media frase.
+    //
+    // Envolverlo en un <span> NO sirve: TinyMCE borra el span. Lo que SÍ
+    // sobrevive es el estilo inline, así que al menos evitamos el display:block.
+    // El salto de renglón que provoca el <p> partido se resuelve con una regla
+    // `:has()` en el complemento del tema (ver REGLAS.md §6-quater).
+    //
+    // Las fórmulas de BLOQUE (display="block") no se tocan: esas sí van solas.
+    doc.querySelectorAll('math').forEach(m => {
+        if (m.getAttribute('display') === 'block') return;   // fórmula de bloque
+        m.style.setProperty('display', 'inline-block', 'important');
+        m.style.setProperty('vertical-align', 'middle');
+    });
+
+    // --- .card-deck: Bootstrap 5 la ELIMINÓ. En el micrositio (5.2.3) no hace
+    // absolutamente nada y sus hijos se apilan; el Bootstrap de Moodle todavía
+    // la trae y la vuelve una fila flex. Resultado: el <p> del pie de figura,
+    // que en varios micrositios va DENTRO del .card-deck, se sube a un lado de
+    // la tarjeta en vez de quedar debajo.
+    //
+    // Se repone inline el comportamiento del micrositio. Inline SÍ se vale
+    // aquí: lo que prohíbe §4 es congelar componentes CON ESTADO —a un botón
+    // le mata el hover—, y un .card-deck no tiene estados. Así las páginas
+    // nuevas salen bien sin depender de que el tema traiga la regla.
+    doc.querySelectorAll('.card-deck').forEach(caja => {
+        caja.style.setProperty('display', 'block', 'important');
+    });
+
+    // El conteo se saca del resultado, no de contadores dentro de cada bloque:
+    // así los bloques quedan tal cual estaban y no hay que tocarlos al agregar
+    // uno nuevo.
+    return {
+        iconos: doc.querySelectorAll('[class*="align-self-"][style*="flex-shrink"]').length,
+        tablasAncho: doc.querySelectorAll('.table-responsive > table').length,
+        titulosTabla: doc.querySelectorAll('.table-responsive > .container-fluid').length,
+        sinSubrayado: doc.querySelectorAll('.text-decoration-none').length,
+        formulas: doc.querySelectorAll('math:not([display="block"])').length,
+        cardDeck: doc.querySelectorAll('.card-deck').length
+    };
+}
+
 /**
  * TinyMCE limpia el HTML inválido al guardar, y una <ul>/<ol> SIN ningún <li> lo
  * es: la borra y deja su contenido suelto. El navegador sí tolera esa lista al
@@ -1083,6 +1320,151 @@ function initMicrositio() {
     }
     tabs.forEach(t => t.addEventListener('click', () => activarTab(t.dataset.target)));
 
+    /* ------------------------------------------------- Modo "Corregir HTML"
+
+       Segunda entrada al MISMO motor. Hay páginas montadas cuando la
+       herramienta aún no tenía todos los arreglos y de las que ya no queda el
+       micrositio: lo único recuperable es el HTML que está en Moodle. Con eso
+       se puede rehacer todo lo que no depende del zip —la marca del tema, el
+       saneo para TinyMCE, los arreglos de montaje y las tablas—, que es
+       justamente lo que separa una página descolorida de una al día.
+
+       Lo que NO se puede rehacer sin el micrositio son los tamaños de las
+       imágenes que eran SVG (hace falta el archivo para saber su viewBox) y las
+       rutas, que aquí ya vienen resueltas y no se tocan. */
+    const inputHtmlViejo = document.getElementById('input-html-viejo');
+    const btnCorregir = document.getElementById('btn-corregir');
+    const tabImgs = document.querySelector('.tab-btn[data-target="imgs"]');
+
+    const enCorreccion = () => document.body.dataset.modo === 'correccion';
+
+    function cambiarModo(modo) {
+        document.body.dataset.modo = modo;
+        document.querySelectorAll('.modo-btn').forEach(b =>
+            b.classList.toggle('active', b.dataset.modo === modo));
+        // Sin zip no hay imágenes que listar ni que descargar.
+        if (tabImgs) {
+            tabImgs.classList.toggle('hidden', modo === 'correccion');
+            if (modo === 'correccion' && tabImgs.classList.contains('active')) activarTab('preview');
+        }
+        if (modo === 'correccion') { if (inputHtmlViejo.value.trim()) corregir(); }
+        else if (ARCHIVOS.size) { convertir(); }
+    }
+    document.querySelectorAll('.modo-btn').forEach(b =>
+        b.addEventListener('click', () => cambiarModo(b.dataset.modo)));
+
+    /**
+     * Pone al día una página ya montada. No toca rutas, imágenes ni texto: solo
+     * repone los arreglos que la herramienta aprendió después de convertirla.
+     */
+    async function corregir() {
+        const crudo = inputHtmlViejo.value.trim();
+        if (!crudo) return;
+
+        // El HTML se envuelve en un documento completo A PROPÓSITO. Pegado tal
+        // cual, el comentario "CAMBIA AQUÍ EL TEMA" con el que abren estas
+        // páginas cae FUERA del <body> —el parser sigue en modo "antes del
+        // html"— y desaparecería de la salida sin decir nada.
+        const doc = new DOMParser().parseFromString(
+            '<!doctype html><html><head><meta charset="utf-8"></head><body>' +
+            crudo + '</body></html>', 'text/html');
+
+        const r = { correccion: true, tablas: [],
+                    marcaYaEstaba: !!doc.querySelector('.ms-convertido') };
+
+        // Las tablas se recalculan aunque ya tengan data-label: el reparto por
+        // columna REAL (contando colspan/rowspan) llegó después, y con rowspan
+        // las etiquetas viejas apuntan a la columna equivocada. Ver REGLAS §6-0.
+        if (opt.tabla.checked) {
+            [...doc.querySelectorAll('table')].forEach((t, i) => {
+                r.tablas.push(aplicarResponsive(t, {
+                    headerIndex: HEADER_OVERRIDE.has(i) ? HEADER_OVERRIDE.get(i) : null,
+                    colorear: opt.colorear.checked,
+                    colorearHeader: opt.colorearHeader.checked
+                }));
+            });
+        }
+
+        r.montaje = arreglosDeMontaje(doc);
+        r.saneado = sanearParaTinyMCE(doc);
+        marcarConvertido(doc);
+
+        const salida = () => doc.body.innerHTML.trim();
+        outputCode.value = salida();
+        pintarRevisionCorreccion(r);
+        // Sin micrositio, la única referencia para la previa es tu hoja de Moodle.
+        pintarPreview(doc, '', '', { forzarMoodle: true });
+
+        if (opt.blindar.checked) {
+            try {
+                r.blindaje = await blindarLigero(doc, inputCssMoodle.value);
+                outputCode.value = salida();
+                pintarRevisionCorreccion(r);
+                pintarPreview(doc, '', '', { forzarMoodle: true });
+            } catch (e) {
+                console.warn('[micrositio] blindaje ligero:', e);
+            }
+        }
+    }
+
+    btnCorregir.addEventListener('click', corregir);
+
+    /** Reporte del modo corrección: qué se tocó, y qué de plano no se puede. */
+    function pintarRevisionCorreccion(r) {
+        const bloques = [];
+        const b = r.blindaje || {};
+        const m = r.montaje || {};
+        const hechos = [];
+        const punto = (n, texto) => { if (n) hechos.push(`<li><i class="ph ph-check-circle"></i> ${texto.replace('%n', n)}</li>`); };
+
+        bloques.push(r.marcaYaEstaba
+            ? `<div class="aviso aviso-info"><i class="ph ph-info"></i>
+                <span><strong>Ya traía la marca <code>.ms-convertido</code>.</strong> Se convirtió con
+                una versión que ya la ponía; el resto de los arreglos se aplicó igual.</span></div>`
+            : `<div class="aviso aviso-ok"><i class="ph ph-check-circle"></i>
+                <span><strong>Marca <code>.ms-convertido</code> agregada.</strong> Es el arreglo grande:
+                sin ella, las reglas de tu tema para los ESTADOS (acordeón abierto, hover de los
+                botones) no aplicaban —desde el HTML esos estados son imposibles de pintar— y la
+                página se veía descolorida.</span></div>`);
+
+        punto(r.saneado.botones, '%n <code>&lt;button href="#…"&gt;</code> pasados a <code>data-bs-target</code> (TinyMCE borraba el <code>href</code> y el botón dejaba de abrir).');
+        punto(r.saneado.listas, '%n lista sin <code>&lt;li&gt;</code> saneada (TinyMCE las borraba al guardar).');
+        punto(m.cardDeck, '%n <code>.card-deck</code> devuelto a bloque (en Moodle vuelve fila y sube el pie de figura).');
+        punto(m.iconos, '%n contenedor de ícono con <code>flex-shrink: 0</code> (sin él se encogía a cero y el ícono desaparecía).');
+        punto(m.titulosTabla, '%n barra de título de tabla a todo lo ancho de su tabla.');
+        punto(m.tablasAncho, '%n tabla acotada a <code>max-width: 100%</code> (en vez de sacar barra de desplazamiento).');
+        punto(m.sinSubrayado, '%n enlace con <code>.text-decoration-none</code> reforzado (Moodle los volvía a subrayar).');
+        punto(m.formulas, '%n fórmula <code>&lt;math&gt;</code> en línea conservada en su renglón.');
+        punto(b.tarjetas, '%n <code>.card</code> con su blanco y su borde de vuelta (Moodle las pinta grises y sin marco).');
+        punto(b.encabezados, '%n celda de encabezado con el color del <code>&lt;thead&gt;</code> (el Bootstrap de Moodle lo tapaba).');
+        punto(b.bs53, '%n clase de fondo que solo existe en Bootstrap 5.3 apagada (en el micrositio no pintaba nada).');
+
+        bloques.push(hechos.length
+            ? `<div class="aviso aviso-ok"><i class="ph ph-wrench"></i>
+                <span><strong>${hechos.length} arreglo(s) en su lugar.</strong> La lista es de lo que
+                la página ya lleva puesto al salir de aquí: lo que faltaba se agregó y lo que ya
+                estaba se dejó igual (nada se pisa dos veces).</span></div>
+                <ul class="lista-veredicto">${hechos.join('')}</ul>`
+            : `<div class="aviso aviso-info"><i class="ph ph-check-circle"></i>
+                <span>No había nada más que reponer: esta página ya traía todos los arreglos.</span></div>`);
+
+        bloques.push(...bloquesDeTablas(r.tablas));
+
+        bloques.push(`<div class="aviso aviso-warn"><i class="ph ph-warning"></i>
+            <span><strong>Lo que esto NO hace.</strong> No toca las rutas ni las imágenes: salen tal
+            como entraron. Y no puede reponer el tamaño de las imágenes que eran <code>SVG</code>
+            —para eso hace falta el archivo original—, así que si alguna se ve chica o gigante, esa
+            página hay que rehacerla desde el micrositio.</span></div>`);
+
+        bloques.push(`<div class="aviso aviso-info"><i class="ph ph-paint-brush"></i>
+            <span><strong>La marca sola no pinta.</strong> Necesita el complemento
+            <code>.ms-convertido</code> pegado en tu tema de Moodle: revísalo en la pestaña
+            <strong>CSS</strong>, ahí te dice si ya lo detecta.</span></div>`);
+
+        revisionLista.innerHTML = bloques.join('');
+    }
+
+
     /* ------------------------------------------------------- Cargar zip */
 
     function avisoCarga(clase, icono, texto) {
@@ -1490,104 +1872,9 @@ function initMicrositio() {
             if (nuevo !== estilo) el.setAttribute('style', nuevo);
         });
 
-        // --- Contenedores flex de íconos que colapsaban.
-        // Los micrositios ponen íconos en un contenedor flex (clase align-self-*,
-        // que solo existe en un ítem flex) cuyo "no encogerse" vivía en el CSS del
-        // micrositio (que se quita). Contra tu Moodle ese contenedor se encoge a 0
-        // y el ícono desaparece. Como la hoja de Moodle no se debe tocar, lo
-        // resolvemos aquí: flex-shrink:0 inline en cada contenedor con align-self-*
-        // que envuelva una imagen. Es inofensivo si el elemento no es ítem flex
-        // (la propiedad se ignora) y respeta lo que ya trae en style.
-        doc.querySelectorAll('[class*="align-self-"]').forEach(el => {
-            if (!el.querySelector('img')) return;
-            const estilo = (el.getAttribute('style') || '').trim();
-            if (/flex-shrink/i.test(estilo)) return;
-            el.setAttribute('style', estilo
-                ? `${estilo.replace(/;?$/, ';')} flex-shrink: 0;`
-                : 'flex-shrink: 0;');
-        });
-
-        // --- Tabla w-auto: el título de arriba no abarcaba el ancho de la tabla.
-        // Cuando la tabla es `w-auto` (se encoge a su contenido), el micrositio la
-        // envuelve en un padre flex (`d-flex justify-content-center`) que hace que
-        // el .table-responsive TAMBIÉN se encoja; así el contenedor del título
-        // (container-fluid, 100% del padre) mide exactamente lo que la tabla.
-        // Si ese envoltorio no sobrevive, el .table-responsive ocupa el 100% y el
-        // título queda de otro ancho. Lo resolvemos aquí sin depender del padre:
-        // fit-content encoge a la tabla, y los márgenes auto la centran igual.
-        doc.querySelectorAll('.table-responsive').forEach(cont => {
-            const tabla = cont.querySelector('table');
-            if (!tabla || !/(^|\s)w-auto(\s|$)/.test(tabla.className)) return;
-            const estilo = (cont.getAttribute('style') || '').trim();
-            if (/(^|;)\s*width\s*:/i.test(estilo)) return;   // ya trae ancho propio
-            cont.setAttribute('style', (estilo ? `${estilo.replace(/;?$/, ';')} ` : '') +
-                'width: fit-content; margin-left: auto; margin-right: auto;');
-        });
-
-        // --- Barra del título de tabla (el .container-fluid que va sobre la tabla).
-        // Moodle constriñe .container-fluid (max-width y márgenes auto) porque la usa
-        // para el layout de la página; eso deja la barra del título más angosta que la
-        // tabla y centrada. En el micrositio ese div mide el 100% de su contenedor.
-        // Lo forzamos inline para que ningún default de Moodle lo encoja.
-        doc.querySelectorAll('.table-responsive > .container-fluid').forEach(cap => {
-            cap.style.setProperty('width', '100%', 'important');
-            cap.style.setProperty('max-width', '100%', 'important');
-            cap.style.setProperty('margin-left', '0', 'important');
-            cap.style.setProperty('margin-right', '0', 'important');
-        });
-
-        // --- Que la tabla se ENCOJA en vez de sacar scroll horizontal.
-        // Una tabla `w-auto` mantiene su ancho natural: en pantallas medianas (más
-        // anchas que el corte de 576px donde entran las tarjetas) no cabía y salía
-        // barra de desplazamiento. Con `max-width: 100%` la tabla se ajusta al
-        // contenedor y el texto de las celdas se acomoda en varias líneas.
-        // Combinado con el `fit-content` del .table-responsive, el título siempre
-        // mide lo mismo que la tabla: si cabe, ambos = ancho de la tabla; si no
-        // cabe, ambos = ancho disponible. Sin scroll y sin desalineación.
-        doc.querySelectorAll('.table-responsive > table').forEach(tabla => {
-            tabla.style.setProperty('max-width', '100%', 'important');
-        });
-
-        // --- Enlaces que NO deben ir subrayados.
-        // Moodle subraya los <a> por accesibilidad con una regla más específica
-        // que la clase `.text-decoration-none` de Bootstrap, así que el subrayado
-        // reaparecía en los enlaces-botón del micrositio (los de <mark>, modales…).
-        // Lo forzamos inline SOLO en lo que ya pedía no tener decoración: el resto
-        // de los enlaces conserva su subrayado, que sí debe estar.
-        doc.querySelectorAll('.text-decoration-none').forEach(el => {
-            el.style.setProperty('text-decoration', 'none', 'important');
-        });
-
-        // --- Fórmulas MathML en línea.
-        // La herramienta SÍ conserva el <math> dentro del <p> (comprobado), pero al
-        // pegar, TinyMCE no lo reconoce como contenido en línea: parte el <p> en dos
-        // y le pone display:block, así que la fórmula salta de renglón a media frase.
-        //
-        // Envolverlo en un <span> NO sirve: TinyMCE borra el span. Lo que SÍ
-        // sobrevive es el estilo inline, así que al menos evitamos el display:block.
-        // El salto de renglón que provoca el <p> partido se resuelve con una regla
-        // `:has()` en el complemento del tema (ver REGLAS.md §6-quater).
-        //
-        // Las fórmulas de BLOQUE (display="block") no se tocan: esas sí van solas.
-        doc.querySelectorAll('math').forEach(m => {
-            if (m.getAttribute('display') === 'block') return;   // fórmula de bloque
-            m.style.setProperty('display', 'inline-block', 'important');
-            m.style.setProperty('vertical-align', 'middle');
-        });
-
-        // --- .card-deck: Bootstrap 5 la ELIMINÓ. En el micrositio (5.2.3) no hace
-        // absolutamente nada y sus hijos se apilan; el Bootstrap de Moodle todavía
-        // la trae y la vuelve una fila flex. Resultado: el <p> del pie de figura,
-        // que en varios micrositios va DENTRO del .card-deck, se sube a un lado de
-        // la tarjeta en vez de quedar debajo.
-        //
-        // Se repone inline el comportamiento del micrositio. Inline SÍ se vale
-        // aquí: lo que prohíbe §4 es congelar componentes CON ESTADO —a un botón
-        // le mata el hover—, y un .card-deck no tiene estados. Así las páginas
-        // nuevas salen bien sin depender de que el tema traiga la regla.
-        doc.querySelectorAll('.card-deck').forEach(caja => {
-            caja.style.setProperty('display', 'block', 'important');
-        });
+        // Arreglos de montaje (íconos flex, anchos de tabla, .card-deck, fórmulas…).
+        // Compartidos con el modo "Corregir HTML": ver arreglosDeMontaje().
+        reporte.montaje = arreglosDeMontaje(doc);
 
         // --- Enlaces a otras páginas del micrositio: no se pueden resolver solos
         doc.querySelectorAll('a[href]').forEach(a => {
@@ -1764,17 +2051,20 @@ function initMicrositio() {
 
     /* -------------------------------------------------------- Revisión */
 
-    function pintarRevision(r) {
+    /**
+     * Bloques del reporte para las tablas. Vive aparte porque lo pintan los dos
+     * modos: la conversión desde el micrositio y la corrección de HTML ya
+     * montado. El selector de fila de títulos funciona igual en los dos.
+     */
+    function bloquesDeTablas(tablas) {
         const bloques = [];
-        const lista = (items) => items.map(i => `<li><code>${escapar(i)}</code></li>`).join('');
-
         // --- Tablas: por cada una, un selector para elegir la fila de títulos.
-        if (r.tablas.length) {
-            const detectadas = r.tablas.filter(Boolean).length;
-            const sinTitulos = r.tablas.length - detectadas;
+        if (tablas.length) {
+            const detectadas = tablas.filter(Boolean).length;
+            const sinTitulos = tablas.length - detectadas;
 
             if (detectadas) {
-                const filasHtml = r.tablas.map((info, i) => {
+                const filasHtml = tablas.map((info, i) => {
                     if (!info) return '';
                     const opciones = info.filas.map(f =>
                         `<option value="${f.index}"${f.index === info.headerIndex ? ' selected' : ''}>` +
@@ -1803,6 +2093,14 @@ function initMicrositio() {
                     la fila de títulos a mano.</span></div>`);
             }
         }
+        return bloques;
+    }
+
+    function pintarRevision(r) {
+        const bloques = [];
+        const lista = (items) => items.map(i => `<li><code>${escapar(i)}</code></li>`).join('');
+
+        bloques.push(...bloquesDeTablas(r.tablas));
 
         // --- Interactivos
         if (r.interactivos.size) {
@@ -1898,7 +2196,7 @@ function initMicrositio() {
 
     /* --------------------------------------------------------- Preview */
 
-    function pintarPreview(doc, css, dirBase) {
+    function pintarPreview(doc, css, dirBase, { forzarMoodle = false } = {}) {
         // El preview usa las imágenes reales del zip (blob:) en vez de
         // @@PLUGINFILE@@, que solo Moodle sabe resolver.
         const copia = doc.cloneNode(true);
@@ -1957,7 +2255,9 @@ function initMicrositio() {
         // falta (íconos que colapsan, clases sin definir) antes de subir.
         // data-bs-theme="light" activa tus tokens de tema claro.
         const cssMoodle = inputCssMoodle.value.trim();
-        const modoMoodle = opt.previewMoodle.checked && cssMoodle;
+        // En el modo "Corregir HTML" el CSS del micro no existe, así que la única
+        // referencia posible es tu hoja de Moodle: ahí se fuerza (forzarMoodle).
+        const modoMoodle = (forzarMoodle || opt.previewMoodle.checked) && cssMoodle;
 
         // srcdoc + sandbox sin allow-scripts: el CSS queda encerrado y no puede
         // tocar los estilos del panel.
@@ -2242,7 +2542,8 @@ function initMicrositio() {
     /* ----------------------------------------------------------- Varios */
 
     Object.values(opt).forEach(o => o.addEventListener('change', () => {
-        if (ARCHIVOS.size) convertir();
+        if (enCorreccion()) corregir();
+        else if (ARCHIVOS.size) convertir();
     }));
     // Al cambiar de página cambian las tablas: olvidamos las filas elegidas.
     selectHtml.addEventListener('change', () => { HEADER_OVERRIDE = new Map(); convertir(); });
@@ -2252,7 +2553,7 @@ function initMicrositio() {
     revisionLista.addEventListener('change', (e) => {
         if (!e.target.classList.contains('sel-header')) return;
         HEADER_OVERRIDE.set(Number(e.target.dataset.tabla), Number(e.target.value));
-        convertir();
+        if (enCorreccion()) corregir(); else convertir();
     });
 
     function copiar(textarea, boton) {

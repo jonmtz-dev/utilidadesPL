@@ -1084,9 +1084,74 @@ quien la quiera de color la enciende, tabla por tabla.
 El `bg-primary-20` del `<thead>` se queda de todas formas: viene del montaje real
 y quitarlo separaría el HTML de la referencia sin ganar nada.
 
-> El color **no se escribe**: sale de `--primary-20`, así que sigue a la paleta
-> del aula sola. Con `reg` da `#a6beb9` y con `MM` da `#d8a7b6` —el mismo hex que
-> ya nos costó meses cuando estaba duplicado a mano en dos herramientas—.
+> ⚠️ **La clase que se repite en los `<th>` es `bg-primary-10`, NO el
+> `bg-primary-20` del `<thead>`.** La primera versión repetía el -20 y eso dejaba
+> la banda del `colspan` y la fila de títulos **del mismo color**. En el montaje
+> publicado son dos tonos distintos: la banda con el -20 y los títulos con el
+> -10, más claro. Cotejado contra dos páginas ya montadas, una de **MM** y otra
+> de **M03**, con el mismo markup en las dos.
+>
+> En M03 la diferencia es sutil (`rgb(250,230,230)` contra `rgb(252,244,244)`),
+> pero en MM salta a la vista: el -20 es el rosa fuerte `#d8a7b6` y el -10 es
+> `rgb(244,233,237)`, casi blanco. Con el -20, media tabla salía rosa.
+
+Los `<th>` de títulos también llevan la clase `thead`, igual que el `<thead>`. No
+pinta nada —la hoja no la declara—; se conserva para que el HTML siga siendo
+comparable renglón por renglón con la página publicada.
+
+> El color **no se escribe**: sale de `--primary-10` / `--primary-20`, así que
+> sigue a la paleta del aula sola. El `#d8a7b6` de `MM` es el mismo hex que ya
+> nos costó meses cuando estaba duplicado a mano en dos herramientas.
+
+### La primera columna tiene DOS montajes, no uno
+
+`colorear` era una casilla (alternar sí/no) y ahora son tres opciones, porque el
+equipo publica las dos cosas:
+
+| Opción | Qué hace | Dónde está publicado |
+|---|---|---|
+| `no` | sin color | tablas sin sombreado |
+| `alternado` | `bg-primary-10` / `bg-secondary-10` fila por fila | las tablas normales (y lo que hace el Convertidor de Tablas). Por eso el importador de Word lo enciende |
+| `plano` | `bg-secondary-10` en **todas** las filas | la **Tabla 1** de la presentación de la semana: cotejado en MM y en M03, sus dos filas llevan el mismo tono |
+
+Con dos filas la diferencia es exactamente una celda, y era la que se veía mal:
+la Tabla 1 salía con la fila 1 en rosa y la 2 en verde, cuando las dos van en
+verde. Por eso la plantilla de *Presentación de semana* trae `colorear: 'plano'`.
+
+El valor viejo (`true`) se sigue entendiendo como `'alternado'`: lo normaliza
+`tonoPrimeraColumna()` en vez de migrar los bloques.
+
+Y el **importador de HTML lo detecta**, mirando la primera celda de cada fila:
+todas del mismo tono y ese tono es `bg-secondary-10` → `plano`; si hay color pero
+no cuadra → `alternado`; sin color → `no`. Antes entraba siempre en "sin color",
+así que importar una tabla publicada y volver a generarla le borraba la columna.
+
+### `MW-auto`: la clase que deja encoger la tabla
+
+El montaje publicado escribe
+`<table class="table table-bordered MW-auto tabla-responsive-cards">`, y esa
+`MW-auto` **no es decorativa**. La hoja del tema trae:
+
+```css
+.mainPlantilla23 .table td { min-width: 200px }
+.mainPlantilla23 .table.MW-auto td { min-width: auto }
+```
+
+Sin `MW-auto`, una tabla de cinco columnas tiene **1000px de ancho mínimo** y ya
+no puede encoger: entre los 576px donde entran las tarjetas y el escritorio saca
+barra de desplazamiento. Es el mismo problema que documenta
+`tools/micrositio-a-pagina/REGLAS.md` §6-ter.
+
+Medido con las cinco columnas de la Tabla 1, con el subconjunto de Bootstrap de
+la previa más la hoja del tema:
+
+| Contenedor | Sin `MW-auto` | Con `MW-auto` |
+|---|---|---|
+| 1100px | 1060px, sin scroll | 1060px, sin scroll |
+| 700px | **1001px → con scroll** | 660px, sin scroll |
+
+O sea: en pantalla ancha no cambia nada y en pantalla mediana quita el scroll.
+Por eso va **siempre**, no como opción.
 
 El iframe va en sandbox **con** `allow-same-origin` —lo necesitan las imágenes
 del Word (son `blob:` del documento padre) y la sincronía con el lienzo—, y con

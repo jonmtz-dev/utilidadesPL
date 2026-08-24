@@ -198,10 +198,25 @@
         const bandaGris = el.querySelector('.bg-neutral-claro-50 p, .bg-neutral-claro-50');
         const titulo = bandaGris ? aMarcas(bandaGris) : '';
 
+        /* Color de la primera columna, leído de las celdas. Antes entraba
+           siempre en 'no' y una tabla publicada perdía ese color al importarla
+           y volver a generarla. Se distinguen los dos montajes reales: la Tabla 1
+           de la presentación lleva el mismo tono en todas las filas ('plano') y
+           las tablas normales van alternando ('alternado'). */
+        const colores = [...tabla.querySelectorAll(':scope > tbody > tr')]
+            .map(tr => tr.children[0])
+            .filter(Boolean)
+            .map(td => (/bg-(primary|secondary)-10/.exec(td.className) || [''])[0]);
+        const conColor = colores.filter(Boolean);
+        const colorear = !conColor.length
+            ? 'no'
+            : (conColor.length === colores.length && new Set(conColor).size === 1
+                && conColor[0] === 'bg-secondary-10' ? 'plano' : 'alternado');
+
         return {
             tipo: 'tabla', banda, encabezados, filas, titulo,
             tarjetas: tabla.classList.contains('tabla-responsive-cards'),
-            colorear: false,
+            colorear,
             encabezadoColor: [...filaTitulos.children].some(t => /bg-primary-\d/.test(t.className))
         };
     }

@@ -380,6 +380,23 @@ y da un veredicto por caso:
   (`bg-primary-10` / `bg-secondary-10`) que el Convertidor de Tablas; va **apagado
   por defecto** para no pisar el estilo propio del micrositio.
 
+**Modo “Corregir HTML” — páginas que ya están en Moodle.** Hay recursos que se
+montaron cuando la herramienta aún no tenía todos los arreglos y **de los que ya
+no queda el micrositio**: lo único recuperable es el HTML que está en Moodle. El
+selector de arriba a la izquierda cambia a ese modo: se pega el HTML y sale el
+mismo HTML con lo que le faltaba. El arreglo grande es la marca
+`.ms-convertido` —sin ella, las reglas de estado del tema (acordeón abierto,
+hover de los botones) no alcanzan a esa página y se ve descolorida—, y con ella
+viajan el saneo para TinyMCE, los arreglos de montaje y el `data-label` por
+columna real de las tablas. Los bloques son **los mismos** que usa la conversión
+normal (`arreglosDeMontaje()`), no una copia.
+
+**No toca rutas ni imágenes**, y no puede reponer el tamaño de las que eran SVG
+(para eso hace falta el archivo original): esa página hay que rehacerla desde el
+micrositio. Tampoco pisa un estilo inline que ya esté puesto —manda el que dejó
+el blindaje medido contra el micrositio de verdad—, así que correrlo de más no
+cambia nada: la salida es idempotente. El detalle, en el §10 de `REGLAS.md`.
+
 > 📐 **La lógica completa del sistema de igualación de estilos vive en
 > [`tools/micrositio-a-pagina/REGLAS.md`](tools/micrositio-a-pagina/REGLAS.md).**
 > Léelo antes de tocar `blindar()`, la marca `.ms-convertido` o el tablero de la
