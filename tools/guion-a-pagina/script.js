@@ -986,6 +986,22 @@ document.addEventListener('click', function (e) {
         if (comp && hueco) hueco.textContent = (comp.resumen(d.bloque) || '').slice(0, 70);
     }
 
+    /**
+     * Dónde se pega el HTML en Moodle.
+     *
+     * En los dos modos es la **Descripción** del recurso, con *Mostrar
+     * descripción en la página del curso* marcado: así lo monta el equipo y así
+     * lo espera su plugin. No es un detalle de gusto —la hoja del tema está
+     * escrita para ese contenedor: sus reglas de ancho cuelgan de
+     * `.activity-description` y en el Contenido de la página no aplican—.
+     *
+     * Lo que cambia entre modos no es el campo, es cuánto va dentro.
+     */
+    const DESTINO = {
+        completa: 'Va en la <strong>Descripción</strong> del recurso, con <em>Mostrar descripción en la página del curso</em> marcado.',
+        titulo: 'Va en la <strong>Descripción</strong> del recurso con archivo (PDF, video): solo la barra del título, y el archivo lo pinta Moodle debajo.'
+    };
+
     /* Los dos ajustes de página se explican solos.
 
        El Resaltado no se ve por ningún lado hasta que la página tiene una
@@ -1028,16 +1044,21 @@ document.addEventListener('click', function (e) {
            de él. Sin este renglón parecería que la herramienta perdió el
            trabajo, que es justo el susto que no debe darse. */
         const avisoSalida = $('#salida-aviso');
+        const soloTitulo = pagina.salida === 'titulo';
         if (avisoSalida) {
-            const soloTitulo = pagina.salida === 'titulo';
             const cuantos = pagina.bloques.length;
             const fuera = soloTitulo && cuantos > 0;
-            avisoSalida.textContent = !soloTitulo ? ''
+            const nota = !soloTitulo ? ''
                 : fuera
                     ? `${cuantos} bloque${cuantos === 1 ? '' : 's'} del lienzo no sale${cuantos === 1 ? '' : 'n'}.`
                     : 'Sale el título y nada más.';
+            // `nota` se arma aquí con un número y texto fijo, así que no hay
+            // nada del usuario que escapar.
+            avisoSalida.innerHTML = (nota ? nota + ' ' : '') + DESTINO[soloTitulo ? 'titulo' : 'completa'];
             avisoSalida.classList.toggle('field-hint--alerta', fuera);
         }
+        const destino = $('#code-destino');
+        if (destino) destino.innerHTML = '<i class="ph ph-target"></i> ' + DESTINO[soloTitulo ? 'titulo' : 'completa'];
 
         const cajaTitulo = $('#campo-titulo');
         if (cajaTitulo) {

@@ -1148,6 +1148,32 @@ empieza a emitir una etiqueta nueva, va también aquí.
 > `CSS_VISTA_PREVIA` en `undefined`: la previa entera sale sin estilos y la
 > consola no dice gran cosa. Pasó al escribir este mismo comentario.
 
+### El HTML va en la DESCRIPCIÓN, siempre
+
+Los dos modos de *Salida* se pegan en el mismo campo: la **Descripción** del
+recurso, con *Mostrar descripción en la página del curso* marcado. Así lo monta
+el equipo y así lo espera su plugin.
+
+No es cuestión de gusto: **la hoja del tema está escrita para ese contenedor.**
+Sus reglas de ancho cuelgan de `.activity-description` (ver *El envoltorio lleva
+el ancho escrito a mano*), y en el *Contenido de la página* no existe ese
+ancestro, así que no aplican.
+
+| Salida | Qué va en la Descripción |
+|---|---|
+| Página completa | la página entera |
+| Solo el título | solo la barra del título, para un recurso con archivo (PDF, video) que Moodle pinta debajo |
+
+Lo dice la tabla `DESTINO`, y se escribe en dos lados —bajo el selector de
+*Salida* y bajo el HTML, en la pestaña de código—.
+
+> ⚠️ **Ojo con dónde se juzga el resultado.** La misma descripción se pinta en
+> dos vistas —la página del curso y el recurso abierto— y **no tienen la misma
+> base de tamaño**. Medido con la misma presentación: el encabezado del recuadro
+> da **14px** en una (= 16 × 0.875, un solo `<small>` sobre base 16) y
+> **11.484375px** en la otra (= 15 × 0.875 × 0.875). El HTML es el mismo en las
+> dos. Antes de tocar nada, hay que saber qué vista se está mirando.
+
 ### El tamaño del texto lo pone el CONTENEDOR, no la herramienta
 
 Ningún bloque de la herramienta escribe un `font-size`: todo se hereda de donde

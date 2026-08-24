@@ -193,6 +193,10 @@
                         <button id="btn-copy" class="btn-icon" title="Copiar HTML"><i class="ph ph-copy"></i></button>
                         <textarea id="code" class="code-output" placeholder="El HTML para el editor de Moodle aparecerá aquí. También puedes pegar aquí una página de Moodle y traerla con el botón de abajo."></textarea>
                     </div>
+                    <!-- Dónde va el HTML. No es un adorno: pegarlo en el campo
+                         equivocado no da error, da una página con las letras más
+                         chicas, y desde ahí nadie adivina qué pasó. -->
+                    <p id="code-destino" class="field-hint"></p>
                     <div class="code-traer">
                         <button id="btn-traer" class="btn-secondary btn-chico" type="button">
                             <i class="ph ph-download-simple"></i> Traer este HTML a la herramienta
