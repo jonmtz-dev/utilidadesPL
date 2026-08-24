@@ -655,18 +655,84 @@ También es la primera plantilla de *Empezar de cero*.
 > cambio — las ventanas de las tarjetas y de los tooltips ya estaban cotejadas
 > con `modal-lg` y no había por qué moverlas.
 
-### Un interruptor que esconde campos vuelve a dibujar el lienzo
+### Un interruptor que esconde campos vuelve a dibujar la FICHA
 
 Los campos con `siOculta` se filtran **al dibujarlos**, así que un interruptor
-que los gobierna tiene que llamar a `dibujarLienzo()` además de
-`refrescarSalida()`. Sin eso, apagar *Recuadro de contenidos* quitaba la columna
-de la página pero dejaba a la vista sus tres campos, que ya no aplicaban. El
-mismo arreglo destapa el caso que ya existía en el bloque Texto (*centrado* está
-gobernado por *destacado*).
+que los gobierna tiene que redibujar además de `refrescarSalida()`. Sin eso,
+apagar *Recuadro de contenidos* quitaba la columna de la página pero dejaba a la
+vista sus tres campos, que ya no aplicaban.
 
-Es `dibujarLienzo()`, nunca `dibujarTodo()`: la previa ya se regenera en
-`refrescarSalida()`, y con `dibujarTodo()` se cerraría el acordeón que se acaba
-de abrir (ver arriba).
+> ⚠️ **Es `dibujarFicha()`, no `dibujarLienzo()`.** Era `dibujarLienzo()` cuando
+> los campos vivían dentro de la tarjeta del lienzo. El rediseño los movió al
+> panel de la derecha (`#panel-bloque` / `#panel-cuerpo`), que `dibujarLienzo()`
+> **no toca**, y el arreglo dejó de servir sin que nada avisara: medido, apagar
+> *Recuadro de contenidos* seguía mostrando los tres campos. Ahora se llaman las
+> dos, porque el renglón del índice también puede cambiar.
+>
+> Nunca `dibujarTodo()`: la previa ya se regenera en `refrescarSalida()`, y con
+> `dibujarTodo()` se cerraría la ficha que se acaba de abrir (ver arriba).
+
+La cuenta de "¿hay algo que esconder?" mira `campos.some(c => c.siOculta)` **y**
+`alineaTexto`, porque los botones de alineación del bloque Texto no viven en
+`campos`: viven en la barra del campo (abajo).
+
+### La alineación del Texto vive en la barra, no como campo
+
+El bloque Texto tenía dos casillas: *centrado y en negritas* (`destacado`) y
+*centrado, sin forzar negritas* (`centrado`). O sea: se podía centrar, pero no
+alinear. La segunda casilla se cambió por tres botones —izquierda / centro /
+derecha— **dentro de la barra de marcas**, junto a negritas y cursivas.
+
+Van ahí y no como campo suelto porque es donde los busca quien viene del editor
+de Moodle: es la misma fila de botones del TinyMCE. El componente lo declara con
+`alineaTexto: 'texto'` (el campo al que se le pegan) y los dibuja
+`barraDeMarcas()`.
+
+> No son una marca. Los otros botones **insertan texto** (`**negritas**`) en la
+> posición del cursor; estos ponen una clase al **bloque entero**, así que se
+> pintan con estado (`.mini-btn.activa`) para que se vea cuál está puesto. Es la
+> diferencia con Tiny, donde la alineación es por párrafo: aquí los párrafos de
+> un bloque van todos iguales. Para mezclar alineaciones, van en bloques
+> distintos.
+
+Detalles que importan:
+
+- **Las clases son de Bootstrap, no inventadas**: `text-center` y `text-end`. La
+  hoja del tema no las declara —salen del Bootstrap que carga Moodle— y tampoco
+  las pelea: lo único con `text-align` ahí son dos reglas de contexto que no
+  tocan al `<p>` suelto. Comprobado renderizando la salida contra la hoja: da
+  `start` / `center` / `right`.
+- **Izquierda no escribe `text-start`.** Es el default del navegador; escribirlo
+  cambiaría el HTML de todos los bloques que ya salían bien sin ganar nada.
+- **`text-justify` NO se ofrece.** Está en el subconjunto de `vista-previa.js`,
+  pero **Bootstrap 5 la eliminó**: en Moodle no existe. Ofrecerla habría dado una
+  previa que miente.
+- **`destacado` manda.** Con esa casilla encendida los botones no se dibujan: ese
+  patrón ya es "centrado y en negritas" por definición.
+- El valor viejo (`centrado: true`) se sigue entendiendo como centro, vía
+  `alineacionTexto()`. Y el **importador lo detecta** de los `<p>`, pero solo si
+  **todos** coinciden: con una mezcla no hay un valor de bloque que la
+  represente.
+
+### El menú de piezas que nunca se cerraba
+
+`.insertar-opciones` —la rejilla de 21 piezas que abre cada "+"— llevaba
+`display: grid !important`. Y `shared.css` esconde con
+`.hidden { display: none !important }`. Misma especificidad, los dos
+`!important`, y el de la herramienta va **después**: ganaba el `grid`, así que
+**el menú jamás se escondía**.
+
+Se veía como dos paneles de piezas abiertos a la vez en la columna izquierda —uno
+por cada "+", más la paleta del pie— y el panel dejaba de entenderse. Medido con
+un solo bloque en la página: **42 piezas en pantalla** cuando debían ser 21 (las
+de la paleta del pie), y el lienzo tres veces más alto.
+
+El `!important` no hacía falta: estaba para ganarle al `display: flex` de la otra
+regla `.insertar-opciones` de más arriba, y esa ya la gana **por orden**.
+
+> La moraleja es de las que se repiten: `!important` sobre una propiedad que una
+> clase de utilidad también gobierna (`display`, `hidden`) le rompe la utilidad
+> en todos lados, no solo aquí.
 
 ## El envoltorio lleva el ancho escrito a mano
 
@@ -1060,6 +1126,45 @@ Va en un `<iframe sandbox>` con dos hojas:
 2. `hoja-moodle-default.js` — la hoja real del tema, **reutilizada de
    Micrositio a Página**. No se duplica a propósito: así fue como el hex
    `#d8a7b6` sobrevivió meses en una copia ya corregida en la otra.
+
+### El `<small>` faltaba en el subconjunto de la previa
+
+`<small>` no es una clase del tema: es **Reboot de Bootstrap**
+(`small { font-size: 0.875em }`). Faltaba en `vista-previa.js`, así que el
+navegador le aplicaba su default (`smaller`) y la previa daba **13.33px** donde
+Moodle da **14px**.
+
+Se nota justo en el recuadro de *Contenidos de aprendizaje* de la presentación,
+que va **entero** dentro de `<small>`: título y párrafos salían más chicos que en
+la página publicada. Medido después del arreglo: 14px en los dos.
+
+Es la regla que ya estaba escrita arriba y que conviene releer: *este subconjunto
+cubre lo que genera `componentes.js`*. Y no solo las **clases** —también las
+**etiquetas** que Bootstrap reestilza (`small`, `mark`, `hr`…). Si un componente
+empieza a emitir una etiqueta nueva, va también aquí.
+
+> ⚠️ **`vista-previa.js` es una plantilla de texto de JS.** Un acento grave
+> dentro de un comentario del CSS cierra la plantilla y deja
+> `CSS_VISTA_PREVIA` en `undefined`: la previa entera sale sin estilos y la
+> consola no dice gran cosa. Pasó al escribir este mismo comentario.
+
+### El tamaño del texto lo pone el CONTENEDOR, no la herramienta
+
+Ningún bloque de la herramienta escribe un `font-size`: todo se hereda de donde
+se pegue el HTML. En el recuadro de la presentación el único reductor es el
+`<small>`, que es **exactamente lo que trae el montaje publicado**.
+
+Por eso, cuando un montaje sale con las letras más chicas, lo primero que hay que
+mirar no es el HTML sino **dónde se pegó**. La señal para distinguirlos: si lo que
+se encogió es **todo el bloque** —el `h1`, los párrafos y el recuadro— es el
+contenedor; si se encogió **solo** lo que va en `<small>`, ahí sí mira el markup.
+
+Un caso real: la misma presentación dio `14px` en el encabezado del recuadro
+abierta como recurso Página, y `11.484375px` en otra vista. Ese número no es
+casual: `15 × 0.875 × 0.875`, o sea **dos reducciones de `em` sobre una base de
+15px** en lugar de una sobre 16px. La hoja del tema no tiene ninguna regla que lo
+haga —buscado: no hay `font-size` en `.activity-description` ni en `.card-header`
+ni en `small`—, así que viene del Moodle de alrededor.
 
 ### El encabezado de la tabla no se pinta (y la previa tampoco debe pintarlo)
 

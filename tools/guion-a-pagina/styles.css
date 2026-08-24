@@ -765,7 +765,14 @@
    pasar el mouse y esperar el tooltip, veintiuna veces. Es la misma pieza que
    ofrece la paleta del pie, así que se ve igual que allá — solo más compacta. */
 .insertar-opciones {
-    display: grid !important;
+    /* ⚠️ SIN `!important`. Lo llevaba, y con eso le ganaba a
+       `.hidden { display: none !important }` de shared.css —misma
+       especificidad, los dos `!important`, y este va después—: el menú de
+       piezas NUNCA se cerraba. Quedaban dos rejillas de 21 piezas abiertas a la
+       vez en el panel izquierdo, una por cada "+", y ya no se entendía dónde
+       estaba uno. No hace falta: la regla de arriba (`display: flex`) tiene la
+       misma especificidad y esta va después, así que gana por orden. */
+    display: grid;
     grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
     gap: 4px;
     /* `.insertar` es flex con align-items:center, así que sin esto la caja se

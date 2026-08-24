@@ -32,6 +32,17 @@ body {
 }
 img { max-width: 100%; height: auto; }
 p { margin: 0 0 1rem; }
+/* <small> es de Bootstrap (Reboot), no del tema, y faltaba en este subconjunto:
+   sin la regla, el navegador le aplica su default 'smaller' y en la previa daba
+   13.33px donde Moodle da 14px. Se nota en el recuadro de "Contenidos de
+   aprendizaje" de la presentación, que va todo en <small>: la previa lo enseñaba
+   más chico de lo que sale publicado. Va en em, no en rem: se encoge respecto a
+   su contenedor, igual que en Bootstrap.
+
+   OJO: este archivo es una PLANTILLA DE TEXTO de JS. Nada de acentos graves
+   aquí dentro (los de teclear código entre comillas): cierran la plantilla y
+   dejan CSS_VISTA_PREVIA en undefined, o sea la previa entera sin estilos. */
+small, .small { font-size: 0.875em; }
 /* h5 entra por el antetítulo de la presentación ("Presentación de la Semana 1"). */
 h1, h2, h3, h4, h5 { margin: 0 0 .5rem; font-weight: 500; }
 h5 { font-size: 1.1rem; }
