@@ -596,7 +596,11 @@ const COMPONENTES = {
                 k: 'estilo', tipo: 'opciones', etiqueta: 'Estilo', ops: [
                     { v: 'vinetas', etiqueta: 'Viñetas', icono: 'list-bullets' },
                     { v: 'numerada', etiqueta: '1, 2, 3', icono: 'list-numbers' },
-                    { v: 'letras', etiqueta: 'a, b, c', icono: 'text-aa' }
+                    { v: 'letras', etiqueta: 'a, b, c', icono: 'text-aa' },
+                    /* La romana la trae Word (`lowerRoman`) y docx.js ya la
+                       distingue; sin esta opción el guion la aplanaba a 1, 2, 3.
+                       `type="i"` es HTML de siempre: no necesita clase del tema. */
+                    { v: 'romana', etiqueta: 'i, ii, iii', icono: 'text-italic' }
                 ]
             },
             { k: 'items', tipo: 'renglones', etiqueta: 'Elementos', marcador: 'Un elemento por renglón' }
@@ -605,7 +609,7 @@ const COMPONENTES = {
             const items = (b.items || []).map(t => String(t).trim()).filter(Boolean);
             if (!items.length) return '';
             const et = b.estilo === 'vinetas' ? 'ul' : 'ol';
-            const tipo = b.estilo === 'letras' ? ' type="a"' : '';
+            const tipo = b.estilo === 'letras' ? ' type="a"' : (b.estilo === 'romana' ? ' type="i"' : '');
             /* Dentro de un <li> la sublista va pelada y SIN .estiloLista: así es
                el `<ol type="a">` de la página real, y la clase del padre ya le da
                el estilo. Envolverla en .row.bloque la sacaría de su punto. */

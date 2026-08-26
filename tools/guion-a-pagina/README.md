@@ -528,6 +528,79 @@ que hay que publicar:
 | `<Pop-up>`, `<Video>` | El bloque correspondiente, vacío |
 | Cualquier otra | Se guarda como indicación, no se publica |
 
+### El formato del Word sí llega: negritas, cursivas, viñetas y el cuadro
+
+Cuatro cosas del Word que antes se perdían en el camino, y las cuatro se perdían
+en el **mismo sitio**: dentro de una celda. Y casi todo el guion instruccional
+vive dentro de una celda, porque el contenido de cada pestaña es una celda de la
+tabla *Pestaña | Contenido*.
+
+| Qué | Dónde se perdía | Cómo llega ahora |
+|---|---|---|
+| **Negritas** | En ningún lado: ya funcionaban (`**texto**` → `<strong>`) | Igual que siempre |
+| **Cursivas** | `docx.js` las trae apagadas por omisión y la herramienta nunca las pedía; encima, el `contenido` de una celda llamaba a `textoDeParrafoConNegritas` con `{ saltos: true }` **fijo**, así que ni pidiéndolas llegaban | `leerBloquesDeDocx(file, { cursivas: true })`, y el `contenido` hereda esa opción. `marcas()` ya convertía `*texto*` en `<em>` |
+| **Viñetas y numeraciones** | El `contenido` de una celda entregaba `{ tipo, texto, imagenes }` y nada más: la viñeta no existía ahí, así que cada elemento salía como un párrafo suelto | `contenido` trae `lista`, `tipoLista`, `nivelLista` e `idLista`, y `bloquesDesdeLineas` agrupa los renglones seguidos en un bloque **Lista** |
+| **El cuadro** (una celda sola, con borde y sin relleno) | Se leía como "tabla de una celda", que en el guion es la barra de título de sección | Si **no** está sombreada es un cuadro y sale como **Caja de color** sin banda |
+| **La caja de instrucción sin su marca** | El guion no siempre escribe `<Texto regular…con ícono de interactividad>`: a veces solo pega el ícono en el párrafo. Salía como un párrafo en negritas más | Se reconoce por el ícono anclado + el texto entero en negritas (ver abajo) |
+
+El estilo de la lista sale de `numbering.xml` (lo lee `docx.js`), no del texto:
+viñeta, `1.`, `a.` e `i.` se distinguen sin adivinar. `ESTILO_LISTA` traduce eso
+al campo `estilo` del bloque en **un solo lugar**, porque lo consultan los tres
+caminos —párrafo suelto, celda y sublista de un paso— y tenerlo tres veces es
+cómo se quedó vivo meses el hex `#d8a7b6`.
+
+Dos decisiones que conviene conocer antes de "arreglarlas":
+
+- **Un cambio de formato abre otra lista.** Si el Word pasa de viñetas a `a, b,
+  c`, salen dos bloques `lista`, no uno con dos estilos. Lo mismo si cambia el
+  `numId`: en el guion eso son dos listas distintas que quedaron pegadas.
+- **Los niveles anidados se aplanan.** El bloque `lista` publica sus elementos
+  como texto y no admite hijos —para eso está `pasos`—, así que una sublista sale
+  como su propia lista debajo. Es legible, y es mucho más de lo que había antes
+  (la viñeta se perdía entera). Si algún día hace falta el anidado de verdad, va
+  en `pasos`, no aquí.
+
+**El cuadro se distingue por el sombreado, no por el tamaño.** En estos guiones
+la barra de sección viene con `#666666` y el cuadro con relleno automático; por
+eso `sugerir()` devuelve `cuadro` solo cuando la tabla tiene una celda **y** no
+está sombreada. El bloque destino es `envolvente` (Caja de color) con
+`fondo: neutral-claro-50`, que es el equivalente neutro de las plantillas: el
+cuadro del Word no trae color y el markup de la caja está copiado de la
+plantilla, no deducido. En el asistente de importación, *Cuadro* también aparece
+como opción para las tablas que sí se preguntan.
+
+### La caja de instrucción cuando el guion no la marca
+
+Lo normal es que el guion abra la caja amarilla con `<Texto regular en negritas
+con ícono de interactividad a la izquierda>`. Hay guiones que no escriben la
+marca: pegan el **ícono dentro del párrafo** y ponen la frase entera en
+negritas. En el Word se ve igual; en la página salía como un párrafo en negritas
+más, sin caja.
+
+Se reconoce por **dos indicios que tienen que darse juntos**:
+
+1. El párrafo trae una imagen anclada **pequeña** — el ícono de interactividad
+   mide 33 px en los guiones cotejados, y la figura más chica del mismo Word
+   mide 135. El corte está en 60 px, con aire por los dos lados.
+2. El texto va **entero** en negritas (`**todo**`, sin ningún `**` por dentro).
+
+Por qué no se dispara de más: en el Word cotejado los únicos párrafos con imagen
+anclada **y** texto son justo los cuatro de instrucción. Las figuras de verdad
+van solas en su párrafo, sin una palabra; y el único párrafo que sí mezcla texto
+con una imagen grande —el SmartArt de la metodología de gráficos— no viene en
+negritas, así que falla el segundo indicio.
+
+El tamaño no se adivina: `assets/docx.js` lo entrega en **`imagenesInfo`**
+(`[{ id, ancho, alto }]` en píxeles, sacado del `wp:extent` del dibujo). Es un
+campo nuevo; `imagenes` sigue siendo la lista de rId pelada que ya leían las
+otras herramientas. Un dibujo sin `wp:extent` llega en 0 —que significa "no sé",
+no "diminuto"— y no cuenta como ícono.
+
+**El ícono lo pone el bloque, no el Word.** La caja sale con
+`@@PLUGINFILE@@/clic.png`, que es lo que publica el montaje; la imagen que traía
+el párrafo era el ícono del guion y no se sube. En la vista previa ese `src` da
+404 a propósito: el archivo vive en Moodle.
+
 ### La caja de pasos y la sangría de Word
 
 Una actividad de aprendizaje no es una sucesión de bloques hermanos: la *Ruta de

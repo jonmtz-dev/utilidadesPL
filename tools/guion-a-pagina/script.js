@@ -2377,7 +2377,11 @@ document.addEventListener('click', function (e) {
         info.classList.remove('hidden');
         info.textContent = 'Leyendo el guion…';
         try {
-            const crudos = await leerBloquesDeDocx(file);
+            /* `cursivas` encendido: docx.js las deja apagadas por omisión
+               porque quien solo quiere texto plano no espera ver `*` sueltos.
+               Aquí sí se quieren: `marcas()` ya convierte `*texto*` en <em>,
+               así que la cursiva del guion llega tal cual a la página. */
+            const crudos = await leerBloquesDeDocx(file, { cursivas: true });
             await cargarImagenes(file);
             const desde = inicioDelContenido(crudos);
             const utiles = crudos.slice(desde);
@@ -2424,6 +2428,7 @@ document.addEventListener('click', function (e) {
         { v: 'acordeon', nombre: 'Acordeón', mini: MINI.acordeon, ayuda: 'Cada fila es un apartado plegable' },
         { v: 'tarjetas', nombre: 'Tarjetas', mini: MINI.tarjetas, ayuda: 'Cada fila es una tarjeta con ventana' },
         { v: 'texto', nombre: 'Texto', mini: MINI.texto, ayuda: 'Solo el contenido, sin tabla' },
+        { v: 'cuadro', nombre: 'Cuadro', mini: MINI.envolvente, ayuda: 'Una caja de color con el texto adentro' },
         { v: 'omitir', nombre: 'No va', mini: MINI.separador, ayuda: 'Es una indicación interna del guion' }
     ];
 
@@ -2471,6 +2476,12 @@ document.addEventListener('click', function (e) {
         const cols = (filas[0] || []).length;
         const enc = (filas[0] || []).map(c => (c.texto || '').toLowerCase()).join(' | ');
 
+        /* Una tabla de UNA celda SIN sombreado no es una tabla: es el CUADRO
+           del guion —la cita de la RAE, la definición encajonada—, que en el
+           montaje se publica como caja de color. Las sombreadas sí son las
+           barras de título de sección y siguen su camino de siempre. */
+        if (t.celdas === 1 && !t.sombreado) return 'cuadro';
+
         // "Pestaña | Contenido" es la tabla que arma las secciones del recurso.
         if (/pesta[ñn]a/.test(enc) && /contenido/.test(enc)) return 'acordeon';
         // "Botón | Información" es el grupo de botones con su ventana emergente.
@@ -2507,12 +2518,80 @@ document.addEventListener('click', function (e) {
 
     const MARCA = /^[<«]\s*(.+?)\s*[>»]$/;
 
+    /* Del formato que lee docx.js en numbering.xml al estilo del bloque `lista`.
+       Vive en UN lugar porque lo consultan los tres caminos (párrafo suelto,
+       celda y sublista de un paso) y tenerlo tres veces es cómo se quedó vivo
+       meses el hex #d8a7b6. */
+    const ESTILO_LISTA = { vinetas: 'vinetas', letras: 'letras', romana: 'romana', ordenada: 'numerada' };
+    const estiloDeLista = tipo => ESTILO_LISTA[tipo] || 'numerada';
+
+    /* ---- La caja de instrucción SIN su marca ----
+
+       Lo normal es que el guion la abra con `<Texto regular en negritas con
+       ícono de interactividad a la izquierda>`. Pero hay guiones que no
+       escriben la marca: pegan el ícono DENTRO del párrafo y ponen la frase
+       entera en negritas. Se veía igual en el Word y salía como un párrafo en
+       negritas más, sin su caja amarilla.
+
+       Los dos indicios tienen que darse JUNTOS, y por eso esto no se dispara de
+       más: en el Word cotejado los únicos párrafos con imagen anclada Y texto
+       son justo los cuatro de instrucción; las figuras de verdad van solas en
+       su párrafo, sin una palabra. */
+
+    /* El ícono de interactividad mide 33 px en los guiones cotejados; la figura
+       más pequeña del mismo Word mide 135. 60 px parte esa distancia con aire
+       de sobra por los dos lados. Un dibujo sin `wp:extent` llega en 0 —"no
+       sé"— y no cuenta como ícono. */
+    const ANCHO_ICONO = 60;
+    const traeIconoAnclado = dato => (dato.imagenesInfo || []).some(i =>
+        i.ancho > 0 && i.ancho <= ANCHO_ICONO && i.alto > 0 && i.alto <= ANCHO_ICONO);
+
+    /** El texto va ENTERO en negritas: `**todo**` y ningún `**` por dentro. */
+    const NEGRITAS_ENTERO = /^\*\*([\s\S]+)\*\*$/;
+    function textoDeInstruccionSinMarca(dato) {
+        if (!traeIconoAnclado(dato)) return '';
+        const m = String(dato.texto || '').trim().match(NEGRITAS_ENTERO);
+        return m && !m[1].includes('**') ? m[1].trim() : '';
+    }
+
+    /**
+     * `lineas` admite dos formas: una cadena (el texto del renglón, como
+     * siempre) o el objeto que entrega docx.js para un párrafo, con sus datos
+     * de lista (`lista`, `tipoLista`, `idLista`). Se aceptan las dos porque hay
+     * llamadores que solo tienen texto —una celda aplanada, una marca fabricada
+     * a mano— y romperlos para ganar las viñetas no valía la pena.
+     */
     function bloquesDesdeLineas(lineas, sueltas, permitirDestacado) {
         const salida = [];
         let acumulado = [];
         let enInstruccion = false;
         let enCentrado = false;
         let primero = permitirDestacado !== false;
+        let listaEnCurso = null;    // bloque `lista` abierto
+        let idListaEnCurso = null;  // el numId de Word que la numera
+
+        const cerrarLista = () => { listaEnCurso = null; idListaEnCurso = null; };
+
+        /* Un renglón que Word numeró o viñeteó. Los seguidos se agrupan en UN
+           bloque `lista`; cambiar de formato (o de numeración en el Word) abre
+           otro, porque en el guion eso son dos listas distintas.
+
+           Los niveles anidados se aplanan a propósito: el bloque `lista` publica
+           sus elementos como texto y no admite hijos (para eso está `pasos`).
+           Así una sublista a, b, c sale como su propia lista `type="a"` debajo,
+           que es legible; antes se perdía la viñeta por completo. */
+        const agregarALista = (dato, texto) => {
+            cerrar();
+            const estilo = estiloDeLista(dato.tipoLista);
+            if (listaEnCurso && (listaEnCurso.estilo !== estilo || idListaEnCurso !== dato.idLista)) cerrarLista();
+            if (!listaEnCurso) {
+                listaEnCurso = Object.assign(crearBloque('lista', false), { estilo, items: [] });
+                idListaEnCurso = dato.idLista;
+                salida.push(listaEnCurso);
+            }
+            listaEnCurso.items.push(sinMarcas(texto));
+            primero = false;
+        };
 
         const cerrar = () => {
             const texto = acumulado.join('\n\n').trim();
@@ -2539,12 +2618,29 @@ document.addEventListener('click', function (e) {
             primero = false;
         };
 
-        (lineas || []).forEach(linea => {
+        (lineas || []).forEach(entrada => {
+            const dato = typeof entrada === 'string' ? { texto: entrada } : (entrada || {});
+            const linea = String(dato.texto || '');
             // Las marcas suelen venir dentro de un run en negritas, así que el
             // renglón llega como `**<Figura>**`. Para reconocerlas hay que
             // quitar los asteriscos primero; el texto normal sí las conserva.
             const m = linea.replace(/\*\*/g, '').trim().match(MARCA);
             if (!m) {
+                // Una viñeta nunca es el pie de una figura ni parte del párrafo
+                // de arriba: se atiende antes que nada.
+                if (dato.lista && linea.trim()) { agregarALista(dato, linea); return; }
+                cerrarLista();
+                /* La caja de instrucción que el guion no marcó: el ícono va
+                   anclado en el párrafo y la frase entera en negritas. Sale
+                   como caja, no como un párrafo en negritas más. El ícono lo
+                   pone el bloque (`clic.png`), como en el montaje publicado. */
+                const instruccion = textoDeInstruccionSinMarca(dato);
+                if (instruccion) {
+                    cerrar();
+                    salida.push(Object.assign(crearBloque('instruccion', false), { texto: instruccion }));
+                    primero = false;
+                    return;
+                }
                 /* "Figura 1. …" y "Nota. Elaboración propia (2026)." no son
                    párrafos de la página: son el encabezado y el pie de la figura
                    de arriba, y así se publican (.card-header.notas-tabla y
@@ -2565,6 +2661,7 @@ document.addEventListener('click', function (e) {
                 return;
             }
 
+            cerrarLista();
             const marca = m[1];
             const clave = marca.toLowerCase();
 
@@ -2657,6 +2754,7 @@ document.addEventListener('click', function (e) {
         const sueltas = [];
         let sueltos = [];         // líneas de párrafos seguidos, aún sin cerrar
         let listaActual = null;
+        let idListaSuelta = null;   // el numId de Word de esa lista
 
         let pasos = null;         // bloque `pasos` abierto por la marca del guion
         let paso = null;          // último punto de la lista, para colgarle cosas
@@ -2730,6 +2828,15 @@ document.addEventListener('click', function (e) {
                 if (crudo.celdas === 1 || (crudo.filas || []).length < 2) {
                     const texto = sinMarcas(crudo.texto);
                     if (!texto) return;
+                    /* Una sola celda SIN sombreado no es la barra de sección: es
+                       el recuadro donde el guion encajona una cita o una
+                       definición. Va como caja de color, no como título ni como
+                       párrafo suelto. Las sombreadas (#666666 en los guiones)
+                       siguen siendo el título de siempre. */
+                    if (crudo.celdas === 1 && !crudo.sombreado) {
+                        empujar(tablaWordA('cuadro', crudo, sueltas));
+                        return;
+                    }
                     cerrarPasos();
                     if (!pagina.titulo) { pagina.titulo = texto; return; }
                     empujar(Object.assign(crearBloque('titulo', false), { nivel: 'h2', texto }));
@@ -2799,9 +2906,7 @@ document.addEventListener('click', function (e) {
                     vaciarSueltos();
                     if (!subLista) {
                         subLista = Object.assign(crearBloque('lista', false), {
-                            estilo: crudo.tipoLista === 'vinetas' ? 'vinetas'
-                                : crudo.tipoLista === 'letras' ? 'letras' : 'numerada',
-                            items: []
+                            estilo: estiloDeLista(crudo.tipoLista), items: []
                         });
                         empujarDestino(subLista);
                     }
@@ -2809,11 +2914,16 @@ document.addEventListener('click', function (e) {
                     return;
                 }
 
+                /* El estilo sale de numbering.xml (docx.js ya distingue viñeta,
+                   1., a. y i.); antes todo lo que no fuera viñeta se publicaba
+                   numerado. Y un cambio de formato —o de numeración del Word—
+                   abre otra lista: son dos listas del guion, no una sola. */
+                const estilo = estiloDeLista(crudo.tipoLista);
+                if (listaActual && (listaActual.estilo !== estilo || idListaSuelta !== crudo.idLista)) listaActual = null;
                 if (!listaActual) {
                     vaciarSueltos();
-                    listaActual = Object.assign(crearBloque('lista', false), {
-                        estilo: crudo.tipoLista === 'vinetas' ? 'vinetas' : 'numerada', items: []
-                    });
+                    listaActual = Object.assign(crearBloque('lista', false), { estilo, items: [] });
+                    idListaSuelta = crudo.idLista;
                     asignarIds([listaActual]);
                     nuevos.push(listaActual);
                 }
@@ -2828,7 +2938,10 @@ document.addEventListener('click', function (e) {
                en la página publicada va después de la caja). Lo centrado es la
                excepción: esa marca dice explícitamente que sí es del paso. */
             if (pasos && !centrado && !crudo.sangria) cerrarPasos();
-            sueltos.push(texto);
+            /* El párrafo ENTERO, no solo su texto: así el intérprete de
+               renglones ve también el ícono anclado y reconoce la caja de
+               instrucción aquí arriba igual que dentro de una celda. */
+            sueltos.push(crudo);
         });
         cerrarPasos();
         resolverTablaPendiente();
@@ -2877,7 +2990,9 @@ document.addEventListener('click', function (e) {
                 const clave = m ? m[1].toLowerCase() : '';
                 if (m && /grupo de\s+\d+\s+bot/.test(clave)) { vaciar(); pendiente = { tipo: 'tarjetas', marca: m[1] }; return; }
                 if (m && /^tabla\b/.test(clave)) { vaciar(); pendiente = { tipo: 'tabla', marca: m[1] }; return; }
-                if (pieza.texto) lineas.push(pieza.texto);
+                // El párrafo ENTERO, no solo su texto: ahí vienen `lista` y
+                // `tipoLista`, que es lo que reconstruye la viñeta.
+                if (pieza.texto) lineas.push(pieza);
                 return;
             }
             vaciar();
@@ -2914,6 +3029,23 @@ document.addEventListener('click', function (e) {
                    tabla no lo lleva. */
                 colorear: 'alternado',
                 titulo: titulo || ''
+            });
+        }
+
+        /* El recuadro de una sola celda del guion. En el montaje eso es la
+           Caja de color SIN banda de las plantillas 01S.05 (markup copiado, no
+           deducido), no una tabla de una celda ni un párrafo más. */
+        if (decision === 'cuadro') {
+            const renglones = filas.flatMap(f => f.flatMap(c =>
+                (c.lineas || []).length ? c.lineas : [c.texto || '']));
+            const cuerpo = renglones.map(l => sinMarcas(l)).filter(Boolean).join('\n\n');
+            if (!cuerpo) return [];
+            return Object.assign(crearBloque('envolvente', false), {
+                titulo: titulo || '',
+                texto: cuerpo,
+                // El cuadro del Word llega sin relleno; el gris es el fondo
+                // neutro de las plantillas, el equivalente más cercano.
+                fondo: 'neutral-claro-50'
             });
         }
 

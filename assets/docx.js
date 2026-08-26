@@ -28,6 +28,37 @@ const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationsh
 // nombres, con sus propios runs (`m:r` con `m:t`). Por eso NO las veía nadie:
 // todo el lector busca `w:r`, y una fórmula no tiene ni uno solo.
 const M_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
+// El tamaño con el que Word DIBUJA una imagen no vive con la imagen, sino en el
+// `wp:extent` del dibujo que la envuelve. Es lo que separa un ícono de 33 px de
+// una figura de 500.
+const WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+
+/**
+ * Imágenes de un párrafo CON su tamaño en píxeles: [{ id, ancho, alto }].
+ *
+ * Campo aparte de `imagenes` (que sigue siendo la lista de rId pelada, como
+ * siempre) porque hay quien solo quiere los ids. El tamaño lo pide quien
+ * necesita distinguir el **ícono anclado dentro de un párrafo** —el de
+ * interactividad, 33 px en los guiones cotejados— de una figura de verdad.
+ *
+ * Word guarda EMU: 9525 EMU = 1 px. Si el dibujo no declara `wp:extent` se
+ * devuelve 0, y quien lea debe tratarlo como "no sé", no como "diminuto".
+ */
+function imagenesConMedidaDeParrafo(p) {
+    return [...p.getElementsByTagNameNS(A_NS, 'blip')].map(blip => {
+        const id = blip.getAttributeNS(REL_NS, 'embed');
+        let nodo = blip;
+        while (nodo && !(nodo.namespaceURI === WP_NS && (nodo.localName === 'inline' || nodo.localName === 'anchor'))) {
+            nodo = nodo.parentNode;
+        }
+        const ext = nodo && nodo.getElementsByTagNameNS(WP_NS, 'extent')[0];
+        return {
+            id,
+            ancho: ext ? Math.round(Number(ext.getAttribute('cx') || 0) / 9525) : 0,
+            alto: ext ? Math.round(Number(ext.getAttribute('cy') || 0) / 9525) : 0
+        };
+    }).filter(x => x.id);
+}
 
 // No todos los DOM resuelven igual el selector con namespaces usado por
 // `closest('*|tbl')`. Recorrer los padres separa de forma estable las tablas
@@ -539,13 +570,35 @@ async function leerBloquesDeDocx(file, opciones) {
         ? Object.assign({}, opciones, { latexPorComentario: await leerLatexDeComentariosDocx(file) })
         : opciones;
 
+    /* Lo que un parrafo dice de la lista a la que pertenece, en un solo lugar.
+       Se saco a funcion porque ahora lo necesitan DOS lectores: el bloque de
+       parrafo de siempre y el `contenido` de una celda —donde antes se perdia,
+       y por eso las vinetas del guion llegaban a la pagina como parrafos
+       sueltos—. Mismos calculos de antes; nada que ya funcionara cambia. */
+    const datosDeLista = n => {
+        const numPr = n.getElementsByTagNameNS(W_NS, 'numPr')[0];
+        const ilvl = numPr && numPr.getElementsByTagNameNS(W_NS, 'ilvl')[0];
+        const numId = numPr && numPr.getElementsByTagNameNS(W_NS, 'numId')[0];
+        const idLista = numId && numId.getAttributeNS(W_NS, 'val');
+        const nivel = Number(ilvl && ilvl.getAttributeNS(W_NS, 'val') || 0);
+        // Algunos Word no incrementan `ilvl` al anidar. En su lugar crean
+        // otro numId y guardan la sangria visual en numbering.xml. Usa esa
+        // informacion como respaldo para no aplanar la jerarquia.
+        const formatoLista = formatosLista[`${idLista}:${nivel}`];
+        const nivelVisual = formatoLista && typeof formatoLista === 'object' ?
+            Number.isFinite(formatoLista.nivelVisual) ? formatoLista.nivelVisual : nivel : nivel;
+        return {
+            lista: Boolean(numPr),
+            idLista,
+            tipoLista: (formatoLista && typeof formatoLista === 'object' ? formatoLista.tipo : formatoLista) || 'ordenada',
+            nivelLista: nivelVisual
+        };
+    };
+
     const bloqueDesdeNodo = n => {
         if (n.localName === 'p') {
             const texto = textoDeParrafoConNegritas(n, opcionesTexto)
                 .replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').trim();
-            const numPr = n.getElementsByTagNameNS(W_NS, 'numPr')[0];
-            const ilvl = numPr && numPr.getElementsByTagNameNS(W_NS, 'ilvl')[0];
-            const numId = numPr && numPr.getElementsByTagNameNS(W_NS, 'numId')[0];
             const jc = n.getElementsByTagNameNS(W_NS, 'jc')[0];
             // Sangría izquierda del Word (w:ind), en twips. Sirve para el texto de
             // cuerpo que va indentado bajo un punto de lista ("1. ..." y debajo un
@@ -570,14 +623,7 @@ async function leerBloquesDeDocx(file, opciones) {
             const colgante = Math.round(traeIndPropio
                 ? Math.max(colganteDirecto, primeraDirecta < 0 ? -primeraDirecta : 0)
                 : (delEstilo || 0));
-            const idLista = numId && numId.getAttributeNS(W_NS, 'val');
-            const nivel = Number(ilvl && ilvl.getAttributeNS(W_NS, 'val') || 0);
-            // Algunos Word no incrementan `ilvl` al anidar. En su lugar crean
-            // otro numId y guardan la sangría visual en numbering.xml. Usa esa
-            // información como respaldo para no aplanar la jerarquía.
-            const formatoLista = formatosLista[`${idLista}:${nivel}`];
-            const nivelVisual = formatoLista && typeof formatoLista === 'object' ?
-                Number.isFinite(formatoLista.nivelVisual) ? formatoLista.nivelVisual : nivel : nivel;
+            const deLista = datosDeLista(n);
             // Las imágenes van como <a:blip r:embed="rIdN"> dentro del párrafo.
             // Se entrega el id para que la herramienta las resuelva con
             // leerImagenesDeDocx (aquí no se cargan bytes: no siempre se usan).
@@ -587,13 +633,14 @@ async function leerBloquesDeDocx(file, opciones) {
                 tipo: 'parrafo',
                 texto,
                 imagenes,
+                imagenesInfo: imagenesConMedidaDeParrafo(n),
                 sangria,
                 sangriaColgante: colgante,
                 sangriaFrancesa: colgante > 0,
-                lista: Boolean(numPr),
-                idLista,
-                tipoLista: (formatoLista && typeof formatoLista === 'object' ? formatoLista.tipo : formatoLista) || 'ordenada',
-                nivelLista: nivelVisual,
+                lista: deLista.lista,
+                idLista: deLista.idLista,
+                tipoLista: deLista.tipoLista,
+                nivelLista: deLista.nivelLista,
                 alineacion: jc && jc.getAttributeNS(W_NS, 'val') === 'center' ? 'centro' :
                     (jc && jc.getAttributeNS(W_NS, 'val') === 'right' ? 'derecha' :
                         (jc && jc.getAttributeNS(W_NS, 'val') === 'both' ? 'justificado' : 'izquierda'))
@@ -638,13 +685,29 @@ async function leerBloquesDeDocx(file, opciones) {
                     const contenido = [];
                     [...tc.childNodes].filter(x => x.nodeType === 1).forEach(hijo => {
                         if (hijo.localName === 'p') {
-                            // Con los saltos de línea del párrafo (irán a <br>);
-                            // solo se normalizan espacios y tabuladores.
-                            const t = textoDeParrafoConNegritas(hijo, { saltos: true })
+                            /* Con los saltos de línea del párrafo (irán a <br>);
+                               solo se normalizan espacios y tabuladores.
+
+                               `cursivas` se hereda de quien llamó: antes iba
+                               fijo en `{ saltos: true }` y por eso una cursiva
+                               escrita DENTRO de una celda se perdía aunque la
+                               herramienta las hubiera pedido. Lo demás (latex)
+                               NO se hereda a propósito: quien lee celdas hoy no
+                               espera un `$$…$$` metido en su texto. */
+                            const t = textoDeParrafoConNegritas(hijo,
+                                { saltos: true, cursivas: Boolean(opciones && opciones.cursivas) })
                                 .replace(/[ \t]+/g, ' ').trim();
                             const imgs = [...hijo.getElementsByTagNameNS(A_NS, 'blip')]
                                 .map(b => b.getAttributeNS(REL_NS, 'embed')).filter(Boolean);
-                            if (t || imgs.length) contenido.push({ tipo: 'parrafo', texto: t, imagenes: imgs });
+                            /* `lista`/`tipoLista`/`nivelLista` son campos NUEVOS aqui:
+                               `texto` e `imagenes` no cambian, asi que quien ya
+                               leia `contenido` sigue viendo lo mismo. Sin esto,
+                               una vineta escrita DENTRO de una celda —que es
+                               donde vive casi todo el guion instruccional—
+                               llegaba como un parrafo mas y la lista se perdia. */
+                            if (t || imgs.length) contenido.push(Object.assign(
+                                { tipo: 'parrafo', texto: t, imagenes: imgs, imagenesInfo: imagenesConMedidaDeParrafo(hijo) },
+                                datosDeLista(hijo)));
                             return;
                         }
                         if (hijo.localName === 'tbl') contenido.push({ tipo: 'tabla', bloque: bloqueDe(hijo) });
