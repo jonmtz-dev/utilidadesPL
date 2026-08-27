@@ -36,6 +36,14 @@
        objeto de blob que usa la vista previa para enseñar la imagen real, y
        `bytes` alimenta el .zip que se arrastra al editor de Moodle. */
     let imagenesDocx = [];
+    /* rId del Word -> nombre del archivo que trae dentro. `imagenesDocx` está
+       de-duplicado por nombre (un mismo archivo llega por varios rId), así que
+       la relación se guarda aparte: es lo único que permite saber QUÉ archivo
+       es la imagen anclada en ESTE párrafo. */
+    let imagenesPorRid = new Map();
+    /* Comentarios del Word: id -> texto. De ahí sale la nomenclatura con la que
+       producción va a subir cada imagen a Moodle. */
+    let comentariosDocx = new Map();
     const historial = [];
     let refrescoPendiente = null;
     /* Tablas del Word que ya se montaron DENTRO de otra (el grupo de tarjetas de
@@ -186,7 +194,13 @@
         // @@PLUGINFILE@@ por el blob: del archivo que venía en el .docx. En el
         // HTML que se copia a Moodle, por supuesto, se queda el @@PLUGINFILE@@.
         imagenesDocx.forEach(img => {
-            html = html.split(`@@PLUGINFILE@@/${img.nombre}`).join(img.url);
+            /* El nombre del Word (`image7.png`) y también los nombres FINALES
+               que le dio la nomenclatura del guion: el HTML lleva escrito el
+               final, y sin esto la previa enseñaría el recuadro roto justo de
+               las figuras que sí tenemos. */
+            [img.nombre, ...(img.alias || [])].forEach(nombre => {
+                html = html.split(`@@PLUGINFILE@@/${nombre}`).join(img.url);
+            });
         });
         const conCartel = html.replace(
             /<iframe [^>]*src="https:\/\/www\.youtube\.com\/embed\/[^"]*"[^>]*><\/iframe>/g,
@@ -2274,7 +2288,9 @@ document.addEventListener('click', function (e) {
     async function cargarImagenes(file) {
         imagenesDocx.forEach(i => URL.revokeObjectURL(i.url));
         imagenesDocx = [];
+        imagenesPorRid = new Map();
         const mapa = await leerImagenesDeDocx(file);
+        mapa.forEach((v, rId) => imagenesPorRid.set(rId, v.nombre));
         const vistos = new Set();
         for (const { nombre, blob } of mapa.values()) {
             // El mismo archivo puede venir referenciado por varios rId.
@@ -2282,16 +2298,84 @@ document.addEventListener('click', function (e) {
             vistos.add(nombre);
             imagenesDocx.push({
                 nombre,
+                // Nombres con los que la página pide este mismo archivo, salidos
+                // de la nomenclatura del guion. Van en lista porque un mismo
+                // archivo del Word puede montarse con dos nomenclaturas.
+                alias: [],
                 url: URL.createObjectURL(blob),
                 bytes: new Uint8Array(await blob.arrayBuffer())
             });
         }
     }
 
+    /* ------------------------------------------------------------------
+       La nomenclatura del comentario
+
+       Producción no escribe el nombre del archivo en el cuerpo del guion: lo
+       deja en un COMENTARIO de Word sobre la imagen —"Insertar ícono de
+       interactividad. Con nomenclatura: 01S.04_ICONO_GENERAL_Interactividad_IMG1"—.
+       Ese es el nombre con el que la imagen se va a subir a Moodle, así que es
+       el que debe quedar escrito en el `@@PLUGINFILE@@` del HTML: puesto así,
+       la página ya sale buena y solo falta subir el archivo.
+       ------------------------------------------------------------------ */
+
+    const NOMENCLATURA = /nomenclatura\s*:?\s*([A-Za-z0-9._-]{3,})/i;
+
+    /** El nombre de archivo que pide el comentario del Word, si lo dice. */
+    function nomenclaturaDe(ids) {
+        for (const id of ids || []) {
+            const m = NOMENCLATURA.exec(comentariosDocx.get(id) || '');
+            if (m) return m[1].replace(/[.]+$/, '');
+        }
+        return '';
+    }
+
+    /**
+     * Con qué nombre se monta la imagen anclada en un párrafo.
+     *
+     * Manda la nomenclatura del comentario; si el guion no la dio, se usa el
+     * nombre que el archivo trae dentro del Word (`image7.png`), que al menos
+     * deja la previa completa y el .zip utilizable.
+     *
+     * La extensión NO se inventa: se toma la del archivo que viene en el Word,
+     * porque la nomenclatura del guion llega sin ella.
+     */
+    function nombreDeMontaje(rId, comentarios) {
+        const delWord = imagenesPorRid.get(rId) || '';
+        const nom = nomenclaturaDe(comentarios);
+        if (!nom) return delWord;
+        const ext = (delWord.match(/\.[a-z0-9]+$/i) || ['.png'])[0];
+        const final = /\.[a-z0-9]+$/i.test(nom) ? nom : nom + ext;
+        // Se apunta como alias del archivo del Word para que la previa lo
+        // enseñe y el .zip lo empaquete ya con el nombre bueno.
+        const img = imagenesDocx.find(i => i.nombre === delWord);
+        if (img && !(img.alias || []).includes(final)) img.alias.push(final);
+        return final;
+    }
+
+    /** El valor de campo para esa imagen: `@@PLUGINFILE@@/<nombre>`. */
+    function srcDeMontaje(rId, comentarios) {
+        const nombre = nombreDeMontaje(rId, comentarios);
+        return nombre ? `@@PLUGINFILE@@/${nombre}` : '';
+    }
+
+    /** Los comentarios del Word, por id: de ahí sale la nomenclatura. */
+    async function cargarComentarios(file) {
+        comentariosDocx = new Map();
+        try {
+            for (const c of await leerComentariosDeDocx(file)) comentariosDocx.set(c.id, c.texto || '');
+        } catch (err) {
+            // Un Word sin comentarios no es un error: se monta con los nombres
+            // que traen los archivos dentro del propio .docx.
+            comentariosDocx = new Map();
+        }
+    }
+
     /** ¿Ese valor de campo apunta a una imagen que trajimos del Word? */
     function imagenDelGuion(valor) {
         const nombre = String(valor || '').replace('@@PLUGINFILE@@/', '').trim();
-        return imagenesDocx.find(i => i.nombre === nombre) || null;
+        if (!nombre) return null;
+        return imagenesDocx.find(i => i.nombre === nombre || (i.alias || []).includes(nombre)) || null;
     }
 
     /* La galería se abre desde un campo concreto y le devuelve el nombre. */
@@ -2328,19 +2412,29 @@ document.addEventListener('click', function (e) {
         $('#modal-galeria').classList.add('hidden');
     }
 
-    /** Nombres de archivo que la página pide y sí tenemos del Word. */
+    /**
+     * Archivos que la página pide y sí tenemos del Word: `[{ nombre, bytes }]`.
+     *
+     * El `nombre` es el que la página tiene ESCRITO en el HTML —que con la
+     * nomenclatura del guion ya no es el del Word (`image7.png`) sino el final
+     * (`01S.04_ICONO_GENERAL_Interactividad_IMG1.png`)—. Tiene que ser ese: el
+     * .zip se arrastra al editor de Moodle y ahí el archivo se llama como se
+     * llame el archivo, así que si el .zip trajera el nombre del Word el
+     * `@@PLUGINFILE@@` del HTML no lo encontraría.
+     */
     function imagenesUsadas() {
-        const nombres = new Set();
+        const pedidos = new Map();
         const recorrer = lista => (lista || []).forEach(b => {
             [b.src, b.icono, ...(b.items || []).map(i => i.img)].forEach(v => {
+                const nombre = String(v || '').replace('@@PLUGINFILE@@/', '').trim();
                 const img = imagenDelGuion(v);
-                if (img) nombres.add(img.nombre);
+                if (img && !pedidos.has(nombre)) pedidos.set(nombre, { nombre, bytes: img.bytes });
             });
             recorrer(b.hijos);
             (b.items || []).forEach(i => recorrer(i.hijos));
         });
         recorrer(pagina.bloques);
-        return [...nombres].map(n => imagenesDocx.find(i => i.nombre === n));
+        return [...pedidos.values()];
     }
 
     /** Descarga las imágenes que usa la página, listas para arrastrarlas. */
@@ -2381,12 +2475,24 @@ document.addEventListener('click', function (e) {
                porque quien solo quiere texto plano no espera ver `*` sueltos.
                Aquí sí se quieren: `marcas()` ya convierte `*texto*` en <em>,
                así que la cursiva del guion llega tal cual a la página. */
-            const crudos = await leerBloquesDeDocx(file, { cursivas: true });
+            /* `colores` encendido: los guiones usan el color como código (una
+               palabra púrpura abre ventana, el turquesa es un recado). `texto`
+               sale igual con o sin esto —está probado en los cinco guiones de
+               referencia—; lo que cambia es que además llegan los `tramos`. */
+            const crudos = await leerBloquesDeDocx(file, { cursivas: true, colores: true });
             await cargarImagenes(file);
+            await cargarComentarios(file);
             const desde = inicioDelContenido(crudos);
             const utiles = crudos.slice(desde);
+            /* Los colores se leen sobre el guion COMPLETO, no sobre lo que va
+               a la página: la leyenda que dice qué significa cada uno vive
+               justamente en las fichas de control que se saltan. */
+            const leyenda = leerLeyenda(crudos);
+            const colores = coloresDelGuion(utiles);
+            colores.forEach(c => { c.sentido = sentidoSugerido(c, c.tramos, leyenda); });
             propuesta = {
                 bloques: utiles,
+                colores,
                 // Las tablas de una sola celda son las barras de título del
                 // guion, no contenido: no se pregunta por ellas, se vuelven
                 // título solas. Preguntar por 15 barras cansaría al usuario y
@@ -2394,10 +2500,11 @@ document.addEventListener('click', function (e) {
                 tablas: utiles.map((b, i) => ({ i, b }))
                     .filter(x => x.b.tipo === 'tabla' && x.b.celdas > 1 && (x.b.filas || []).length > 1)
             };
-            info.textContent = `${utiles.length} elementos leídos, ${propuesta.tablas.length} tablas por decidir` +
+            info.textContent = `${utiles.length} elementos leídos, ${propuesta.tablas.length} tablas y ` +
+                `${propuesta.colores.length} colores por decidir` +
                 `${imagenesDocx.length ? `, ${imagenesDocx.length} imágenes disponibles` : ''}. ` +
                 `Se saltaron ${desde} elementos de control editorial.`;
-            if (propuesta.tablas.length) abrirAsistente();
+            if (propuesta.tablas.length || propuesta.colores.length) abrirAsistente();
             else aplicarImportacion();
         } catch (err) {
             info.textContent = 'No se pudo leer el archivo: ' + err.message;
@@ -2421,6 +2528,320 @@ document.addEventListener('click', function (e) {
         return ficha > 0 ? ficha : 0;
     }
 
+    /* ------------------------------------------------------------------
+       Los colores del guion
+
+       Los guiones usan el color como CÓDIGO y lo declaran ellos mismos, en su
+       primera página: "las indicaciones para producción figuran resaltadas en
+       turquesa", "haz clic en las palabras de color púrpura". Cotejado en los
+       cinco guiones de referencia, ese código se repite… pero está escrito
+       DENTRO del guion, así que otro módulo puede usar otro. Por eso no se
+       cablea: la herramienta propone y el asistente confirma, igual que con las
+       tablas.
+       ------------------------------------------------------------------ */
+
+    /* Qué puede significar un color. `talcual` es no hacer nada especial: el
+       texto se publica con las negritas y cursivas que traiga. */
+    const SENTIDOS_COLOR = [
+        { v: 'talcual', nombre: 'Tal cual', icono: 'text-aa', ayuda: 'Se publica como viene, sin nada especial' },
+        { v: 'ventana', nombre: 'Ventana', icono: 'app-window', ayuda: 'La palabra abre una ventana emergente con el texto de su comentario' },
+        { v: 'resaltado', nombre: 'Resaltado', icono: 'highlighter', ayuda: 'Sale con fondo de color (<mark>)' },
+        { v: 'indicacion', nombre: 'No va', icono: 'prohibit', ayuda: 'Es un recado para producción o montaje: no se publica' }
+    ];
+
+    /* El color con el que se dibuja la muestra. Los resaltados de Word son
+       nombres fijos; los colores de letra ya vienen en hex. */
+    const TINTA_RESALTADO = {
+        yellow: '#ffff00', green: '#00ff00', cyan: '#00ffff', magenta: '#ff00ff',
+        red: '#ff0000', blue: '#0000ff', darkYellow: '#808000', darkGreen: '#008000',
+        lightGray: '#c0c0c0', darkGray: '#808080', black: '#000000', white: '#ffffff'
+    };
+
+    const NOMBRE_RESALTADO = {
+        yellow: 'amarillo', green: 'verde', cyan: 'turquesa', magenta: 'magenta',
+        red: 'rojo', blue: 'azul', lightGray: 'gris claro', darkGray: 'gris', white: 'blanco'
+    };
+
+    /**
+     * Qué se propone para un color, leyendo la LEYENDA que el propio guion
+     * escribe arriba ("…resaltadas en turquesa", "palabras de color púrpura").
+     *
+     * Si el guion no dice nada, `talcual`: es la única propuesta que no puede
+     * romper nada —publica el texto como viene— y deja que la decisión sea del
+     * usuario en vez de una corazonada de la herramienta.
+     */
+    function sentidoSugerido(clave, tramos, leyenda) {
+        /* Una palabra con comentario de "pop-up" es una ventana, lo diga o no
+           la leyenda: el comentario ES el texto de la ventana.
+
+           Pero tiene que ser lo que ese color hace CASI SIEMPRE, no una vez.
+           Los dos códigos se solapan: las palabras púrpura vienen además
+           resaltadas en verde, y el verde solo significa "conserva el estilo".
+           Contando "alguna", el verde entero se proponía como ventana por
+           cuatro palabras de noventa y cuatro. */
+        const conTexto = tramos.filter(t => (t.texto || '').trim());
+        const conPopUp = conTexto.filter(t => (t.comentarios || [])
+            .some(id => /pop-?up|ventana/i.test(comentariosDocx.get(id) || '')));
+        if (conTexto.length && conPopUp.length * 2 >= conTexto.length) return 'ventana';
+        const nombre = clave.tipo === 'resaltado' ? (NOMBRE_RESALTADO[clave.valor] || '') : '';
+        if (nombre && leyenda.indicacion.includes(nombre)) return 'indicacion';
+        if (nombre && leyenda.estilo.includes(nombre)) return 'talcual';
+        return 'talcual';
+    }
+
+    /**
+     * Lee la leyenda de colores que el guion escribe en sus primeras páginas:
+     *   "Las indicaciones para producción figuran … resaltadas en turquesa."
+     *   "El texto resaltado en verde deberá conservar el estilo."
+     *
+     * Va FRASE POR FRASE, no por bloque. Las cuatro líneas de la leyenda viven
+     * en una misma celda de la ficha de control, así que el bloque entero trae
+     * las cuatro reglas y los cuatro colores juntos: leído de corrido, el verde
+     * se contagiaba de la frase del turquesa y salía propuesto como "No va".
+     */
+    function leerLeyenda(bloques) {
+        const leyenda = { indicacion: [], estilo: [] };
+        const colores = /(turquesa|amarillo|verde|azul|rojo|p[úu]rpura|morado|magenta|gris)/gi;
+        bloques.slice(0, 40).forEach(b => {
+            const crudo = (b.texto || '') + ' ' + (b.filas || [])
+                .map(f => f.map(c => (c.lineas || []).join('. ')).join('. ')).join('. ');
+            crudo.toLowerCase().split(/[.;\n]+/).forEach(frase => {
+                const hallados = (frase.match(colores) || []).map(x => x.toLowerCase());
+                if (!hallados.length) return;
+                if (/indicaci[oó]n(es)?\s+para\s+(producci[oó]n|montaje)/.test(frase)) leyenda.indicacion.push(...hallados);
+                else if (/conservar?\s+el\s+estilo/.test(frase)) leyenda.estilo.push(...hallados);
+            });
+        });
+        return leyenda;
+    }
+
+    /** Todos los colores que trae el guion, con sus tramos y una muestra. */
+    function coloresDelGuion(bloques) {
+        const mapa = new Map();
+        const meter = (tipo, valor, tramo) => {
+            if (!valor || (tipo === 'color' && valor === '000000')) return;
+            const k = tipo + ':' + valor;
+            if (!mapa.has(k)) mapa.set(k, { tipo, valor, tramos: [], muestras: [] });
+            const e = mapa.get(k);
+            e.tramos.push(tramo);
+            const limpio = (tramo.texto || '').trim();
+            if (limpio && e.muestras.length < 3 && !e.muestras.includes(limpio)) e.muestras.push(limpio);
+        };
+        const recorrer = t => { meter('resaltado', t.resaltado, t); meter('color', t.color, t); };
+        bloques.forEach(b => {
+            (b.tramos || []).forEach(recorrer);
+            (b.filas || []).forEach(f => f.forEach(c =>
+                (c.contenido || []).forEach(pz => (pz.tramos || []).forEach(recorrer))));
+        });
+        // Un color que aparece una sola vez suele ser la propia leyenda ("…en
+        // turquesa"): se conserva igual, pero los más usados van primero.
+        return [...mapa.values()].sort((a, b) => b.tramos.length - a.tramos.length);
+    }
+
+    /* ---- Aplicar lo que se decidió en el tablero ---- */
+
+    /* Lo que decidió el usuario, por clave `tipo:valor`. Se llena al aceptar el
+       asistente; vacío = todo "tal cual", que es como se comportaba antes. */
+    let decisionesColor = new Map();
+
+    /**
+     * El texto del pop-up que producción dejó en el comentario.
+     *
+     * El recado no tiene una sola forma; en los guiones cotejados sale como
+     * "Producción: Crear pop-up con el siguiente texto:TXT:…",
+     * "Producción:Crear Pop-up con el siguiente TXT…" (sin dos puntos) y
+     * "…con el siguiente TXT y código latex:Txt:…". Se corta por la ÚLTIMA
+     * marca "txt" justamente por el tercer caso: con la primera, el cuerpo se
+     * quedaba con "y código latex:Txt:" pegado delante.
+     */
+    const MARCA_TXT = /^[\s\S]*\btxt\b\s*:?\s*/i;
+    const SOLO_PRODUCCION = /^\s*producci[oó]n\s*:?\s*/i;
+    function textoDePopUp(ids) {
+        for (const id of ids || []) {
+            const crudo = comentariosDocx.get(id) || '';
+            if (!/pop-?up|ventana/i.test(crudo)) continue;
+            const porTxt = crudo.replace(MARCA_TXT, '').trim();
+            if (porTxt) return porTxt;
+            // Sin marca "txt" se quita al menos el encabezado del recado, para
+            // no publicar "Producción:" dentro de la ventana.
+            const pelado = crudo.replace(SOLO_PRODUCCION, '').trim();
+            if (pelado) return pelado;
+        }
+        return '';
+    }
+
+    /**
+     * Qué se hace con un tramo, según lo elegido para sus colores.
+     *
+     * Un tramo puede traer los DOS canales (las palabras púrpura vienen además
+     * resaltadas en verde), así que hay un orden de mando: lo que no se publica
+     * gana sobre todo, y una ventana gana sobre un simple resaltado.
+     */
+    const MANDO_SENTIDO = ['indicacion', 'ventana', 'resaltado'];
+    function sentidoDeTramo(t) {
+        const votos = [];
+        if (t.color) votos.push(decisionesColor.get('color:' + t.color) || 'talcual');
+        if (t.resaltado) votos.push(decisionesColor.get('resaltado:' + t.resaltado) || 'talcual');
+        return MANDO_SENTIDO.find(x => votos.includes(x)) || 'talcual';
+    }
+
+    /* Ni la palabra ni el cuerpo de una ventana pueden traer las llaves ni la
+       barra con que se escribe la marca: partirían el `{{…|…|…}}` en pedazos. */
+    const limpiarParaMarca = t => String(t || '').replace(/[{}|]/g, ' ').replace(/\s+/g, ' ').trim();
+
+    /**
+     * Rehace el texto de un párrafo aplicando lo decidido para cada color.
+     *
+     * Devuelve '' si no hay nada que cambiar, para que quien llame conserve el
+     * texto de siempre: así un guion sin colores (o con todo en "tal cual")
+     * sigue exactamente el camino que ya estaba probado.
+     */
+    function textoDeTramosDecididos(tramos, sueltas) {
+        if (!decisionesColor.size || !(tramos || []).length) return '';
+        if (!tramos.some(t => sentidoDeTramo(t) !== 'talcual')) return '';
+        /* Tramos seguidos con el MISMO sentido se juntan antes de envolverlos.
+           Word parte "1. Observación" en dos runs (el número y el nombre), y
+           uno por uno salían dos `<mark>` pegados donde el montaje tiene uno.
+           Para una ventana además tienen que compartir comentario: si no, dos
+           palabras vecinas con pop-ups distintos acabarían en la misma. */
+        const juntos = [];
+        tramos.forEach(t => {
+            const sentido = sentidoDeTramo(t);
+            const previo = juntos[juntos.length - 1];
+            if (previo && previo.sentido === sentido && sentido !== 'talcual'
+                && String(previo.comentarios || '') === String(t.comentarios || '')) {
+                previo.texto += (t.texto || '');
+                return;
+            }
+            juntos.push(Object.assign({}, t, { sentido }));
+        });
+        let salida = '';
+        juntos.forEach(t => {
+            const crudo = t.texto || '';
+            if (!crudo) return;
+            const sentido = t.sentido;
+            const m = crudo.match(/^(\s*)([\s\S]*?)(\s*)$/);
+            const nucleo = m[2];
+            if (!nucleo) { salida += crudo; return; }
+            if (sentido === 'indicacion') {
+                /* Una MARCA del guion no se tira aunque venga del color que
+                   dice "esto no se publica": las marcas son la gramática del
+                   guion —`<Pop up>`, `<Figura>`, `<h2>`— y quien las traduce
+                   viene después. Borrarlas aquí dejaba el texto de la ventana
+                   suelto y sin quién lo reconociera; el intérprete de marcas ya
+                   se encarga de que no lleguen impresas a la página. */
+                if (/[<«][^<>«»]*[>»]/.test(nucleo)) { salida += crudo; return; }
+                // No se publica, pero tampoco se tira en silencio: se apunta
+                // para la lista de "el guion pedía".
+                if (sueltas) sueltas.push(nucleo);
+                return;
+            }
+            let dentro = nucleo;
+            const cuerpo = sentido === 'ventana' ? limpiarParaMarca(textoDePopUp(t.comentarios)) : '';
+            /* Una ventana SIN comentario no es una ventana: el comentario es su
+               contenido. Pasa con la propia leyenda del guion —"haz clic en las
+               palabras de color púrpura"—, donde la palabra va del color que
+               explica pero no abre nada. Sin esto salía un modal vacío. */
+            if (sentido === 'ventana' && cuerpo) {
+                const palabra = limpiarParaMarca(nucleo);
+                // El título de la ventana es la propia palabra, sin el punto
+                // final que arrastra cuando cierra la frase.
+                const titulo = palabra.replace(/[.,;:]+$/, '');
+                dentro = `{{${palabra}|${titulo}|${cuerpo}}}`;
+            } else if (sentido === 'resaltado') {
+                dentro = `==${nucleo}==`;
+            } else {
+                // Tal cual: las marcas de formato de siempre.
+                if (t.cursiva) dentro = `*${dentro}*`;
+                if (t.negrita) dentro = `**${dentro}**`;
+            }
+            salida += m[1] + dentro + m[3];
+        });
+        return salida;
+    }
+
+    /**
+     * Reescribe el texto de los bloques con lo decidido, antes de armar nada.
+     *
+     * Se hace aquí, sobre los bloques crudos, y no dentro del constructor: así
+     * TODO lo de abajo —las listas, las celdas, las tablas, las cajas— sigue
+     * leyendo `texto` como siempre y no hubo que tocar el camino que ya estaba
+     * probado con los guiones anteriores.
+     */
+    /* El salto de línea, en una constante: escribirlo dentro de la cadena de
+       este archivo ya se coló una vez como salto de verdad y partió el JS. */
+    const SALTO = String.fromCharCode(10);
+
+    function aplicarColores(bloques, sueltas) {
+        const rehacer = obj => {
+            const nuevo = textoDeTramosDecididos(obj.tramos, sueltas);
+            if (nuevo === '') return false;
+            obj.texto = nuevo.replace(/[ 	]+/g, ' ').trim();
+            return true;
+        };
+        (bloques || []).forEach(b => {
+            rehacer(b);
+            (b.filas || []).forEach(f => f.forEach(celda => {
+                const piezas = celda.contenido || [];
+                // `some` no: hay que rehacer TODAS las piezas, no parar en la
+                // primera que cambie.
+                const cambio = piezas.map(rehacer).some(Boolean);
+                if (!cambio) return;
+                /* `lineas` y `texto` de la celda salen de otra lectura del Word
+                   (el texto aplanado), así que no se enteran de lo que se acaba
+                   de reescribir en `contenido`. Se rearman desde ahí, que ahora
+                   es la versión buena: sin esto, una palabra resaltada dentro de
+                   una tabla se publicaba pelada —que es como salían los pasos
+                   del método científico—. */
+                celda.lineas = piezas.filter(pz => pz.tipo === 'parrafo')
+                    .flatMap(pz => String(pz.texto || '').split(SALTO))
+                    .map(l => l.trim()).filter(Boolean);
+                celda.texto = celda.lineas.join(' ');
+            }));
+        });
+    }
+
+    /** Dibuja el tablero de colores del asistente. */
+    function dibujarColores() {
+        const caja = $('#import-colores');
+        const seccion = $('#import-colores-caja');
+        caja.innerHTML = '';
+        const lista = (propuesta && propuesta.colores) || [];
+        seccion.classList.toggle('hidden', !lista.length);
+        lista.forEach(c => {
+            const tinta = c.tipo === 'resaltado' ? (TINTA_RESALTADO[c.valor] || '#cccccc') : '#' + c.valor;
+            const nombre = c.tipo === 'resaltado'
+                ? `Resaltado ${NOMBRE_RESALTADO[c.valor] || c.valor}`
+                : `Letra en #${c.valor}`;
+            const ficha = document.createElement('div');
+            ficha.className = 'import-color';
+            ficha.innerHTML = `
+                <div class="import-color-que">
+                    <span class="import-color-chip" style="background:${escapar(tinta)}"></span>
+                    <div class="import-color-texto">
+                        <div class="import-color-nombre">${escapar(nombre)} <span class="import-meta">· ${c.tramos.length}</span></div>
+                        <div class="import-color-muestra">${escapar(c.muestras.join(' · ') || 'sin texto')}</div>
+                    </div>
+                </div>
+                <div class="import-opciones"></div>`;
+            const ops = ficha.querySelector('.import-opciones');
+            SENTIDOS_COLOR.forEach(d => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'pieza pieza--chica' + (d.v === c.sentido ? ' activa' : '');
+                b.title = d.ayuda;
+                b.innerHTML = `<i class="ph ph-${d.icono}"></i><span>${d.nombre}</span>`;
+                b.addEventListener('click', () => {
+                    c.sentido = d.v;
+                    ops.querySelectorAll('.pieza').forEach(x => x.classList.remove('activa'));
+                    b.classList.add('activa');
+                });
+                ops.appendChild(b);
+            });
+            caja.appendChild(ficha);
+        });
+    }
+
     /* ---- Asistente: qué es cada tabla ---- */
 
     const DECISIONES = [
@@ -2433,7 +2854,9 @@ document.addEventListener('click', function (e) {
     ];
 
     function abrirAsistente() {
+        dibujarColores();
         const caja = $('#import-tablas');
+        $('#import-tablas-caja').classList.toggle('hidden', !(propuesta.tablas || []).length);
         caja.innerHTML = '';
         propuesta.tablas.forEach(t => {
             t.decision = sugerir(t.b);
@@ -2518,6 +2941,15 @@ document.addEventListener('click', function (e) {
 
     const MARCA = /^[<«]\s*(.+?)\s*[>»]$/;
 
+    /* Una marca con su contenido PEGADO en el mismo renglón:
+       "<Pop up> Identificar un fenómeno…". El `MARCA` de arriba exige que el
+       renglón termine en `>`, así que estas no se reconocían como marca y el
+       texto del pop-up se publicaba tal cual, con su `<Pop up>` delante. */
+    const MARCA_CON_CUERPO = /^[<«]\s*([^<>«»]+?)\s*[>»]\s*(.+)$/;
+
+    /* La liga de YouTube en cualquiera de sus formas. El id son 11 caracteres. */
+    const LIGA_YOUTUBE = /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/;
+
     /* Del formato que lee docx.js en numbering.xml al estilo del bloque `lista`.
        Vive en UN lugar porque lo consultan los tres caminos (párrafo suelto,
        celda y sublista de un paso) y tenerlo tres veces es cómo se quedó vivo
@@ -2548,6 +2980,21 @@ document.addEventListener('click', function (e) {
 
     /** El texto va ENTERO en negritas: `**todo**` y ningún `**` por dentro. */
     const NEGRITAS_ENTERO = /^\*\*([\s\S]+)\*\*$/;
+
+    /* "Figura 1.", "Imagen 2:", "Gráfica 3." — el encabezado de una figura. En
+       UN solo lugar porque lo usan los dos casos: el pie que viene antes de la
+       imagen y el que viene después. */
+    const ENCABEZADO_DE_FIGURA = /^(figura|imagen|gr[áa]fic\w*)\s*\d*\s*[.:]/i;
+
+    /** ¿El párrafo trae una imagen de FIGURA (no el ícono de interactividad)? */
+    const traeImagenDeFigura = dato => {
+        const imgs = dato.imagenes || [];
+        if (!imgs.length) return false;
+        const info = dato.imagenesInfo || [];
+        // Sin medidas no se descarta nada: mejor una figura de más que perderla.
+        if (!info.length) return true;
+        return info.some(i => !(i.ancho > 0 && i.ancho <= ANCHO_ICONO && i.alto > 0 && i.alto <= ANCHO_ICONO));
+    };
     function textoDeInstruccionSinMarca(dato) {
         if (!traeIconoAnclado(dato)) return '';
         const m = String(dato.texto || '').trim().match(NEGRITAS_ENTERO);
@@ -2571,6 +3018,45 @@ document.addEventListener('click', function (e) {
         let idListaEnCurso = null;  // el numId de Word que la numera
 
         const cerrarLista = () => { listaEnCurso = null; idListaEnCurso = null; };
+
+        /* Párrafo que SOLO trae la imagen: es la figura del guion.
+
+           Antes se tiraba —el recorrido pedía texto— y por eso una página
+           importada salía sin una sola figura: quedaban los bloques vacíos de
+           las marcas `<Figura>`, cuando las hubiera, y nada más.
+
+           El pie viene ANTES en unos guiones ("Figura 1. …" y debajo la imagen)
+           y DESPUÉS en otros. El de después ya se reconocía; aquí se atiende el
+           de antes: si lo único que está esperando salir es ese renglón, se lo
+           queda la figura en vez de publicarse como un párrafo encima. */
+        /** ¿El último renglón que espera salir es el encabezado de una figura? */
+        const hayEncabezadoDeFiguraPendiente = () => Boolean(acumulado.length)
+            && ENCABEZADO_DE_FIGURA.test(acumulado[acumulado.length - 1].replace(/\*\*/g, '').trim());
+
+        const ponerFigura = dato => {
+            let pie = '';
+            if (acumulado.length) {
+                // El ÚLTIMO renglón pendiente, no el único: el encabezado llega
+                // pegado a la imagen pero encima suele haber un párrafo normal
+                // ("Para entenderlo de forma sencilla…"), que sí se publica.
+                const limpio = acumulado[acumulado.length - 1].replace(/\*\*/g, '').trim();
+                if (ENCABEZADO_DE_FIGURA.test(limpio)) { pie = limpio; acumulado.pop(); }
+            }
+            cerrar();
+            cerrarLista();
+            const src = srcDeMontaje((dato.imagenes || [])[0], dato.comentarios);
+            /* Si el guion ya había abierto la figura con su marca `<Figura>`, la
+               imagen va A ESA, no a una nueva: si no, salían las dos, el bloque
+               vacío con la nota y la figura de verdad. */
+            const ultimo = salida[salida.length - 1];
+            if (ultimo && ultimo.tipo === 'imagen' && !(ultimo.src || '').trim()) {
+                ultimo.src = src;
+                if (pie && !ultimo.pie) ultimo.pie = pie;
+                return;
+            }
+            salida.push(Object.assign(crearBloque('imagen', false), { src, lado: 'sola', pie }));
+            primero = false;
+        };
 
         /* Un renglón que Word numeró o viñeteó. Los seguidos se agrupan en UN
            bloque `lista`; cambiar de formato (o de numeración en el Word) abre
@@ -2637,9 +3123,79 @@ document.addEventListener('click', function (e) {
                 const instruccion = textoDeInstruccionSinMarca(dato);
                 if (instruccion) {
                     cerrar();
-                    salida.push(Object.assign(crearBloque('instruccion', false), { texto: instruccion }));
+                    salida.push(Object.assign(crearBloque('instruccion', false), {
+                        texto: instruccion,
+                        /* El ícono que el guion trae anclado, con el nombre que
+                           pide su comentario. Vacío deja el `clic.png` de
+                           siempre, que es lo que publica el montaje. */
+                        icono: srcDeMontaje((dato.imagenes || [])[0], dato.comentarios)
+                    }));
                     primero = false;
                     return;
+                }
+                /* Una liga de YouTube ES el video: en el guion viene sola en su
+                   renglón, y antes se publicaba como una URL suelta dentro de un
+                   párrafo. Se exige que el renglón sea casi solo la liga para no
+                   convertir en video un párrafo que la menciona de pasada. */
+                const yt = linea.match(LIGA_YOUTUBE);
+                /* La liga puede venir sola o —lo normal— dentro del recado de
+                   producción: "Producción: Embeber el siguiente video: …". Las
+                   dos formas son el video; lo que NO puede serlo es un párrafo
+                   de contenido que la mencione de pasada, de ahí el límite al
+                   texto que la acompaña cuando no hay recado. */
+                const restoLiga = linea.replace(/https?:\/\/\S+/g, '').replace(/\*\*/g, '').trim();
+                const pideVideo = /embeber\s+(el\s+)?(siguiente\s+)?v[ií]deo|v[ií]deo\s+embebido/i.test(linea.replace(/\*\*/g, ''));
+                if (yt && (restoLiga.length < 25 || /producci[oó]n|embeb|insertar|v[ií]deo/i.test(restoLiga))) {
+                    cerrar();
+                    cerrarLista();
+                    salida.push(Object.assign(crearBloque('video', false), { url: yt[0] }));
+                    primero = false;
+                    return;
+                }
+                /* "Producción: Embeber video <SM2_S3_…_Video>": el video todavía
+                   no existe, solo su nomenclatura. Sale el bloque vacío con la
+                   indicación —como ya se hace con `<Figura>`— para que en el
+                   montaje se pegue la liga; el recado no se publica. */
+                if (pideVideo) {
+                    cerrar();
+                    cerrarLista();
+                    salida.push(Object.assign(crearBloque('video', false),
+                        { url: '', indicacion: sinMarcas(linea) || linea.replace(/\*\*/g, '').trim() }));
+                    primero = false;
+                    return;
+                }
+                /* `<Pop up> texto…`: la marca y el contenido de la ventana en el
+                   mismo renglón. El cuerpo es lo que sigue a la marca; antes se
+                   perdía entero porque la marca no se reconocía. */
+                const conCuerpo = linea.replace(/\*\*/g, '').trim().match(MARCA_CON_CUERPO);
+                if (conCuerpo && /pop-?\s*up|ventana/i.test(conCuerpo[1])) {
+                    cerrar();
+                    cerrarLista();
+                    // El renglón cierra con su propia marca: `<Termina pop up>`.
+                    const dentro = conCuerpo[2].replace(/[<«][^<>«»]*[>»]\s*$/, '').trim();
+                    const cuerpo = [Object.assign(crearBloque('texto', false), { texto: dentro })];
+                    asignarIds(cuerpo);
+                    salida.push(Object.assign(crearBloque('modal', false),
+                        { etiqueta: 'Ver más', titulo: 'Más información', hijos: cuerpo }));
+                    primero = false;
+                    return;
+                }
+                /* La figura del guion. Normalmente es un párrafo con la imagen
+                   y ni una palabra.
+
+                   La excepción es el SmartArt: Word le pega al mismo párrafo el
+                   texto que hay DENTRO del diagrama ("- Depende del tipo y
+                   cantidad de información.- Depende si usas…"), así que la
+                   figura llega con texto encima. Lo que la delata es que venga
+                   justo debajo de su encabezado "Figura N.". Ahí sale la figura
+                   y el texto sigue su camino como párrafo: borrar un párrafo de
+                   más es fácil, recuperar una imagen perdida no. */
+                if (traeImagenDeFigura(dato)) {
+                    const soloImagen = !linea.trim();
+                    if (soloImagen || hayEncabezadoDeFiguraPendiente()) {
+                        ponerFigura(dato);
+                        if (soloImagen) return;
+                    }
                 }
                 /* "Figura 1. …" y "Nota. Elaboración propia (2026)." no son
                    párrafos de la página: son el encabezado y el pie de la figura
@@ -2651,7 +3207,7 @@ document.addEventListener('click', function (e) {
                     const ultimo = salida[salida.length - 1];
                     const limpio = linea.replace(/\*\*/g, '').trim();
                     if (ultimo && ultimo.tipo === 'imagen') {
-                        if (!ultimo.pie && /^(figura|imagen|gr[áa]fic\w*)\s*\d*\s*[.:]/i.test(limpio)) { ultimo.pie = limpio; return; }
+                        if (!ultimo.pie && ENCABEZADO_DE_FIGURA.test(limpio)) { ultimo.pie = limpio; return; }
                         if (!ultimo.nota && /^nota\s*[.:]/i.test(limpio)) { ultimo.nota = limpio; return; }
                     }
                 }
@@ -2752,6 +3308,13 @@ document.addEventListener('click', function (e) {
         decisionesTabla = new Map((propuesta.tablas || []).map(t => [t.b, t.decision]));
         const nuevos = [];
         const sueltas = [];
+        /* Lo elegido en el tablero de colores, aplicado ANTES de armar nada:
+           de aquí para abajo `texto` ya trae las ventanas y los resaltados, y
+           lo que era un recado de producción ya no está. */
+        decisionesColor = new Map(((propuesta.colores) || [])
+            .filter(c => c.sentido && c.sentido !== 'talcual')
+            .map(c => [c.tipo + ':' + c.valor, c.sentido]));
+        aplicarColores(propuesta.bloques, sueltas);
         let sueltos = [];         // líneas de párrafos seguidos, aún sin cerrar
         let listaActual = null;
         let idListaSuelta = null;   // el numId de Word de esa lista
@@ -2763,6 +3326,10 @@ document.addEventListener('click', function (e) {
         let centrado = false;     // dentro de <Texto regular centrado>
         let tablaPendiente = null; // marca <Tabla> esperando la tabla de verdad
         let tituloTabla = '';     // el encabezado que venía junto a esa tabla
+        /* Nivel anunciado por una marca `<h1>`/`<h2>`: el título es el párrafo
+           que viene DESPUÉS. No todos los guiones traen la barra sombreada; los
+           que no, marcan así sus títulos y antes se perdían todos. */
+        let tituloPendiente = null;
 
         // Dentro de un paso todo cuelga de él; fuera, va al cuerpo de la página.
         const empujarDestino = b => {
@@ -2852,7 +3419,15 @@ document.addEventListener('click', function (e) {
             }
 
             const texto = (crudo.texto || '').trim();
-            if (!texto) return;
+            /* Un párrafo sin texto pero CON imagen es una figura del guion, no
+               un párrafo vacío: se deja pasar para que allá abajo se convierta
+               en su bloque. Se va derecho a `sueltos` porque no hay nada que
+               mirarle (ni marca, ni lista, ni sangría que cierre la caja de
+               pasos: una figura dentro de un paso sigue siendo del paso). */
+            if (!texto) {
+                if ((crudo.imagenes || []).length) sueltos.push(crudo);
+                return;
+            }
 
             // ¿El párrafo es solo una marca de montaje? Las que abren y cierran
             // región se atienden aquí; las demás siguen su camino de siempre
@@ -2868,6 +3443,16 @@ document.addEventListener('click', function (e) {
                 if (/texto regular centrado/.test(clave)) {
                     vaciarSueltos();      // se cierra lo anterior con su estado
                     centrado = !termina;
+                    return;
+                }
+                /* `<h1>` y `<h2>` no son el título: lo ANUNCIAN. En los guiones
+                   con barra sombreada el título ya salió de la barra y la marca
+                   sobra; en los que no la traen —hay varios— esto era lo único
+                   que decía cuál de los párrafos es un título, y sin leerlo la
+                   página entera salía sin uno solo. */
+                if (/^h[1-4]$/.test(clave)) {
+                    vaciarSueltos();
+                    tituloPendiente = termina ? null : clave;
                     return;
                 }
                 if (/^tabla\b/.test(clave)) {   // <Tabla>: la de verdad viene abajo
@@ -2888,6 +3473,22 @@ document.addEventListener('click', function (e) {
                 // banda gris del montaje lo publica en texto normal.
                 tituloTabla = sinMarcas(texto).replace(/\*\*/g, '');
                 return;
+            }
+
+            /* El párrafo que sigue a un `<h1>`/`<h2>`. Si la barra ya dio el
+               título de la página, un `<h1>` posterior es un título de sección:
+               por eso baja a `h2` en vez de pelearse con el de arriba. */
+            if (tituloPendiente && !crudo.lista) {
+                const nivel = tituloPendiente;
+                tituloPendiente = null;
+                const limpio = sinMarcas(texto);
+                if (limpio) {
+                    cerrarPasos();
+                    if (nivel === 'h1' && !pagina.titulo) { pagina.titulo = limpio; return; }
+                    empujar(Object.assign(crearBloque('titulo', false),
+                        { nivel: nivel === 'h1' ? 'h2' : nivel, texto: limpio }));
+                    return;
+                }
             }
 
             if (crudo.lista) {
@@ -2990,9 +3591,11 @@ document.addEventListener('click', function (e) {
                 const clave = m ? m[1].toLowerCase() : '';
                 if (m && /grupo de\s+\d+\s+bot/.test(clave)) { vaciar(); pendiente = { tipo: 'tarjetas', marca: m[1] }; return; }
                 if (m && /^tabla\b/.test(clave)) { vaciar(); pendiente = { tipo: 'tabla', marca: m[1] }; return; }
-                // El párrafo ENTERO, no solo su texto: ahí vienen `lista` y
-                // `tipoLista`, que es lo que reconstruye la viñeta.
-                if (pieza.texto) lineas.push(pieza);
+                /* El párrafo ENTERO, no solo su texto: ahí vienen `lista` y
+                   `tipoLista` (la viñeta) y las imágenes (la figura). Y pasa
+                   también sin texto: una figura del guion es justo eso, un
+                   párrafo con la imagen y ni una palabra. */
+                if (pieza.texto || (pieza.imagenes || []).length) lineas.push(pieza);
                 return;
             }
             vaciar();
@@ -3012,9 +3615,68 @@ document.addEventListener('click', function (e) {
         return salida;
     }
 
+    /**
+     * La ventana que vive DENTRO de una celda.
+     *
+     * Forma real en los guiones: la celda trae la palabra y su ventana como
+     * renglones distintos —"1." / "Observación" / "<Pop up> Identificar un
+     * fenómeno…"—, y a veces la marca va sola y el cuerpo baja al renglón
+     * siguiente ("7. Conclusión" / "<Pop up>" / "A partir del análisis…").
+     * Las dos formas se atienden aquí; el cuerpo es todo lo que sigue a la
+     * marca, y la palabra todo lo que venía antes.
+     */
+    const ABRE_POPUP = /^[<«]\s*pop-?\s*up\s*[>»]\s*/i;
+    function ventanaDeCelda(celda) {
+        const lineas = ((celda && celda.lineas) || []).map(l => String(l).trim()).filter(Boolean);
+        const i = lineas.findIndex(l => ABRE_POPUP.test(l.replace(/\*\*/g, '').trim()));
+        if (i < 0) return null;
+        // Antes de la marca está la palabra; las otras marcas del guion
+        // (`<Figura>`) no forman parte de ella.
+        const palabra = sinMarcas(lineas.slice(0, i).join(' '));
+        const resto = [lineas[i].replace(/\*\*/g, '').trim().replace(ABRE_POPUP, '')]
+            .concat(lineas.slice(i + 1));
+        const cuerpo = sinMarcas(resto.join(' '));
+        return palabra && cuerpo ? { palabra, cuerpo } : null;
+    }
+
+    /**
+     * La tabla que en realidad es una lista de palabras con ventana.
+     *
+     * En el guion, los pasos del método científico vienen como una tabla: en
+     * una columna la figura y en otra el paso con su `<Pop up>`. En la página
+     * montada eso no es una tabla: es cada paso resaltado y, al hacer clic, su
+     * ventana. Leída como tabla, la explicación se publicaba como una columna
+     * más —con la marca `<Pop up>` impresa— y no salía una sola ventana.
+     *
+     * Se exige que TODAS las filas tengan esa forma, para no confundirla con
+     * una tabla normal que casualmente traiga un pop-up en una celda.
+     */
+    function tablaDeVentanas(filas) {
+        if ((filas || []).length < 2) return null;
+        const parejas = filas.map(f => {
+            for (const celda of f) {
+                const v = ventanaDeCelda(celda);
+                if (v) return v;
+            }
+            return null;
+        });
+        if (!parejas.every(Boolean)) return null;
+        return Object.assign(crearBloque('texto', false), {
+            texto: parejas.map(p => {
+                const palabra = limpiarParaMarca(p.palabra);
+                return `{{${palabra}|${palabra}|${limpiarParaMarca(p.cuerpo)}}}`;
+            }).join('\n')
+        });
+    }
+
     /** Convierte una tabla del Word al bloque que el usuario eligió. */
     function tablaWordA(decision, crudo, sueltas, titulo) {
         const filas = crudo.filas || [];
+        // Antes que nada: ¿es la "tabla" que en realidad son palabras con
+        // ventana? Manda sobre la decisión del asistente porque ahí se ofrecía
+        // elegir entre formas de tabla, y esto no es ninguna.
+        const ventanas = decision !== 'omitir' ? tablaDeVentanas(filas) : null;
+        if (ventanas) return ventanas;
         const encabezados = (filas[0] || []).map(c => sinMarcas(c.texto));
         const cuerpo = filas.slice(1);
 

@@ -149,7 +149,11 @@ function marcas(texto) {
         const clase = MARCAS_COLOR[color.toLowerCase()];
         return clase ? `<mark class="${clase} border-0">${txt}</mark>` : todo;
     });
-    t = t.replace(/==([^=]+)==/g, '<mark class="bg-resalte-20">$1</mark>');
+    /* El nivel del resaltado es el que se eligió PARA LA PÁGINA, el mismo que
+       usa la palabra que abre una ventana. Estaba fijo en `bg-resalte-20` y
+       entonces una página con resalte 30 salía con dos intensidades distintas
+       sin que nadie lo hubiera pedido; los montajes cotejados usan una sola. */
+    t = t.replace(/==([^=]+)==/g, `<mark class="${RESALTE_VENTANA}">$1</mark>`);
     return t;
 }
 
@@ -254,10 +258,52 @@ const REJILLA = {
 };
 
 /** Botón que dispara un modal (el "Mesopotámica ▸" de las tarjetas). */
-function botonModal(id, etiqueta) {
-    return `<button class="btn btn-secondary btn-sm rounded-4 border border-4 border-secondary-10 flecha_btn" ` +
+/* Los dos tonos del botón que abre una ventana, tal como salen en las páginas
+   ya montadas. El borde va SIEMPRE apareado con el tono (`btn-primary` con
+   `border-primary-10`): en un montaje real se coló un `btn-secondary` con
+   `border-primary-10` y se ve como un botón a medio pintar. Aquí se aparean
+   solos justamente para que eso no se pueda escribir. */
+const TONOS_BOTON = {
+    secundario: { btn: 'btn-secondary', borde: 'border-secondary-10' },
+    primario: { btn: 'btn-primary', borde: 'border-primary-10' }
+};
+
+/* `btn-sm` y `btn-lg` son de Bootstrap; el tamaño de en medio no lleva clase.
+   Los tres salen en los montajes cotejados. */
+const TAMANOS_BOTON = { chico: 'btn-sm', normal: '', grande: 'btn-lg' };
+
+/**
+ * El botón que abre una ventana emergente.
+ *
+ * `ops` es opcional y por omisión da EXACTAMENTE lo de siempre —secundario y
+ * chico—: es lo que ya está publicado en las páginas hechas con la herramienta
+ * y no hay por qué moverlo.
+ */
+function botonModal(id, etiqueta, ops) {
+    const tono = TONOS_BOTON[(ops && ops.tono)] || TONOS_BOTON.secundario;
+    const tamano = TAMANOS_BOTON[(ops && ops.tamano) !== undefined ? ops.tamano : 'chico'];
+    const clases = ['btn', tono.btn, tamano, 'rounded-4', 'border', 'border-4', tono.borde, 'flecha_btn']
+        .filter(Boolean).join(' ');
+    return `<button class="${clases}" ` +
         `type="button" data-bs-toggle="modal" data-bs-target="#${id}"><strong>${marcas(etiqueta)}</strong></button>`;
 }
+
+/* Los campos del tono y el tamaño, compartidos por los dos bloques que ponen
+   botones de ventana (Tarjetas y Botón suelto). Uno solo: duplicarlos es como
+   se quedó vivo meses el hex repetido. */
+const CAMPO_TONO_BOTON = {
+    k: 'tono', tipo: 'opciones', etiqueta: 'Tono del botón', ops: [
+        { v: 'secundario', etiqueta: 'Secundario', icono: 'circle-half' },
+        { v: 'primario', etiqueta: 'Primario', icono: 'circle' }
+    ]
+};
+const CAMPO_TAMANO_BOTON = {
+    k: 'tamano', tipo: 'opciones', etiqueta: 'Tamaño del botón', ops: [
+        { v: 'chico', etiqueta: 'Chico', icono: 'text-t' },
+        { v: 'normal', etiqueta: 'Normal', icono: 'text-t' },
+        { v: 'grande', etiqueta: 'Grande', icono: 'text-t' }
+    ]
+};
 
 /* Con esto encendido, cada bloque sale marcado con `data-bq="<id>"` para que la
    vista previa y el lienzo puedan señalarse mutuamente. SOLO se enciende para
@@ -747,10 +793,21 @@ const COMPONENTES = {
             const conTexto = b.lado !== 'sola' && (b.texto || '').trim();
             if (!src && !conTexto) return '';
 
-            // La figura con encabezado usa la tarjeta .img-contenedor de la
-            // página real; sin encabezado va la imagen suelta.
-            const figura = nivel => {
-                const img = `${ind(nivel + (b.pie ? 2 : 0))}<img class="${b.pie ? 'card-img-top ' : ''}img-fluid" src="${ligaSegura(src)}" alt="${escapar(b.alt || '')}">`;
+            /* La figura con encabezado usa la tarjeta .img-contenedor de la
+               página real; sin encabezado va la imagen suelta.
+
+               `centrada` es para la imagen SOLA y sin encabezado. El envoltorio
+               (`.col-md-8.mx-auto`) centra la COLUMNA, no lo que va dentro: una
+               imagen más angosta que esa columna se pegaba a su orilla
+               izquierda. Con encabezado no pasaba —la `.card-deck` ocupa el
+               ancho—, y de ahí que la misma figura saliera centrada o no según
+               si el guion le había puesto "Figura N." encima. Eso era la
+               inconsistencia: en el guion TODAS las figuras vienen centradas
+               (`w:jc="center"`, sin una sola excepción en los cotejados). */
+            const figura = (nivel, centrada) => {
+                const clases = [b.pie ? 'card-img-top' : '', 'img-fluid',
+                    !b.pie && centrada ? 'd-block mx-auto' : ''].filter(Boolean).join(' ');
+                const img = `${ind(nivel + (b.pie ? 2 : 0))}<img class="${clases}" src="${ligaSegura(src)}" alt="${escapar(b.alt || '')}">`;
                 if (!b.pie) return img;
                 return [
                     `${ind(nivel)}<div class="card-deck">`,
@@ -768,7 +825,7 @@ const COMPONENTES = {
                 return [
                     `${ind(n)}<div class="row bloque justify-content-center">`,
                     `${ind(n + 1)}<div class="col-12 col-md-8 mx-auto">`,
-                    figura(n + 2),
+                    figura(n + 2, true),
                     nota(n + 2),
                     `${ind(n + 1)}</div>`,
                     `${ind(n)}</div>`
@@ -983,6 +1040,8 @@ const COMPONENTES = {
             { k: 'etiqueta', tipo: 'texto', etiqueta: 'Texto del botón' },
             { k: 'titulo', tipo: 'texto', etiqueta: 'Título de la ventana' },
             Object.assign({}, CAMPO_ALINEACION, { etiqueta: 'Alineación del botón' }),
+            CAMPO_TONO_BOTON,
+            CAMPO_TAMANO_BOTON,
             { k: 'hijos', tipo: 'hijos', etiqueta: 'Contenido de la ventana' }
         ],
         html: (b, n) => {
@@ -995,7 +1054,7 @@ const COMPONENTES = {
             return [
                 `${ind(n)}<div class="row bloque ${alineado.fila}">`,
                 `${ind(n + 1)}<div class="col-12 ${alineado.texto}">`,
-                `${ind(n + 2)}${botonModal(id, b.etiqueta || 'Ver más')}`,
+                `${ind(n + 2)}${botonModal(id, b.etiqueta || 'Ver más', b)}`,
                 `${ind(n + 1)}</div>`,
                 `${ind(n)}</div>`,
                 modalBootstrap(id, b.titulo || b.etiqueta || '', dentro, n)
@@ -1019,6 +1078,8 @@ const COMPONENTES = {
         resumen: b => `${(b.items || []).length} tarjetas`,
         campos: [
             Object.assign({}, CAMPO_ALINEACION, { etiqueta: 'Alineación de los botones' }),
+            CAMPO_TONO_BOTON,
+            CAMPO_TAMANO_BOTON,
             {
                 k: 'items', tipo: 'repetible', etiqueta: 'Tarjetas', nombreItem: 'Tarjeta',
                 nuevo: () => ({ img: '', alt: '', etiqueta: 'Nueva tarjeta', titulo: 'Nueva tarjeta', hijos: [] }),
@@ -1048,7 +1109,7 @@ const COMPONENTES = {
                     // El mx-auto viene del montaje real, pero centra la CAJA, no lo
                     // que lleva dentro: sin la clase de texto los botones quedaban
                     // pegados a la izquierda de su tarjeta y la fila se veía despareja.
-                    `${ind(n + 3)}<div class="card-body mx-auto ${alineacionDe(b.alineacion).texto}">${botonModal(ids[i], item.etiqueta || '')}</div>`,
+                    `${ind(n + 3)}<div class="card-body mx-auto ${alineacionDe(b.alineacion).texto}">${botonModal(ids[i], item.etiqueta || '', b)}</div>`,
                     `${ind(n + 2)}</div>`);
             });
             partes.push(`${ind(n + 1)}</div>`, `${ind(n)}</div>`);

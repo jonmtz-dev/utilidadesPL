@@ -34,6 +34,29 @@ const M_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
 const WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 
 /**
+ * Ids de los comentarios del Word que tocan este párrafo.
+ *
+ * Se miran las TRES anclas —`commentRangeStart`, `commentRangeEnd` y
+ * `commentReference`— porque Word usa unas u otras según dónde empiece y acabe
+ * el rango; con una sola se pierden comentarios de un párrafo.
+ *
+ * Un rango que abarca varios párrafos solo se le atribuye a los que llevan un
+ * ancla escrita, no a los de en medio. Es de propósito: quien lee esto quiere
+ * saber a qué señala el comentario, y en los guiones producción lo ancla sobre
+ * la pieza concreta (la imagen, la palabra) que hay que construir.
+ */
+function comentariosDeParrafo(p) {
+    const ids = new Set();
+    ['commentRangeStart', 'commentRangeEnd', 'commentReference'].forEach(etiqueta => {
+        [...p.getElementsByTagNameNS(W_NS, etiqueta)].forEach(n => {
+            const id = n.getAttributeNS(W_NS, 'id');
+            if (id) ids.add(id);
+        });
+    });
+    return [...ids];
+}
+
+/**
  * Imágenes de un párrafo CON su tamaño en píxeles: [{ id, ancho, alto }].
  *
  * Campo aparte de `imagenes` (que sigue siendo la lista de rId pelada, como
@@ -447,8 +470,8 @@ async function leerLatexDeComentariosDocx(file) {
  * párrafo anterior no se sigue, y entonces la fórmula cae en la conversión
  * automática, que es el respaldo correcto.
  */
-function unidadesDeParrafo(p, conLatex) {
-    if (!conLatex) return [...p.getElementsByTagNameNS(W_NS, 'r')].map(run => ({ run }));
+function unidadesDeParrafo(p, conLatex, conComentarios) {
+    if (!conLatex && !conComentarios) return [...p.getElementsByTagNameNS(W_NS, 'r')].map(run => ({ run }));
     const salida = [];
     const abiertos = new Set();
     const recorrer = (nodo) => {
@@ -459,7 +482,10 @@ function unidadesDeParrafo(p, conLatex) {
                 continue;
             }
             if (n.namespaceURI === W_NS) {
-                if (n.localName === 'r') { salida.push({ run: n }); continue; }
+                // Los comentarios abiertos viajan CON el run: es lo que permite
+                // saber qué comentario describe QUÉ palabra cuando en un mismo
+                // párrafo hay varias señaladas.
+                if (n.localName === 'r') { salida.push({ run: n, comentarios: [...abiertos] }); continue; }
                 if (n.localName === 'commentRangeStart') { abiertos.add(n.getAttributeNS(W_NS, 'id')); continue; }
                 if (n.localName === 'commentRangeEnd') { abiertos.delete(n.getAttributeNS(W_NS, 'id')); continue; }
                 // Las propiedades del párrafo no traen texto y sí traen `w:rPr`.
@@ -473,14 +499,18 @@ function unidadesDeParrafo(p, conLatex) {
 }
 
 /**
- * Texto de un párrafo conservando las negritas como marcas `**texto**` y, si se
- * piden, las cursivas como `*texto*` (una sola estrella, como en markdown).
+ * Los TRAMOS de un párrafo: `[{ texto, negrita, cursiva }]`, y con
+ * `opciones.colores` también `{ resaltado, color }`.
+ *
  * Word parte un mismo texto en varios runs (por el corrector, por ediciones);
- * aquí se fusionan los runs contiguos con el mismo formato para no generar
- * `**guárdalo** **en tu equipo**`. Los espacios de orilla quedan FUERA de las
- * marcas: un `** texto**` no se reconocería al convertirlo a <strong>.
+ * aquí se fusionan los contiguos con el mismo formato para no generar
+ * `**guárdalo** **en tu equipo**`.
+ *
+ * Se expone aparte porque hay quien necesita el formato pieza por pieza y no
+ * un texto ya marcado: los guiones colorean palabras para decir qué son
+ * (una ventana emergente, un recado de producción) y eso no cabe en `**`.
  */
-function textoDeParrafoConNegritas(p, opciones) {
+function segmentosDeParrafo(p, opciones) {
     /* `saltos` conserva los saltos de línea manuales (Shift+Enter, que en el XML
        son `w:br`) como `\n`. Va apagado por omisión a propósito: quien parte
        listas por renglón —el Integrador HTML— convertiría un salto dentro de un
@@ -502,9 +532,14 @@ function textoDeParrafoConNegritas(p, opciones) {
        en el editor de rúbricas de Moodle esos signos se publicarían literales.
        Lo pide quien genera HTML para una página (el Integrador 3.11). */
     const conLatex = Boolean(opciones && opciones.latex);
+    /* Los colores del Word, apagados por omisión: ver el comentario de abajo,
+       donde se leen. */
+    const conColores = Boolean(opciones && opciones.colores);
     const latexPorComentario = (opciones && opciones.latexPorComentario) || null;
+    /** El `w:val` de un nodo de formato, o '' si no está. */
+    const valorDe = nodo => (nodo && nodo.getAttributeNS(W_NS, 'val')) || '';
     const segmentos = [];
-    for (const unidad of unidadesDeParrafo(p, conLatex)) {
+    for (const unidad of unidadesDeParrafo(p, conLatex, conColores)) {
         if (unidad.math) {
             /* El comentario manda: es el código que autorizó producción. La
                conversión automática es el respaldo (`auto` deja que la
@@ -536,11 +571,52 @@ function textoDeParrafoConNegritas(p, opciones) {
         };
         const negrita = encendido(rPr && rPr.getElementsByTagNameNS(W_NS, 'b')[0]);
         const cursiva = cursivas && encendido(rPr && rPr.getElementsByTagNameNS(W_NS, 'i')[0]);
+        /* Resaltado (el subrayador) y color de letra del run. Los guiones los
+           usan como CÓDIGO: turquesa es un recado para producción, púrpura es
+           una palabra con ventana… pero qué significa cada uno lo decide quien
+           importa, no este lector. Aquí solo se entregan.
+
+           Van APAGADOS por omisión, como las cursivas y los saltos: encendidos
+           parten los segmentos por color, y dos trozos en negritas seguidos se
+           unirían mal (`**a****b**` en vez de `**ab**`). Quien los pide sabe
+           que va a leer `tramos`, no el texto plano. */
+        const resaltado = conColores ? valorDe(rPr && rPr.getElementsByTagNameNS(W_NS, 'highlight')[0]) : '';
+        const color = conColores ? (valorDe(rPr && rPr.getElementsByTagNameNS(W_NS, 'color')[0]) || '').toLowerCase() : '';
+        const comentarios = conColores ? (unidad.comentarios || []) : [];
         const previo = segmentos[segmentos.length - 1];
-        if (previo && !previo.math && previo.negrita === negrita && previo.cursiva === cursiva) previo.texto += texto;
-        else segmentos.push({ texto, negrita, cursiva });
+        const mismoFormato = previo && !previo.math
+            && previo.negrita === negrita && previo.cursiva === cursiva
+            && (!conColores || (previo.resaltado === resaltado && previo.color === color
+                && String(previo.comentarios) === String(comentarios)));
+        if (mismoFormato) previo.texto += texto;
+        else segmentos.push(conColores
+            ? { texto, negrita, cursiva, resaltado, color, comentarios }
+            : { texto, negrita, cursiva });
     }
-    return segmentos.map(s => {
+    return segmentos;
+}
+
+/**
+ * Texto de un párrafo conservando las negritas como marcas `**texto**` y, si se
+ * piden, las cursivas como `*texto*` (una sola estrella, como en markdown).
+ *
+ * El texto sale IGUAL se pidan o no los colores. Con colores los tramos se
+ * parten también por color, y dos trozos en negritas seguidos de distinto color
+ * darían `**a****b**` en vez de `**ab**`; por eso aquí se vuelven a juntar por
+ * el único formato que sabe escribir: negritas y cursivas. Sin esto, encender
+ * `colores` cambiaba en silencio lo que leen las otras herramientas.
+ */
+function textoDeParrafoConNegritas(p, opciones) {
+    const juntos = [];
+    for (const s of segmentosDeParrafo(p, opciones)) {
+        const previo = juntos[juntos.length - 1];
+        if (previo && !previo.math && !s.math && previo.negrita === s.negrita && previo.cursiva === s.cursiva) {
+            previo.texto += s.texto;
+        } else {
+            juntos.push({ texto: s.texto, negrita: s.negrita, cursiva: s.cursiva, math: s.math });
+        }
+    }
+    return juntos.map(s => {
         if (!s.texto.trim() || (!s.negrita && !s.cursiva)) return s.texto;
         // Los espacios de orilla quedan FUERA de las marcas: un `** texto**` no
         // se reconocería al convertirlo a <strong>.
@@ -634,6 +710,11 @@ async function leerBloquesDeDocx(file, opciones) {
                 texto,
                 imagenes,
                 imagenesInfo: imagenesConMedidaDeParrafo(n),
+                comentarios: comentariosDeParrafo(n),
+                /* Los tramos con su color, solo si se pidieron: son varias
+                   veces más objetos por párrafo y quien no lee colores no los
+                   necesita. `texto` no cambia. */
+                tramos: opcionesTexto && opcionesTexto.colores ? segmentosDeParrafo(n, opcionesTexto) : [],
                 sangria,
                 sangriaColgante: colgante,
                 sangriaFrancesa: colgante > 0,
@@ -706,7 +787,13 @@ async function leerBloquesDeDocx(file, opciones) {
                                donde vive casi todo el guion instruccional—
                                llegaba como un parrafo mas y la lista se perdia. */
                             if (t || imgs.length) contenido.push(Object.assign(
-                                { tipo: 'parrafo', texto: t, imagenes: imgs, imagenesInfo: imagenesConMedidaDeParrafo(hijo) },
+                                {
+                                    tipo: 'parrafo', texto: t, imagenes: imgs,
+                                    imagenesInfo: imagenesConMedidaDeParrafo(hijo),
+                                    comentarios: comentariosDeParrafo(hijo),
+                                    tramos: opcionesTexto && opcionesTexto.colores
+                                        ? segmentosDeParrafo(hijo, Object.assign({ saltos: true }, opcionesTexto)) : []
+                                },
                                 datosDeLista(hijo)));
                             return;
                         }
