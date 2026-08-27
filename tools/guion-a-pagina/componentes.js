@@ -149,11 +149,7 @@ function marcas(texto) {
         const clase = MARCAS_COLOR[color.toLowerCase()];
         return clase ? `<mark class="${clase} border-0">${txt}</mark>` : todo;
     });
-    /* El nivel del resaltado es el que se eligió PARA LA PÁGINA, el mismo que
-       usa la palabra que abre una ventana. Estaba fijo en `bg-resalte-20` y
-       entonces una página con resalte 30 salía con dos intensidades distintas
-       sin que nadie lo hubiera pedido; los montajes cotejados usan una sola. */
-    t = t.replace(/==([^=]+)==/g, `<mark class="${RESALTE_VENTANA}">$1</mark>`);
+    t = t.replace(/==([^=]+)==/g, '<mark class="bg-resalte-20">$1</mark>');
     return t;
 }
 
@@ -257,53 +253,61 @@ const REJILLA = {
     '12': 'col-12 col-sm-6 col-md-4 col-lg-1 mb-2'
 };
 
-/** Botón que dispara un modal (el "Mesopotámica ▸" de las tarjetas). */
-/* Los dos tonos del botón que abre una ventana, tal como salen en las páginas
-   ya montadas. El borde va SIEMPRE apareado con el tono (`btn-primary` con
-   `border-primary-10`): en un montaje real se coló un `btn-secondary` con
-   `border-primary-10` y se ve como un botón a medio pintar. Aquí se aparean
-   solos justamente para que eso no se pueda escribir. */
-const TONOS_BOTON = {
-    secundario: { btn: 'btn-secondary', borde: 'border-secondary-10' },
-    primario: { btn: 'btn-primary', borde: 'border-primary-10' }
+/* Color del botón. `primary` es el color del aula (M01, M02, M03, MM, reg) y
+   `secondary` el gris fuerte; en el grupo de botones de la página publicada se
+   alternan uno con otro, y por eso se elige por botón y no por bloque.
+
+   El valor vacío cuenta como gris: los documentos hechos antes de que existiera
+   este campo tienen que seguir saliendo igual. */
+const CAMPO_COLOR_BOTON = {
+    k: 'color', tipo: 'opciones', etiqueta: 'Color del botón',
+    ayuda: '"Del tema" toma el color del aula (M01, M02…); "Gris" es el gris fuerte del montaje.',
+    ops: [
+        { v: 'primary', etiqueta: 'Del tema', icono: 'palette' },
+        { v: 'secondary', etiqueta: 'Gris', icono: 'circle-half' }
+    ]
 };
 
-/* `btn-sm` y `btn-lg` son de Bootstrap; el tamaño de en medio no lleva clase.
-   Los tres salen en los montajes cotejados. */
-const TAMANOS_BOTON = { chico: 'btn-sm', normal: '', grande: 'btn-lg' };
+/* El gris NO se escribe en el botón: llega por `.ms-convertido .btn-secondary`,
+   que la hoja del aula declara como #6c757d con blanco encima. Hubo una versión
+   con el hex en línea (opción "Gris fijo") y se quitó al saber que el
+   contenedor lleva la clase: el hex duplicado congelaba el hover y era el mismo
+   error del `#d8a7b6`. Si el gris vuelve a verse claro, lo que falta es la
+   clase en el contenedor, no un color aquí. */
 
-/**
- * El botón que abre una ventana emergente.
- *
- * `ops` es opcional y por omisión da EXACTAMENTE lo de siempre —secundario y
- * chico—: es lo que ya está publicado en las páginas hechas con la herramienta
- * y no hay por qué moverlo.
- */
-function botonModal(id, etiqueta, ops) {
-    const tono = TONOS_BOTON[(ops && ops.tono)] || TONOS_BOTON.secundario;
-    const tamano = TAMANOS_BOTON[(ops && ops.tamano) !== undefined ? ops.tamano : 'chico'];
-    const clases = ['btn', tono.btn, tamano, 'rounded-4', 'border', 'border-4', tono.borde, 'flecha_btn']
-        .filter(Boolean).join(' ');
-    return `<button class="${clases}" ` +
-        `type="button" data-bs-toggle="modal" data-bs-target="#${id}"><strong>${marcas(etiqueta)}</strong></button>`;
+/* Clases del botón, copiadas de la página ya montada:
+
+     btn btn-<color> btn-lg rounded-4 border border-4 border-primary-10
+
+   Dos detalles que NO se deducen y que se tenían mal:
+
+   1. El borde es `border-primary-10` en LOS DOS colores. El gris llevaba
+      `border-secondary-10`, que era lo que parecía coherente y no es lo que
+      hay en la página.
+   2. El `margin-bottom` en línea también es del montaje, y hace falta: cuando
+      la fila de botones se parte en dos renglones, sin él quedan pegados.
+
+   `btn-sm` lo usan solo los botones DENTRO de una tarjeta con imagen (las
+   "culturas"), que es el otro montaje de referencia; ahí no cabe el grande.
+
+   Y ya no sale `flecha_btn`: esa clase solo pinta la flechita dentro de
+   `.ms-convertido` —o sea, en las páginas del convertidor de micrositios—, así
+   que aquí viajaba muerta. */
+function clasesBoton(color, tamano) {
+    return `btn btn-${color === 'primary' ? 'primary' : 'secondary'} btn-${tamano || 'lg'} ` +
+        'rounded-4 border border-4 border-primary-10';
 }
 
-/* Los campos del tono y el tamaño, compartidos por los dos bloques que ponen
-   botones de ventana (Tarjetas y Botón suelto). Uno solo: duplicarlos es como
-   se quedó vivo meses el hex repetido. */
-const CAMPO_TONO_BOTON = {
-    k: 'tono', tipo: 'opciones', etiqueta: 'Tono del botón', ops: [
-        { v: 'secundario', etiqueta: 'Secundario', icono: 'circle-half' },
-        { v: 'primario', etiqueta: 'Primario', icono: 'circle' }
-    ]
-};
-const CAMPO_TAMANO_BOTON = {
-    k: 'tamano', tipo: 'opciones', etiqueta: 'Tamaño del botón', ops: [
-        { v: 'chico', etiqueta: 'Chico', icono: 'text-t' },
-        { v: 'normal', etiqueta: 'Normal', icono: 'text-t' },
-        { v: 'grande', etiqueta: 'Grande', icono: 'text-t' }
-    ]
-};
+/** El `style` del botón: el margen del montaje, y nada más. */
+function estiloBoton() { return 'margin-bottom: 5px;'; }
+
+/** Botón que dispara un modal (el "Mesopotámica ▸" de las tarjetas). */
+function botonModal(id, etiqueta, ops) {
+    const o = ops || {};
+    const texto = o.fuerte ? `<strong>${marcas(etiqueta)}</strong>` : marcas(etiqueta);
+    return `<button class="${clasesBoton(o.color, o.tamano)}" style="${estiloBoton()}" ` +
+        `type="button" data-bs-toggle="modal" data-bs-target="#${id}">${texto}</button>`;
+}
 
 /* Con esto encendido, cada bloque sale marcado con `data-bq="<id>"` para que la
    vista previa y el lienzo puedan señalarse mutuamente. SOLO se enciende para
@@ -642,11 +646,7 @@ const COMPONENTES = {
                 k: 'estilo', tipo: 'opciones', etiqueta: 'Estilo', ops: [
                     { v: 'vinetas', etiqueta: 'Viñetas', icono: 'list-bullets' },
                     { v: 'numerada', etiqueta: '1, 2, 3', icono: 'list-numbers' },
-                    { v: 'letras', etiqueta: 'a, b, c', icono: 'text-aa' },
-                    /* La romana la trae Word (`lowerRoman`) y docx.js ya la
-                       distingue; sin esta opción el guion la aplanaba a 1, 2, 3.
-                       `type="i"` es HTML de siempre: no necesita clase del tema. */
-                    { v: 'romana', etiqueta: 'i, ii, iii', icono: 'text-italic' }
+                    { v: 'letras', etiqueta: 'a, b, c', icono: 'text-aa' }
                 ]
             },
             { k: 'items', tipo: 'renglones', etiqueta: 'Elementos', marcador: 'Un elemento por renglón' }
@@ -655,7 +655,7 @@ const COMPONENTES = {
             const items = (b.items || []).map(t => String(t).trim()).filter(Boolean);
             if (!items.length) return '';
             const et = b.estilo === 'vinetas' ? 'ul' : 'ol';
-            const tipo = b.estilo === 'letras' ? ' type="a"' : (b.estilo === 'romana' ? ' type="i"' : '');
+            const tipo = b.estilo === 'letras' ? ' type="a"' : '';
             /* Dentro de un <li> la sublista va pelada y SIN .estiloLista: así es
                el `<ol type="a">` de la página real, y la clase del padre ya le da
                el estilo. Envolverla en .row.bloque la sacaría de su punto. */
@@ -793,21 +793,10 @@ const COMPONENTES = {
             const conTexto = b.lado !== 'sola' && (b.texto || '').trim();
             if (!src && !conTexto) return '';
 
-            /* La figura con encabezado usa la tarjeta .img-contenedor de la
-               página real; sin encabezado va la imagen suelta.
-
-               `centrada` es para la imagen SOLA y sin encabezado. El envoltorio
-               (`.col-md-8.mx-auto`) centra la COLUMNA, no lo que va dentro: una
-               imagen más angosta que esa columna se pegaba a su orilla
-               izquierda. Con encabezado no pasaba —la `.card-deck` ocupa el
-               ancho—, y de ahí que la misma figura saliera centrada o no según
-               si el guion le había puesto "Figura N." encima. Eso era la
-               inconsistencia: en el guion TODAS las figuras vienen centradas
-               (`w:jc="center"`, sin una sola excepción en los cotejados). */
-            const figura = (nivel, centrada) => {
-                const clases = [b.pie ? 'card-img-top' : '', 'img-fluid',
-                    !b.pie && centrada ? 'd-block mx-auto' : ''].filter(Boolean).join(' ');
-                const img = `${ind(nivel + (b.pie ? 2 : 0))}<img class="${clases}" src="${ligaSegura(src)}" alt="${escapar(b.alt || '')}">`;
+            // La figura con encabezado usa la tarjeta .img-contenedor de la
+            // página real; sin encabezado va la imagen suelta.
+            const figura = nivel => {
+                const img = `${ind(nivel + (b.pie ? 2 : 0))}<img class="${b.pie ? 'card-img-top ' : ''}img-fluid" src="${ligaSegura(src)}" alt="${escapar(b.alt || '')}">`;
                 if (!b.pie) return img;
                 return [
                     `${ind(nivel)}<div class="card-deck">`,
@@ -825,7 +814,7 @@ const COMPONENTES = {
                 return [
                     `${ind(n)}<div class="row bloque justify-content-center">`,
                     `${ind(n + 1)}<div class="col-12 col-md-8 mx-auto">`,
-                    figura(n + 2, true),
+                    figura(n + 2),
                     nota(n + 2),
                     `${ind(n + 1)}</div>`,
                     `${ind(n)}</div>`
@@ -1034,14 +1023,13 @@ const COMPONENTES = {
         ayuda: 'Un botón que abre una ventana con más información',
         icono: 'app-window',
         mini: MINI.modal,
-        nuevo: () => ({ etiqueta: 'Ver más', titulo: 'Título de la ventana', alineacion: 'centro', hijos: [] }),
+        nuevo: () => ({ etiqueta: 'Ver más', titulo: 'Título de la ventana', color: 'primary', alineacion: 'centro', hijos: [] }),
         resumen: b => b.etiqueta,
         campos: [
             { k: 'etiqueta', tipo: 'texto', etiqueta: 'Texto del botón' },
             { k: 'titulo', tipo: 'texto', etiqueta: 'Título de la ventana' },
+            CAMPO_COLOR_BOTON,
             Object.assign({}, CAMPO_ALINEACION, { etiqueta: 'Alineación del botón' }),
-            CAMPO_TONO_BOTON,
-            CAMPO_TAMANO_BOTON,
             { k: 'hijos', tipo: 'hijos', etiqueta: 'Contenido de la ventana' }
         ],
         html: (b, n) => {
@@ -1054,7 +1042,7 @@ const COMPONENTES = {
             return [
                 `${ind(n)}<div class="row bloque ${alineado.fila}">`,
                 `${ind(n + 1)}<div class="col-12 ${alineado.texto}">`,
-                `${ind(n + 2)}${botonModal(id, b.etiqueta || 'Ver más', b)}`,
+                `${ind(n + 2)}${botonModal(id, b.etiqueta || 'Ver más', { color: b.color })}`,
                 `${ind(n + 1)}</div>`,
                 `${ind(n)}</div>`,
                 modalBootstrap(id, b.titulo || b.etiqueta || '', dentro, n)
@@ -1068,25 +1056,36 @@ const COMPONENTES = {
         ayuda: 'Fila de imágenes con botón; cada una abre su ventana',
         icono: 'cards-three',
         mini: MINI.tarjetas,
+        /* Los dos colores alternados no son adorno: así está el grupo de
+           botones de la página publicada (tema, gris, tema, gris…). */
         nuevo: () => ({
+            formato: 'auto',
             alineacion: 'centro',
             items: [
-                { img: '', alt: '', etiqueta: 'Tarjeta 1', titulo: 'Tarjeta 1', hijos: [] },
-                { img: '', alt: '', etiqueta: 'Tarjeta 2', titulo: 'Tarjeta 2', hijos: [] }
+                { img: '', alt: '', etiqueta: 'Tarjeta 1', titulo: 'Tarjeta 1', color: 'primary', hijos: [] },
+                { img: '', alt: '', etiqueta: 'Tarjeta 2', titulo: 'Tarjeta 2', color: 'secondary', hijos: [] }
             ]
         }),
         resumen: b => `${(b.items || []).length} tarjetas`,
         campos: [
+            {
+                k: 'formato', tipo: 'opciones', etiqueta: 'Se ve como',
+                ayuda: 'Automático: con imagen salen tarjetas; sin ninguna imagen sale solo la fila de botones, que es el "grupo de N botones" del guion.',
+                ops: [
+                    { v: 'auto', etiqueta: 'Automático', icono: 'magic-wand' },
+                    { v: 'tarjetas', etiqueta: 'Tarjetas', icono: 'cards-three' },
+                    { v: 'botones', etiqueta: 'Solo botones', icono: 'rectangle' }
+                ]
+            },
             Object.assign({}, CAMPO_ALINEACION, { etiqueta: 'Alineación de los botones' }),
-            CAMPO_TONO_BOTON,
-            CAMPO_TAMANO_BOTON,
             {
                 k: 'items', tipo: 'repetible', etiqueta: 'Tarjetas', nombreItem: 'Tarjeta',
-                nuevo: () => ({ img: '', alt: '', etiqueta: 'Nueva tarjeta', titulo: 'Nueva tarjeta', hijos: [] }),
+                nuevo: () => ({ img: '', alt: '', etiqueta: 'Nueva tarjeta', titulo: 'Nueva tarjeta', color: 'secondary', hijos: [] }),
                 campos: [
                     { k: 'img', tipo: 'url', imagen: true, etiqueta: 'Imagen', marcador: '@@PLUGINFILE@@/imagen.png' },
                     { k: 'alt', tipo: 'texto', etiqueta: 'Texto alternativo' },
                     { k: 'etiqueta', tipo: 'texto', etiqueta: 'Texto del botón' },
+                    CAMPO_COLOR_BOTON,
                     { k: 'titulo', tipo: 'texto', etiqueta: 'Título de la ventana' }
                 ],
                 hijos: true
@@ -1096,23 +1095,40 @@ const COMPONENTES = {
             const items = b.items || [];
             if (!items.length) return '';
             const ids = items.map(() => nuevoId('modal'));
-            const partes = [
-                `${ind(n)}<div class="col-12 p-4">`,
-                `${ind(n + 1)}<div class="card-group">`
-            ];
-            items.forEach((item, i) => {
-                partes.push(`${ind(n + 2)}<div class="card">`);
-                if ((item.img || '').trim()) {
-                    partes.push(`${ind(n + 3)}<img class="card-img-top img-fluid" src="${ligaSegura(item.img.trim())}" alt="${escapar(item.alt || '')}">`);
-                }
+            const partes = [];
+
+            /* Sin una sola imagen esto no es una fila de tarjetas: es el grupo
+               de botones del guion. Salía igual —cada botón dentro de su
+               `.card`— y en Moodle eso se ve como una banda gris con los
+               botones flotando dentro, que no es ningún montaje. El grupo de
+               verdad es una columna centrada con los botones sueltos. */
+            const conImagen = items.some(it => (it.img || '').trim());
+            const formato = (b.formato && b.formato !== 'auto') ? b.formato : (conImagen ? 'tarjetas' : 'botones');
+
+            if (formato === 'botones') {
+                partes.push(`${ind(n)}<div class="col-12 col-lg-12 mx-auto ${alineacionDe(b.alineacion).texto}">`);
+                items.forEach((item, i) => partes.push(
+                    `${ind(n + 1)}${botonModal(ids[i], item.etiqueta || '', { color: item.color })}`));
+                partes.push(`${ind(n)}</div>`);
+            } else {
                 partes.push(
-                    // El mx-auto viene del montaje real, pero centra la CAJA, no lo
-                    // que lleva dentro: sin la clase de texto los botones quedaban
-                    // pegados a la izquierda de su tarjeta y la fila se veía despareja.
-                    `${ind(n + 3)}<div class="card-body mx-auto ${alineacionDe(b.alineacion).texto}">${botonModal(ids[i], item.etiqueta || '', b)}</div>`,
-                    `${ind(n + 2)}</div>`);
-            });
-            partes.push(`${ind(n + 1)}</div>`, `${ind(n)}</div>`);
+                    `${ind(n)}<div class="col-12 p-4">`,
+                    `${ind(n + 1)}<div class="card-group">`);
+                items.forEach((item, i) => {
+                    partes.push(`${ind(n + 2)}<div class="card">`);
+                    if ((item.img || '').trim()) {
+                        partes.push(`${ind(n + 3)}<img class="card-img-top img-fluid" src="${ligaSegura(item.img.trim())}" alt="${escapar(item.alt || '')}">`);
+                    }
+                    partes.push(
+                        // El mx-auto viene del montaje real, pero centra la CAJA, no lo
+                        // que lleva dentro: sin la clase de texto los botones quedaban
+                        // pegados a la izquierda de su tarjeta y la fila se veía despareja.
+                        `${ind(n + 3)}<div class="card-body mx-auto ${alineacionDe(b.alineacion).texto}">` +
+                        `${botonModal(ids[i], item.etiqueta || '', { color: item.color, tamano: 'sm', fuerte: true })}</div>`,
+                        `${ind(n + 2)}</div>`);
+                });
+                partes.push(`${ind(n + 1)}</div>`, `${ind(n)}</div>`);
+            }
             // Los modales van después del grupo de tarjetas, como en la página
             // real: dentro de la tarjeta, Bootstrap los posiciona mal.
             items.forEach((item, i) => {
@@ -1443,7 +1459,7 @@ const COMPONENTES = {
         ayuda: 'Enlace a un documento o a otro sitio',
         icono: 'link',
         mini: MINI.boton,
-        nuevo: () => ({ texto: 'Descargar el documento', url: '', estilo: 'boton', alineacion: 'centro' }),
+        nuevo: () => ({ texto: 'Descargar el documento', url: '', estilo: 'boton', color: 'primary', alineacion: 'centro' }),
         resumen: b => b.texto,
         campos: [
             { k: 'texto', tipo: 'texto', etiqueta: 'Texto' },
@@ -1454,6 +1470,7 @@ const COMPONENTES = {
                     { v: 'enlace', etiqueta: 'Enlace', icono: 'link-simple' }
                 ]
             },
+            CAMPO_COLOR_BOTON,
             CAMPO_ALINEACION
         ],
         html: (b, n) => {
@@ -1461,7 +1478,7 @@ const COMPONENTES = {
             if (!url) return '';
             const clase = b.estilo === 'enlace'
                 ? 'nomediaplugin'
-                : 'btn btn-secondary btn-sm rounded-4 border border-4 border-secondary-10 nomediaplugin';
+                : `${clasesBoton(b.color)} nomediaplugin`;
             // La fila y el texto se alinean juntos: con solo uno de los dos, un
             // botón "a la derecha" se quedaba centrado dentro de una columna
             // pegada a la derecha, que no es lo que nadie espera.
@@ -1469,7 +1486,8 @@ const COMPONENTES = {
             return [
                 `${ind(n)}<div class="row bloque ${alineado.fila}">`,
                 `${ind(n + 1)}<div class="col-12 ${alineado.texto}">`,
-                `${ind(n + 2)}<a href="${ligaSegura(url)}" target="_blank" class="${clase}">${marcas(b.texto || '')}</a>`,
+                `${ind(n + 2)}<a href="${ligaSegura(url)}" target="_blank" class="${clase}"` +
+                `${b.estilo === 'enlace' ? '' : ` style="${estiloBoton()}"`}>${marcas(b.texto || '')}</a>`,
                 `${ind(n + 1)}</div>`,
                 `${ind(n)}</div>`
             ].join('\n');

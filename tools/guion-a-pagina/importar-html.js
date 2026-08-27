@@ -336,7 +336,10 @@
            `ms-convertido`, que le pone Micrositio a Página y que la hoja del tema
            usa para sus propias reglas: perderla cambia cómo se ve la página
            entera, y sin avisar. */
-        const propias = ['container-fluid', 'mainPlantilla23', 'M01', 'M02', 'M03', 'MM', 'reg'];
+        const propias = ['container-fluid', 'mainPlantilla23', 'M01', 'M02', 'M03', 'MM', 'reg',
+            // La pone la herramienta en cada salida; guardarla como "extra"
+            // la duplicaría al volver a generar.
+            'ms-convertido'];
         const clasesExtra = [...raiz.classList].filter(c => !propias.includes(c));
 
         /* Los `style=` inline que trae la página no se pueden representar como

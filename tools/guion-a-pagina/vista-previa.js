@@ -73,13 +73,6 @@ hr { border: 0; border-top: 1px solid #d5dce3; margin: 1.5rem 0; }
 .text-center { text-align: center; }
 .text-justify { text-align: justify; }
 .d-flex { display: flex; }
-/* Faltaba, y la previa mentía justo donde importa: una imagen sola lleva
-   d-block + mx-auto, y margin:auto no centra nada sobre un elemento inline.
-   En Moodle sí funciona —el Bootstrap de la plataforma trae la utilidad— y
-   aquí salía pegada a la izquierda. Es la misma trampa del small.
-   OJO: este CSS vive dentro de una plantilla de texto; nada de acentos
-   graves aquí adentro o se parte en dos y la previa se queda sin hoja. */
-.d-block { display: block; }
 .d-inline { display: inline; }
 .d-inline-block { display: inline-block; }
 .flex-shrink-0 { flex-shrink: 0; }
@@ -193,7 +186,12 @@ caption { caption-side: top; padding: .5rem; }
     border: 1px solid transparent; cursor: pointer; font: inherit; background: transparent;
 }
 .btn-sm { padding: .25rem .5rem; font-size: .875rem; }
+.btn-lg { padding: .5rem 1rem; font-size: 1.125rem; }
 .btn-secondary { background: #6c757d; border-color: #6c757d; color: #fff; }
+/* El botón "del tema" toma el color del aula: --primary-40 es el hex fuerte de
+   la paleta (M01 morado, M02 azul…) y viene de la hoja del tema, así que la
+   previa cambia sola al cambiar de paleta. */
+.btn-primary { background: var(--primary-40, #8d67b7); border-color: var(--primary-40, #8d67b7); color: #fff; }
 .rounded-4 { border-radius: .75rem !important; }
 .border-4 { border-width: 4px !important; }
 .mx-auto { margin-left: auto; margin-right: auto; }
@@ -254,6 +252,8 @@ caption { caption-side: top; padding: .5rem; }
     .col-lg-1 { flex: 0 0 8.3333%; max-width: 8.3333%; }
     .col-lg-2 { flex: 0 0 16.6667%; max-width: 16.6667%; }
     .col-lg-8 { flex: 0 0 66.6667%; max-width: 66.6667%; }
+    /* El grupo de botones va en un col-12 col-lg-12, tal cual el montaje. */
+    .col-lg-12 { flex: 0 0 100%; max-width: 100%; }
 }
 a { color: var(--primary-50, #6b4c8b); }
 
@@ -327,6 +327,21 @@ a { color: var(--primary-50, #6b4c8b); }
 /* --- Modal <details> --- */
 details > summary { cursor: pointer; }
 details[open] > summary { position: relative; z-index: 98; }
+
+/* --- Lo que la hoja del aula pinta SOLO bajo .ms-convertido ---
+   El contenedor de la salida lleva esa clase (script.js), así que estas reglas
+   son las que van a aplicar en Moodle. Van al final para ganarle a las de
+   arriba, igual que allá. Copiadas de conjunto_unificado.scss, no deducidas.
+
+   Sí, los enlaces salen azules y subrayados —también los que son botón y la
+   palabra que abre una ventana—. No es un descuido de la previa: es lo que
+   hace la hoja, y si aquí se pintara bonito la previa estaría mintiendo. */
+.ms-convertido a { color: #0000ff; text-decoration: underline; }
+.ms-convertido a.btn-primary, .ms-convertido .btn-secondary { color: #fff; }
+.ms-convertido .bloque { padding: 8px 0; }
+.ms-convertido .card-deck { display: block; }
+.ms-convertido .card.img-contenedor { background: #fff; border: 1px solid rgba(0, 0, 0, .17); }
+.ms-convertido .table-responsive .container-fluid.rounded-top p { font-weight: bold; text-align: center; }
 `;
 
 /* ==========================================================================
