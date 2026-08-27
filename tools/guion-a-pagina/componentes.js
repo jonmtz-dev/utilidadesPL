@@ -149,7 +149,11 @@ function marcas(texto) {
         const clase = MARCAS_COLOR[color.toLowerCase()];
         return clase ? `<mark class="${clase} border-0">${txt}</mark>` : todo;
     });
-    t = t.replace(/==([^=]+)==/g, '<mark class="bg-resalte-20">$1</mark>');
+    /* El nivel del resaltado es el que se eligió PARA LA PÁGINA, el mismo que
+       usa la palabra que abre una ventana. Estaba fijo en `bg-resalte-20` y
+       entonces una página con resalte 30 salía con dos intensidades distintas
+       sin que nadie lo hubiera pedido; los montajes cotejados usan una sola. */
+    t = t.replace(/==([^=]+)==/g, `<mark class="${RESALTE_VENTANA}">$1</mark>`);
     return t;
 }
 
@@ -287,16 +291,35 @@ const CAMPO_COLOR_BOTON = {
    2. El `margin-bottom` en línea también es del montaje, y hace falta: cuando
       la fila de botones se parte en dos renglones, sin él quedan pegados.
 
-   `btn-sm` lo usan solo los botones DENTRO de una tarjeta con imagen (las
-   "culturas"), que es el otro montaje de referencia; ahí no cabe el grande.
+   El tamaño NO va aquí: es un campo (`CAMPO_TAMANO_BOTON`), porque en los
+   montajes cotejados hay tres —chico, sin modificador y grande—. Lo que sí es
+   fijo es el arranque: grande en el grupo de botones, chico dentro de una
+   tarjeta con imagen, que es donde no cabe el grande.
 
    Y ya no sale `flecha_btn`: esa clase solo pinta la flechita dentro de
-   `.ms-convertido` —o sea, en las páginas del convertidor de micrositios—, así
-   que aquí viajaba muerta. */
+   `.ms-convertido`. Antes viajaba muerta —la salida no llevaba la clase—, pero
+   ahora el contenedor sí la lleva y la pintaría; el grupo de botones de la
+   página de referencia no trae flechita. */
+/* `btn-sm` y `btn-lg` son de Bootstrap; el tamaño de en medio no lleva clase.
+   Los tres salen en montajes cotejados (aa1 chico, aa3 grande, aa5 sin
+   modificador), y por eso el tamaño es un campo y no una constante. */
+const TAMANOS_BOTON = { chico: 'btn-sm', normal: '', grande: 'btn-lg' };
+
 function clasesBoton(color, tamano) {
-    return `btn btn-${color === 'primary' ? 'primary' : 'secondary'} btn-${tamano || 'lg'} ` +
-        'rounded-4 border border-4 border-primary-10';
+    const tam = TAMANOS_BOTON[tamano] !== undefined ? TAMANOS_BOTON[tamano] : TAMANOS_BOTON.grande;
+    return ['btn', `btn-${color === 'primary' ? 'primary' : 'secondary'}`, tam,
+        'rounded-4', 'border', 'border-4', 'border-primary-10'].filter(Boolean).join(' ');
 }
+
+/* El campo del tamaño, compartido por Tarjetas, Ventana emergente y Botón.
+   Uno solo: duplicarlo es como se quedó vivo meses el hex repetido. */
+const CAMPO_TAMANO_BOTON = {
+    k: 'tamano', tipo: 'opciones', etiqueta: 'Tamaño del botón', ops: [
+        { v: 'chico', etiqueta: 'Chico', icono: 'text-t' },
+        { v: 'normal', etiqueta: 'Normal', icono: 'text-t' },
+        { v: 'grande', etiqueta: 'Grande', icono: 'text-t' }
+    ]
+};
 
 /** El `style` del botón: el margen del montaje, y nada más. */
 function estiloBoton() { return 'margin-bottom: 5px;'; }
@@ -646,7 +669,11 @@ const COMPONENTES = {
                 k: 'estilo', tipo: 'opciones', etiqueta: 'Estilo', ops: [
                     { v: 'vinetas', etiqueta: 'Viñetas', icono: 'list-bullets' },
                     { v: 'numerada', etiqueta: '1, 2, 3', icono: 'list-numbers' },
-                    { v: 'letras', etiqueta: 'a, b, c', icono: 'text-aa' }
+                    { v: 'letras', etiqueta: 'a, b, c', icono: 'text-aa' },
+                    /* La romana la trae Word (`lowerRoman`) y docx.js ya la
+                       distingue; sin esta opción el guion la aplanaba a 1, 2, 3.
+                       `type="i"` es HTML de siempre: no necesita clase del tema. */
+                    { v: 'romana', etiqueta: 'i, ii, iii', icono: 'text-italic' }
                 ]
             },
             { k: 'items', tipo: 'renglones', etiqueta: 'Elementos', marcador: 'Un elemento por renglón' }
@@ -655,7 +682,7 @@ const COMPONENTES = {
             const items = (b.items || []).map(t => String(t).trim()).filter(Boolean);
             if (!items.length) return '';
             const et = b.estilo === 'vinetas' ? 'ul' : 'ol';
-            const tipo = b.estilo === 'letras' ? ' type="a"' : '';
+            const tipo = b.estilo === 'letras' ? ' type="a"' : (b.estilo === 'romana' ? ' type="i"' : '');
             /* Dentro de un <li> la sublista va pelada y SIN .estiloLista: así es
                el `<ol type="a">` de la página real, y la clase del padre ya le da
                el estilo. Envolverla en .row.bloque la sacaría de su punto. */
@@ -793,10 +820,21 @@ const COMPONENTES = {
             const conTexto = b.lado !== 'sola' && (b.texto || '').trim();
             if (!src && !conTexto) return '';
 
-            // La figura con encabezado usa la tarjeta .img-contenedor de la
-            // página real; sin encabezado va la imagen suelta.
-            const figura = nivel => {
-                const img = `${ind(nivel + (b.pie ? 2 : 0))}<img class="${b.pie ? 'card-img-top ' : ''}img-fluid" src="${ligaSegura(src)}" alt="${escapar(b.alt || '')}">`;
+            /* La figura con encabezado usa la tarjeta .img-contenedor de la
+               página real; sin encabezado va la imagen suelta.
+
+               `centrada` es para la imagen SOLA y sin encabezado. El envoltorio
+               (`.col-md-8.mx-auto`) centra la COLUMNA, no lo que va dentro: una
+               imagen más angosta que esa columna se pegaba a su orilla
+               izquierda. Con encabezado no pasaba —la `.card-deck` ocupa el
+               ancho—, y de ahí que la misma figura saliera centrada o no según
+               si el guion le había puesto "Figura N." encima. Eso era la
+               inconsistencia: en el guion TODAS las figuras vienen centradas
+               (`w:jc="center"`, sin una sola excepción en los cotejados). */
+            const figura = (nivel, centrada) => {
+                const clases = [b.pie ? 'card-img-top' : '', 'img-fluid',
+                    !b.pie && centrada ? 'd-block mx-auto' : ''].filter(Boolean).join(' ');
+                const img = `${ind(nivel + (b.pie ? 2 : 0))}<img class="${clases}" src="${ligaSegura(src)}" alt="${escapar(b.alt || '')}">`;
                 if (!b.pie) return img;
                 return [
                     `${ind(nivel)}<div class="card-deck">`,
@@ -814,7 +852,7 @@ const COMPONENTES = {
                 return [
                     `${ind(n)}<div class="row bloque justify-content-center">`,
                     `${ind(n + 1)}<div class="col-12 col-md-8 mx-auto">`,
-                    figura(n + 2),
+                    figura(n + 2, true),
                     nota(n + 2),
                     `${ind(n + 1)}</div>`,
                     `${ind(n)}</div>`
@@ -851,7 +889,8 @@ const COMPONENTES = {
         nuevo: () => ({
             encabezados: ['Columna 1', 'Columna 2'],
             filas: [['', ''], ['', '']],
-            colorear: 'no', tarjetas: true, titulo: '', encabezadoColor: false, banda: ''
+            colorear: 'no', tarjetas: true, titulo: '', encabezadoColor: false, banda: '',
+            anchos: 'auto', anchoCols: []
         }),
         resumen: b => `${(b.filas || []).length} filas × ${(b.encabezados || []).length} columnas`,
         campos: [
@@ -866,6 +905,15 @@ const COMPONENTES = {
                 ayuda: 'El renglón de COLOR que cruza todas las columnas, ya dentro de la tabla y encima de los títulos. No es el gris de arriba: ese es el campo anterior.'
             },
             { k: 'rejilla', tipo: 'rejilla', etiqueta: 'Contenido' },
+            {
+                k: 'anchos', tipo: 'opciones', etiqueta: 'Ancho de las columnas',
+                ayuda: '«Automático» deja que el navegador reparta según el texto, y es lo que hace que una columna corta salga apretada aunque sobre espacio. «Parejas» las hace todas iguales. «A la medida» abre una casilla de % sobre cada columna, ahí arriba en el Contenido.',
+                ops: [
+                    { v: 'auto', etiqueta: 'Automático', icono: 'magic-wand' },
+                    { v: 'parejo', etiqueta: 'Parejas', icono: 'columns' },
+                    { v: 'medida', etiqueta: 'A la medida', icono: 'ruler' }
+                ]
+            },
             {
                 k: 'tarjetas', tipo: 'check',
                 etiqueta: 'En celular, cada fila como tarjeta (recomendado)'
@@ -945,7 +993,15 @@ const COMPONENTES = {
                —la hoja no la declara—, pero se conserva para que el HTML siga
                siendo comparable línea por línea con la página publicada. */
             const claseTh = 'thead text-center align-middle' + (b.encabezadoColor ? ' bg-primary-10' : '');
-            enc.forEach(t => partes.push(`${ind(n + 6)}<th scope="col" class="${claseTh}">${marcas(t)}</th>`));
+            /* El ancho va en el <th> y en por ciento, no en la <table> ni en un
+               <colgroup>: es donde lo escribe el propio TinyMCE al redimensionar
+               una columna a mano, así que es lo único que se sabe que sobrevive
+               al editor de Moodle. En celular ni se nota —`.tabla-responsive-cards
+               thead { display: none }` y las celdas pasan a bloque—. */
+            const anchos = anchosDeTabla(b, enc.length);
+            enc.forEach((t, c) => partes.push(
+                `${ind(n + 6)}<th scope="col" class="${claseTh}"` +
+                `${anchos[c] ? ` style="width: ${anchos[c]}%;"` : ''}>${marcas(t)}</th>`));
             partes.push(`${ind(n + 5)}</tr>`, `${ind(n + 4)}</thead>`, `${ind(n + 4)}<tbody>`);
 
             const tono = tonoPrimeraColumna(b);
@@ -1023,12 +1079,13 @@ const COMPONENTES = {
         ayuda: 'Un botón que abre una ventana con más información',
         icono: 'app-window',
         mini: MINI.modal,
-        nuevo: () => ({ etiqueta: 'Ver más', titulo: 'Título de la ventana', color: 'primary', alineacion: 'centro', hijos: [] }),
+        nuevo: () => ({ etiqueta: 'Ver más', titulo: 'Título de la ventana', color: 'primary', tamano: 'grande', alineacion: 'centro', hijos: [] }),
         resumen: b => b.etiqueta,
         campos: [
             { k: 'etiqueta', tipo: 'texto', etiqueta: 'Texto del botón' },
             { k: 'titulo', tipo: 'texto', etiqueta: 'Título de la ventana' },
             CAMPO_COLOR_BOTON,
+            CAMPO_TAMANO_BOTON,
             Object.assign({}, CAMPO_ALINEACION, { etiqueta: 'Alineación del botón' }),
             { k: 'hijos', tipo: 'hijos', etiqueta: 'Contenido de la ventana' }
         ],
@@ -1042,7 +1099,7 @@ const COMPONENTES = {
             return [
                 `${ind(n)}<div class="row bloque ${alineado.fila}">`,
                 `${ind(n + 1)}<div class="col-12 ${alineado.texto}">`,
-                `${ind(n + 2)}${botonModal(id, b.etiqueta || 'Ver más', { color: b.color })}`,
+                `${ind(n + 2)}${botonModal(id, b.etiqueta || 'Ver más', { color: b.color, tamano: b.tamano })}`,
                 `${ind(n + 1)}</div>`,
                 `${ind(n)}</div>`,
                 modalBootstrap(id, b.titulo || b.etiqueta || '', dentro, n)
@@ -1077,6 +1134,7 @@ const COMPONENTES = {
                     { v: 'botones', etiqueta: 'Solo botones', icono: 'rectangle' }
                 ]
             },
+            CAMPO_TAMANO_BOTON,
             Object.assign({}, CAMPO_ALINEACION, { etiqueta: 'Alineación de los botones' }),
             {
                 k: 'items', tipo: 'repetible', etiqueta: 'Tarjetas', nombreItem: 'Tarjeta',
@@ -1105,10 +1163,15 @@ const COMPONENTES = {
             const conImagen = items.some(it => (it.img || '').trim());
             const formato = (b.formato && b.formato !== 'auto') ? b.formato : (conImagen ? 'tarjetas' : 'botones');
 
+            /* Sin elección explícita, cada forma conserva el tamaño de su
+               montaje: el grupo de botones el grande, y el de dentro de una
+               tarjeta el chico —ahí un `btn-lg` no cabe—. */
+            const tamano = b.tamano || (formato === 'botones' ? 'grande' : 'chico');
+
             if (formato === 'botones') {
                 partes.push(`${ind(n)}<div class="col-12 col-lg-12 mx-auto ${alineacionDe(b.alineacion).texto}">`);
                 items.forEach((item, i) => partes.push(
-                    `${ind(n + 1)}${botonModal(ids[i], item.etiqueta || '', { color: item.color })}`));
+                    `${ind(n + 1)}${botonModal(ids[i], item.etiqueta || '', { color: item.color, tamano })}`));
                 partes.push(`${ind(n)}</div>`);
             } else {
                 partes.push(
@@ -1124,7 +1187,7 @@ const COMPONENTES = {
                         // que lleva dentro: sin la clase de texto los botones quedaban
                         // pegados a la izquierda de su tarjeta y la fila se veía despareja.
                         `${ind(n + 3)}<div class="card-body mx-auto ${alineacionDe(b.alineacion).texto}">` +
-                        `${botonModal(ids[i], item.etiqueta || '', { color: item.color, tamano: 'sm', fuerte: true })}</div>`,
+                        `${botonModal(ids[i], item.etiqueta || '', { color: item.color, tamano, fuerte: true })}</div>`,
                         `${ind(n + 2)}</div>`);
                 });
                 partes.push(`${ind(n + 1)}</div>`, `${ind(n)}</div>`);
@@ -1459,7 +1522,7 @@ const COMPONENTES = {
         ayuda: 'Enlace a un documento o a otro sitio',
         icono: 'link',
         mini: MINI.boton,
-        nuevo: () => ({ texto: 'Descargar el documento', url: '', estilo: 'boton', color: 'primary', alineacion: 'centro' }),
+        nuevo: () => ({ texto: 'Descargar el documento', url: '', estilo: 'boton', color: 'primary', tamano: 'grande', alineacion: 'centro' }),
         resumen: b => b.texto,
         campos: [
             { k: 'texto', tipo: 'texto', etiqueta: 'Texto' },
@@ -1471,6 +1534,7 @@ const COMPONENTES = {
                 ]
             },
             CAMPO_COLOR_BOTON,
+            CAMPO_TAMANO_BOTON,
             CAMPO_ALINEACION
         ],
         html: (b, n) => {
@@ -1478,7 +1542,7 @@ const COMPONENTES = {
             if (!url) return '';
             const clase = b.estilo === 'enlace'
                 ? 'nomediaplugin'
-                : `${clasesBoton(b.color)} nomediaplugin`;
+                : `${clasesBoton(b.color, b.tamano)} nomediaplugin`;
             // La fila y el texto se alinean juntos: con solo uno de los dos, un
             // botón "a la derecha" se quedaba centrado dentro de una columna
             // pegada a la derecha, que no es lo que nadie espera.
@@ -1582,6 +1646,31 @@ const COMPONENTES = {
         html: (b, n) => `${ind(n)}<hr class="espacio-fino">`
     }
 };
+
+/**
+ * El ancho de cada columna, en por ciento. `0` = sin escribir nada.
+ *
+ * Existe porque `MW-auto` —que va siempre, y con razón: sin ella una tabla de
+ * cinco columnas no puede encoger— también suelta el reparto: el navegador le
+ * da el ancho a la columna con más texto y deja la corta partiendo palabras a
+ * la mitad ("Media aritméti-ca"), aunque haya espacio de sobra al lado.
+ *
+ * `parejo` no se guarda columna por columna a propósito: si se agrega una
+ * columna después, el reparto se recalcula solo.
+ */
+function anchosDeTabla(b, cuantas) {
+    if (b.anchos === 'parejo') {
+        const w = Math.round(10000 / cuantas) / 100;
+        return Array.from({ length: cuantas }, () => w);
+    }
+    if (b.anchos === 'medida') {
+        return Array.from({ length: cuantas }, (_, c) => {
+            const v = Number((b.anchoCols || [])[c]);
+            return v > 0 && v <= 100 ? v : 0;
+        });
+    }
+    return Array.from({ length: cuantas }, () => 0);
+}
 
 /** Id de un video de YouTube en cualquiera de sus formas de liga. */
 function idDeYoutube(url) {

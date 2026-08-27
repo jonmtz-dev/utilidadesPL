@@ -229,9 +229,20 @@
     <!-- Asistente de importación: qué es cada tabla del Word -->
     <div id="modal-import" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-import-titulo">
         <div class="modal-caja modal-caja--ancha glass-panel">
-            <h2 id="modal-import-titulo"><i class="ph ph-wand"></i> ¿Qué es cada tabla del Word?</h2>
-            <p class="modal-intro">En el guion todo llega como tabla. Tú decides qué se vuelve cada una: la vista previa de la izquierda es su contenido real.</p>
-            <div id="import-tablas" class="import-tablas scroll-sin-barra scroll-difuso" data-pista-scroll></div>
+            <h2 id="modal-import-titulo"><i class="ph ph-wand"></i> ¿Qué trae este guion?</h2>
+            <p class="modal-intro">La herramienta propone; tú decides. Los colores del guion son un código —turquesa suele ser un recado para producción, púrpura una palabra con ventana— pero cada módulo escribe el suyo, así que aquí se confirma.</p>
+            <div class="import-cuerpo scroll-sin-barra scroll-difuso" data-pista-scroll>
+                <!-- Los colores del Word y qué significa cada uno. Se dibuja
+                     solo si el guion trae alguno; ver dibujarColores(). -->
+                <section id="import-colores-caja" class="import-seccion hidden">
+                    <h3><i class="ph ph-palette"></i> ¿Qué significa cada color?</h3>
+                    <div id="import-colores" class="import-colores"></div>
+                </section>
+                <section id="import-tablas-caja" class="import-seccion hidden">
+                    <h3><i class="ph ph-table"></i> ¿Qué es cada tabla?</h3>
+                    <div id="import-tablas" class="import-tablas"></div>
+                </section>
+            </div>
             <div class="modal-acciones">
                 <button id="import-cancelar" class="btn-secondary" type="button">Cancelar</button>
                 <button id="import-aceptar" class="btn-primary" type="button"><i class="ph ph-check"></i> Armar la página</button>

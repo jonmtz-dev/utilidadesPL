@@ -73,6 +73,13 @@ hr { border: 0; border-top: 1px solid #d5dce3; margin: 1.5rem 0; }
 .text-center { text-align: center; }
 .text-justify { text-align: justify; }
 .d-flex { display: flex; }
+/* Faltaba, y la previa mentía justo donde importa: una imagen sola lleva
+   d-block + mx-auto, y margin:auto no centra nada sobre un elemento inline.
+   En Moodle sí funciona —el Bootstrap de la plataforma trae la utilidad— y
+   aquí salía pegada a la izquierda. Es la misma trampa del small.
+   OJO: este CSS vive dentro de una plantilla de texto; nada de acentos
+   graves aquí adentro o se parte en dos y la previa se queda sin hoja. */
+.d-block { display: block; }
 .d-inline { display: inline; }
 .d-inline-block { display: inline-block; }
 .flex-shrink-0 { flex-shrink: 0; }

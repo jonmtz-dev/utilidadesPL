@@ -444,8 +444,11 @@ Tres detalles que **no se deducen** y que estaban mal:
   bien.)
 - El `style="margin-bottom: 5px"` en línea también es del montaje, y sirve:
   cuando la fila de botones se parte en dos renglones, sin él quedan pegados.
-- Salía `flecha_btn`, que **solo pinta la flechita dentro de `.ms-convertido`**
-  —las páginas del convertidor de micrositios—. Aquí viajaba muerta. Fuera.
+- Salía `flecha_btn`, que **solo pinta la flechita dentro de `.ms-convertido`**.
+  Cuando la salida no llevaba esa clase, la flechita nunca aparecía: viajaba
+  muerta. Ahora que el contenedor sí la lleva (sección siguiente) la pintaría,
+  y por eso importa que no salga: el grupo de botones de la página de
+  referencia no la trae. Si algún día se quiere de vuelta, va como campo.
 
 ### El gris no estaba en el botón: estaba en el contenedor
 
@@ -623,6 +626,300 @@ que hay que publicar:
 | `<Tabla>` | Se queda esperando: si abajo viene una tabla de verdad, **es esa** (antes salían las dos, la vacía y la real). Si nunca llega, queda la tabla vacía con la nota |
 | `<Pop-up>`, `<Video>` | El bloque correspondiente, vacío |
 | Cualquier otra | Se guarda como indicación, no se publica |
+
+### El formato del Word sí llega: negritas, cursivas, viñetas y el cuadro
+
+Cuatro cosas del Word que antes se perdían en el camino, y las cuatro se perdían
+en el **mismo sitio**: dentro de una celda. Y casi todo el guion instruccional
+vive dentro de una celda, porque el contenido de cada pestaña es una celda de la
+tabla *Pestaña | Contenido*.
+
+| Qué | Dónde se perdía | Cómo llega ahora |
+|---|---|---|
+| **Negritas** | En ningún lado: ya funcionaban (`**texto**` → `<strong>`) | Igual que siempre |
+| **Cursivas** | `docx.js` las trae apagadas por omisión y la herramienta nunca las pedía; encima, el `contenido` de una celda llamaba a `textoDeParrafoConNegritas` con `{ saltos: true }` **fijo**, así que ni pidiéndolas llegaban | `leerBloquesDeDocx(file, { cursivas: true })`, y el `contenido` hereda esa opción. `marcas()` ya convertía `*texto*` en `<em>` |
+| **Viñetas y numeraciones** | El `contenido` de una celda entregaba `{ tipo, texto, imagenes }` y nada más: la viñeta no existía ahí, así que cada elemento salía como un párrafo suelto | `contenido` trae `lista`, `tipoLista`, `nivelLista` e `idLista`, y `bloquesDesdeLineas` agrupa los renglones seguidos en un bloque **Lista** |
+| **El cuadro** (una celda sola, con borde y sin relleno) | Se leía como "tabla de una celda", que en el guion es la barra de título de sección | Si **no** está sombreada es un cuadro y sale como **Caja de color** sin banda |
+| **La caja de instrucción sin su marca** | El guion no siempre escribe `<Texto regular…con ícono de interactividad>`: a veces solo pega el ícono en el párrafo. Salía como un párrafo en negritas más | Se reconoce por el ícono anclado + el texto entero en negritas (ver abajo) |
+| **Las figuras** | El párrafo que solo trae la imagen se caía: la página salía sin una sola | Se vuelve bloque **Imagen**, con su pie y con el nombre de archivo que pide el comentario del guion |
+
+El estilo de la lista sale de `numbering.xml` (lo lee `docx.js`), no del texto:
+viñeta, `1.`, `a.` e `i.` se distinguen sin adivinar. `ESTILO_LISTA` traduce eso
+al campo `estilo` del bloque en **un solo lugar**, porque lo consultan los tres
+caminos —párrafo suelto, celda y sublista de un paso— y tenerlo tres veces es
+cómo se quedó vivo meses el hex `#d8a7b6`.
+
+Dos decisiones que conviene conocer antes de "arreglarlas":
+
+- **Un cambio de formato abre otra lista.** Si el Word pasa de viñetas a `a, b,
+  c`, salen dos bloques `lista`, no uno con dos estilos. Lo mismo si cambia el
+  `numId`: en el guion eso son dos listas distintas que quedaron pegadas.
+- **Los niveles anidados se aplanan.** El bloque `lista` publica sus elementos
+  como texto y no admite hijos —para eso está `pasos`—, así que una sublista sale
+  como su propia lista debajo. Es legible, y es mucho más de lo que había antes
+  (la viñeta se perdía entera). Si algún día hace falta el anidado de verdad, va
+  en `pasos`, no aquí.
+
+**El cuadro se distingue por el sombreado, no por el tamaño.** En estos guiones
+la barra de sección viene con `#666666` y el cuadro con relleno automático; por
+eso `sugerir()` devuelve `cuadro` solo cuando la tabla tiene una celda **y** no
+está sombreada. El bloque destino es `envolvente` (Caja de color) con
+`fondo: neutral-claro-50`, que es el equivalente neutro de las plantillas: el
+cuadro del Word no trae color y el markup de la caja está copiado de la
+plantilla, no deducido. En el asistente de importación, *Cuadro* también aparece
+como opción para las tablas que sí se preguntan.
+
+### La caja de instrucción cuando el guion no la marca
+
+Lo normal es que el guion abra la caja amarilla con `<Texto regular en negritas
+con ícono de interactividad a la izquierda>`. Hay guiones que no escriben la
+marca: pegan el **ícono dentro del párrafo** y ponen la frase entera en
+negritas. En el Word se ve igual; en la página salía como un párrafo en negritas
+más, sin caja.
+
+Se reconoce por **dos indicios que tienen que darse juntos**:
+
+1. El párrafo trae una imagen anclada **pequeña** — el ícono de interactividad
+   mide 33 px en los guiones cotejados, y la figura más chica del mismo Word
+   mide 135. El corte está en 60 px, con aire por los dos lados.
+2. El texto va **entero** en negritas (`**todo**`, sin ningún `**` por dentro).
+
+Por qué no se dispara de más: en el Word cotejado los únicos párrafos con imagen
+anclada **y** texto son justo los cuatro de instrucción. Las figuras de verdad
+van solas en su párrafo, sin una palabra; y el único párrafo que sí mezcla texto
+con una imagen grande —el SmartArt de la metodología de gráficos— no viene en
+negritas, así que falla el segundo indicio.
+
+El tamaño no se adivina: `assets/docx.js` lo entrega en **`imagenesInfo`**
+(`[{ id, ancho, alto }]` en píxeles, sacado del `wp:extent` del dibujo). Es un
+campo nuevo; `imagenes` sigue siendo la lista de rId pelada que ya leían las
+otras herramientas. Un dibujo sin `wp:extent` llega en 0 —que significa "no sé",
+no "diminuto"— y no cuenta como ícono.
+
+**El ícono lo pone el bloque, no el Word.** La caja sale con
+`@@PLUGINFILE@@/clic.png`, que es lo que publica el montaje; la imagen que traía
+el párrafo era el ícono del guion y no se sube. En la vista previa ese `src` da
+404 a propósito: el archivo vive en Moodle.
+
+### Las imágenes se montan solas (y con el nombre bueno)
+
+Antes, una página importada salía **sin una sola figura**: el recorrido pedía
+texto y un párrafo que solo trae la imagen se caía por ahí. Quedaban los bloques
+vacíos de las marcas `<Figura>`, cuando el guion las escribiera, y nada más.
+
+Ahora un párrafo con imagen y sin texto se vuelve su bloque **Imagen**, con dos
+cosas resueltas:
+
+**El pie.** El encabezado *"Figura 1. …"* viene **antes** de la imagen en unos
+guiones y **después** en otros. El de después ya se reconocía; ahora también el
+de antes: si el último renglón que espera salir es un encabezado de figura, se lo
+queda la figura en vez de publicarse como un párrafo encima. El *"Nota.
+Elaboración propia (2026)."* de abajo sigue cayendo en `nota`. Un solo regex
+—`ENCABEZADO_DE_FIGURA`— para los dos casos.
+
+**El nombre.** Producción no escribe el nombre del archivo en el cuerpo del
+guion: lo deja en un **comentario de Word** sobre la imagen — *"Insertar ícono de
+interactividad. Con nomenclatura: 01S.04_ICONO_GENERAL_Interactividad_IMG1"*—. Ese
+es el nombre con el que la imagen se va a subir a Moodle, así que es el que queda
+escrito en el `@@PLUGINFILE@@`. Puesta así, la página ya sale buena: solo falta
+subir el archivo.
+
+La extensión **no se inventa**: la nomenclatura llega sin ella, y se toma la del
+archivo que viene dentro del `.docx`. Sin comentario, se usa el nombre del propio
+Word (`IMG003.png`), que al menos deja la previa completa y el `.zip` utilizable.
+
+#### El alias, que es lo que hace que todo cuadre
+
+`imagenesDocx` está indexado por el nombre que el archivo trae **dentro** del
+Word, y con esto la página pide otro. Cada entrada lleva ahora una lista `alias`
+con los nombres finales que se le dieron, y de ahí salen tres cosas:
+
+| Quién | Qué hace con el alias |
+|---|---|
+| La vista previa | Cambia `@@PLUGINFILE@@/<alias>` por el `blob:` del archivo, así que la previa se ve completa aunque el nombre todavía no exista en Moodle |
+| El `.zip` de *Antes de subir* | Empaqueta cada archivo **con el nombre que pide el HTML**, no con el del Word. Si trajera el del Word, el `@@PLUGINFILE@@` no lo encontraría al arrastrarlo al editor |
+| La galería y la lista de pendientes | Reconocen las dos formas del nombre |
+
+Es lista y no un campo suelto porque un mismo archivo del Word puede montarse con
+dos nomenclaturas distintas.
+
+### Los colores del guion son un código (y lo elige el usuario)
+
+Los guiones usan el color como código y **lo declaran ellos mismos**, en su
+ficha de control:
+
+> Las indicaciones para producción figuran como comentarios y/o resaltadas en turquesa.
+> Las indicaciones para montaje figuran como comentarios y/o resaltadas en amarillo.
+> El texto resaltado en verde deberá conservar el estilo.
+> Haz clic en las palabras de color púrpura para conocer más información.
+
+Ese código se repite en los cinco guiones cotejados… pero está escrito DENTRO
+del guion, así que otro módulo puede usar otro — y de hecho lo usa: en aa2 el
+magenta son **resaltados**, y en aa3 y aa5 el púrpura son **ventanas**. Por eso
+NO se cablea. El asistente muestra cada color con su muestra y su conteo, y se
+elige entre cuatro sentidos: **Tal cual · Ventana · Resaltado · No va**.
+
+La propuesta sale de la leyenda; el usuario manda. Igual que con las tablas.
+
+### La leyenda se lee frase por frase
+
+Las cuatro líneas viven en una misma celda, así que el bloque entero trae las
+cuatro reglas y los cuatro colores juntos. Leído de corrido, el verde heredaba
+la frase del turquesa y salía propuesto como "No va".
+
+### "Ventana" se propone por mayoría, no por una vez
+
+Los dos canales se solapan: las palabras púrpura vienen **además** resaltadas en
+verde. Contando "alguna", el verde entero se proponía como ventana por cuatro
+palabras de noventa y cuatro.
+
+### El texto tiene que salir IGUAL con colores o sin ellos
+
+Encender `colores` parte los tramos por color, y dos trozos en negritas seguidos
+daban `**a****b**` en vez de `**ab**`. O sea: encender la función habría cambiado
+en silencio lo que leen el Integrador HTML y Bibliografías. `textoDeParrafoConNegritas`
+vuelve a juntar los tramos por el único formato que sabe escribir —negritas y
+cursivas— antes de armar la cadena. Comprobado en los cinco guiones: `texto`
+idéntico con colores encendidos y apagados.
+
+### El comentario va con la PALABRA, no con el párrafo
+
+El texto de cada ventana es el comentario que producción ancló sobre esa palabra
+("Producción: Crear pop-up con el siguiente texto:TXT:…"). Cuando un párrafo
+tiene varias palabras señaladas, el comentario del párrafo no basta: los ids
+viajan por tramo (`unidadesDeParrafo` los rastrea igual que hacía para el LaTeX).
+
+El cuerpo se corta por la **última** marca `txt`, no la primera: hay recados con
+la forma "…con el siguiente TXT y código latex:Txt:…" y con la primera el cuerpo
+se quedaba con "y código latex:Txt:" pegado delante.
+
+**Una ventana sin comentario no es una ventana.** Pasa con la propia leyenda
+—"haz clic en las palabras de color púrpura"—, donde la palabra va del color que
+explica pero no abre nada. Sin esa salvedad salía un modal vacío.
+
+### Se aplica sobre los bloques crudos
+
+`aplicarColores` reescribe `texto` ANTES de armar nada, así que las listas, las
+celdas, las tablas y las cajas siguen leyendo `texto` como siempre: no hubo que
+tocar el camino ya probado. En una celda hay que rearmar además `lineas` y
+`texto`, que salen de otra lectura del Word y no se enteran de lo reescrito.
+
+### El resaltado usa el nivel de la página
+
+`==texto==` estaba fijo en `bg-resalte-20` mientras la palabra con ventana usaba
+el de la página (`bg-resalte-30`): la misma página salía con dos intensidades sin
+que nadie lo pidiera. Los montajes cotejados usan una sola.
+
+### Los títulos que no vienen en barra
+
+No todos los guiones traen la barra sombreada de la que salía el título. Los que
+no, lo marcan: un párrafo con `<h1>` y **el título en el párrafo siguiente**.
+
+    <h1>
+    ¿Cómo se construye el conocimiento?     ← el título
+    <h2>
+    Método científico                        ← subtítulo
+
+La marca se ignoraba ("ya es el título", decía el código) porque en los guiones
+con barra sobra. En los que no la traen, esto era lo ÚNICO que decía cuál de los
+párrafos es un título, y la página entera salía sin uno solo: aa2 y aa4 daban
+**cero**. Un `<h1>` posterior, cuando la barra ya dio el título de la página, baja
+a `h2`: es un título de sección, no un segundo título de la página.
+
+### El video
+
+Tres formas, todas del guion:
+
+| En el guion | Qué sale |
+|---|---|
+| La liga sola en su renglón | Bloque Video con esa liga |
+| `Producción: Embeber el siguiente video: <liga>` | Igual; el recado no se publica |
+| `Producción: Embeber video <SM2_S3_…_Video>` | Bloque Video **vacío** con la indicación |
+
+La tercera es un video que todavía no existe: solo hay nomenclatura. Sale el
+bloque vacío con su nota —como ya se hacía con `<Figura>`— para que en el montaje
+se pegue la liga. Un párrafo que menciona una liga de pasada no se convierte en
+video: sin recado, se exige que el renglón sea casi solo la liga.
+
+### La tabla que en realidad son palabras con ventana
+
+En el guion, los pasos del método científico vienen como tabla: en una columna la
+figura y en otra el paso con su ventana, como renglones de la MISMA celda:
+
+    1.
+    Observación
+    <Pop up> Identificar un fenómeno o problema que genera interés. <Termina pop up>
+
+En la página montada eso no es una tabla: es cada paso resaltado y, al hacer clic,
+su ventana. Leída como tabla, la explicación se publicaba como una columna más
+—con la marca `<Pop up>` impresa— y no salía una sola ventana. A veces la marca va
+sola y el cuerpo baja al renglón siguiente; las dos formas se atienden.
+
+Se exige que **todas** las filas tengan esa forma, para no confundirla con una
+tabla normal que casualmente traiga un pop-up.
+
+### Una MARCA nunca se descarta por color
+
+Este es el que costó encontrar. En aa2, la marca `<Pop up>` viene **resaltada en
+turquesa**, y turquesa está propuesto como "no va". Resultado: el color borraba la
+marca antes de que la gramática del guion pudiera leerla, y el texto de la ventana
+quedaba suelto, sin quién lo reconociera. Cero ventanas, y ningún error a la vista.
+
+Regla: cuando un tramo marcado como "no va" contiene `<…>`, se conserva. Las
+marcas son la gramática del guion —`<Pop up>`, `<Figura>`, `<h2>`— y el intérprete
+que las traduce viene después; ya se encarga de que no lleguen impresas a la
+página. El color decide sobre el TEXTO, no sobre la gramática.
+
+### El botón de ventana tiene color y tamaño
+
+Salían todos iguales —gris y chico—, pero en las páginas montadas hay tres
+combinaciones vivas:
+
+| Montaje | Clases |
+|---|---|
+| aa1 | `btn btn-secondary btn-sm … border-secondary-10` |
+| aa3 | `btn btn-primary btn-lg … border-primary-10` |
+| aa5 | `btn btn-primary … border-primary-10` (sin modificador de tamaño) |
+
+Son dos ejes: **color** (`CAMPO_COLOR_BOTON`, arriba) y **tamaño**
+(`CAMPO_TAMANO_BOTON`: `btn-sm`, nada, `btn-lg`). Los dos son campos y los
+comparten Tarjetas, Ventana emergente y Botón; el tamaño vive una sola vez.
+
+**El borde NO se aparea con el color: es `border-primary-10` siempre.** Hubo una
+versión que los emparejaba (`btn-secondary` con `border-secondary-10`) leyendo
+aa1, y se revirtió: el HTML de la página que se tomó como referencia para el
+grupo de botones lleva `border-primary-10` en los grises y en los del tema, y es
+la que se ve bien. Además `.border-primary-10` **no existe** en la hoja —hay
+`-20`, `-30`, `-40`, `-50`—, así que en la práctica deja el borde gris claro de
+Bootstrap en los dos casos: emparejarlo cambiaba el resultado sin arreglar nada.
+
+Sin elección explícita, cada forma conserva el tamaño de su montaje: el grupo de
+botones sale grande y el de dentro de una tarjeta con imagen, chico.
+
+### La imagen sola va centrada
+
+En el guion **todas** las figuras vienen centradas (`w:jc="center"`, sin una sola
+excepción en los cotejados), pero salían pegadas a la izquierda… solo algunas.
+
+La inconsistencia estaba dentro del bloque Imagen: el envoltorio
+(`.col-12.col-md-8.mx-auto`) centra la **columna**, no lo que va dentro. Con
+encabezado no se notaba —la `.card-deck` ocupa el ancho de la columna—, pero sin
+encabezado la imagen es un `<img>` suelto y, si es más angosta que la columna, se
+queda en su orilla izquierda. O sea: la misma figura salía centrada o no según si
+el guion le había puesto "Figura N." encima.
+
+Ahora la imagen sola y sin encabezado lleva `d-block mx-auto`. Medido en la
+previa: `izq === der` en las ocho figuras del guion de prueba.
+
+#### El SmartArt
+
+Word le pega al párrafo de la imagen el texto que hay **dentro** del diagrama
+(*"- Depende del tipo y cantidad de información.- Depende si usas…"*), así que
+esa figura llega con texto encima y no cumple la regla de "párrafo con imagen y
+ni una palabra". Lo que la delata es venir justo debajo de su encabezado *"Figura
+N."*. Ahí sale la figura **y el texto sigue su camino como párrafo**: borrar un
+párrafo de más en el editor es fácil, recuperar una imagen perdida no. Esa
+asimetría es la regla, no un descuido.
 
 ### La caja de pasos y la sangría de Word
 
@@ -1235,10 +1532,20 @@ Se nota justo en el recuadro de *Contenidos de aprendizaje* de la presentación,
 que va **entero** dentro de `<small>`: título y párrafos salían más chicos que en
 la página publicada. Medido después del arreglo: 14px en los dos.
 
+Volvió a pasar con **`.d-block`**, y ahí el sintoma fue mas engañoso: la imagen
+sola lleva `d-block mx-auto`, y `.mx-auto` **si** estaba en el subconjunto. Pero
+`margin: auto` no centra nada sobre un elemento `inline`, asi que sin `.d-block`
+las dos clases juntas no hacian nada y la figura salia pegada a la izquierda —en
+Moodle, con el Bootstrap de la plataforma, se veia bien—. La hoja del tema **no**
+sirve de red: solo retoca Bootstrap, no lo trae (su unico `.d-block` es un
+`ul.section.d-block` de Moodle, y su unico `.mx-auto` va dentro de
+`.mainPlantilla23`).
+
 Es la regla que ya estaba escrita arriba y que conviene releer: *este subconjunto
 cubre lo que genera `componentes.js`*. Y no solo las **clases** —también las
 **etiquetas** que Bootstrap reestilza (`small`, `mark`, `hr`…). Si un componente
-empieza a emitir una etiqueta nueva, va también aquí.
+empieza a emitir una etiqueta nueva, va también aquí. **Una clase a medias es
+peor que ninguna**: con `.mx-auto` sola la previa no fallaba, mentía.
 
 > ⚠️ **`vista-previa.js` es una plantilla de texto de JS.** Un acento grave
 > dentro de un comentario del CSS cierra la plantilla y deja
@@ -1353,6 +1660,33 @@ Y el **importador de HTML lo detecta**, mirando la primera celda de cada fila:
 todas del mismo tono y ese tono es `bg-secondary-10` → `plano`; si hay color pero
 no cuadra → `alternado`; sin color → `no`. Antes entraba siempre en "sin color",
 así que importar una tabla publicada y volver a generarla le borraba la columna.
+
+### El ancho de las columnas se elige
+
+`MW-auto` (abajo) deja encoger la tabla, pero también suelta el reparto: el
+navegador le da el ancho a la columna con más texto y deja la corta partiendo
+palabras a la mitad —"Media aritméti-ca"— aunque sobre espacio al lado. Eso se
+reportó desde Moodle, con la Tabla 2 de medidas de tendencia central.
+
+Por eso el bloque Tabla trae **Ancho de las columnas**:
+
+| Modo | Qué escribe |
+|---|---|
+| Automático | nada (lo de siempre) |
+| Parejas | `width` igual en cada `<th>`, recalculado si se agrega una columna |
+| A la medida | el % que se teclee en cada columna, en la rejilla del Contenido |
+
+**El ancho va en el `<th>` y en por ciento**, no en la `<table>` ni en un
+`<colgroup>`: es donde lo escribe el propio TinyMCE cuando alguien arrastra una
+columna a mano, así que es lo único que se sabe que sobrevive al editor de
+Moodle. En celular no estorba: `.tabla-responsive-cards thead { display: none }`
+y las celdas pasan a bloque al 100%.
+
+En «A la medida» la rejilla muestra la **suma en vivo** y la marca en rojo si
+pasa de 100. Sin eso, pasarse se descubría hasta ver la previa, y ahí el
+navegador reparte el sobrante a su manera —justo lo que se vino a evitar—.
+
+Medido en la previa con 25/75 y una tabla de 655px: 164px y 491px. Exacto.
 
 ### `MW-auto`: la clase que deja encoger la tabla
 
