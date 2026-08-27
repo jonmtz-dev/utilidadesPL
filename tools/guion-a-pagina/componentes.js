@@ -1003,9 +1003,15 @@ const COMPONENTES = {
                al editor de Moodle. En celular ni se nota —`.tabla-responsive-cards
                thead { display: none }` y las celdas pasan a bloque—. */
             const anchos = anchosDeTabla(b, enc.length);
-            enc.forEach((t, c) => partes.push(
-                `${ind(n + 6)}<th scope="col" class="${claseTh}"` +
-                `${anchos[c] ? ` style="width: ${anchos[c]}%;"` : ''}>${marcas(t)}</th>`));
+            /* Sin ancho elegido, el mínimo de la palabra más larga. Con ancho
+               elegido no se pone: el que decidió es quien manda. */
+            const minimos = minimosDeTabla(b, enc.length);
+            enc.forEach((t, c) => {
+                const estilo = anchos[c]
+                    ? `width: ${anchos[c]}%;`
+                    : `min-width: ${minimos[c]}ch;`;
+                partes.push(`${ind(n + 6)}<th scope="col" class="${claseTh}" style="${estilo}">${marcas(t)}</th>`);
+            });
             partes.push(`${ind(n + 5)}</tr>`, `${ind(n + 4)}</thead>`, `${ind(n + 4)}<tbody>`);
 
             const tono = tonoPrimeraColumna(b);
@@ -1650,6 +1656,41 @@ const COMPONENTES = {
         html: (b, n) => `${ind(n)}<hr class="espacio-fino">`
     }
 };
+
+/**
+ * El mínimo de cada columna: lo que mide su palabra más larga.
+ *
+ * Hace falta por una combinación de dos reglas de la hoja del aula:
+ *
+ *     .mainPlantilla23 table        { word-break: break-word !important }
+ *     .mainPlantilla23 .table.MW-auto td { min-width: auto }
+ *
+ * `MW-auto` va siempre —sin ella la tabla no puede encoger— pero quita el piso,
+ * y entonces `break-word` deja que una columna se angoste POR DEBAJO de su
+ * palabra más larga: "Media aritméti-ca" partida a la mitad con espacio de
+ * sobra al lado. Eso no es una decisión de nadie, es un accidente.
+ *
+ * El `word-break` no se puede desactivar desde aquí (es `!important` y le gana
+ * a cualquier `style=`), pero el `min-width` de `MW-auto` **no** lo es, así que
+ * un mínimo en línea sí manda.
+ *
+ * Va en `ch` —el ancho del "0" de la fuente— porque la medida que importa es
+ * cuántos caracteres caben, no cuántos píxeles. Y va topado: con una liga
+ * larguísima en una celda, un mínimo enorme traería de vuelta la barra de
+ * desplazamiento que `MW-auto` vino a quitar. Ahí sí que parta.
+ */
+function minimosDeTabla(b, cuantas) {
+    const TOPE = 16;
+    const palabraMasLarga = t => String(t || '')
+        .replace(/[*_{}|]/g, ' ')          // las marcas del guion no son texto
+        .split(/\s+/)
+        .reduce((m, p) => Math.max(m, p.length), 0);
+    return Array.from({ length: cuantas }, (_, c) => {
+        let n = palabraMasLarga((b.encabezados || [])[c]);
+        (b.filas || []).forEach(f => { n = Math.max(n, palabraMasLarga((f || [])[c])); });
+        return Math.min(n + 1, TOPE);
+    });
+}
 
 /**
  * El ancho de cada columna, en por ciento. `0` = sin escribir nada.

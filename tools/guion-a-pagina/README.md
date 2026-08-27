@@ -1672,9 +1672,21 @@ Por eso el bloque Tabla trae **Ancho de las columnas**:
 
 | Modo | Qué escribe |
 |---|---|
-| Automático | nada (lo de siempre) |
+| Automático | `min-width` en `ch`: lo que mide la palabra más larga de esa columna |
 | Parejas | `width` igual en cada `<th>`, recalculado si se agrega una columna |
 | A la medida | el % que se teclee en cada columna, en el panel |
+
+**Automático ya no escribe "nada".** Escribía nada, y era el modo de fábrica: la
+tabla salía con la columna corta partiendo palabras y había que ir a elegir un
+ancho para arreglarlo —o sea, el valor por omisión era el roto—. Ahora pone el
+piso de la palabra más larga y ya no hay cortes a media palabra sin que nadie
+haya decidido nada. `word-break` sigue vivo (es `!important`, no se puede
+apagar desde aquí), pero ya no tiene por dónde morder.
+
+El mínimo va **topado en 16ch**: con una liga larguísima en una celda, un mínimo
+enorme traería de vuelta la barra de desplazamiento que `MW-auto` vino a quitar.
+Ahí sí que parta. Y con un ancho elegido no se escribe mínimo: manda quien
+eligió.
 
 **El ancho va en el `<th>` y en por ciento**, no en la `<table>` ni en un
 `<colgroup>`: es donde lo escribe el propio TinyMCE cuando alguien arrastra una
@@ -1694,8 +1706,16 @@ columnas, la tercera con un párrafo largo), tabla de 655px:
 
 | Modo | Columna 1 | Columna 2 | Columna 3 |
 |---|---|---|---|
-| Automático | **60px (9%)** — parte «aritméti-ca» | 216px | 377px |
+| Automático, sin mínimo (como estaba) | **60px (9%)** — parte «aritméti-ca» | 216px | 377px |
+| Automático, con mínimo | 103px | 228px | 323px |
 | A la medida 20/35/45 | 131px (20%) | 229px (35%) | 294px (45%) |
+
+Con el mínimo, «aritmética» mide 69px y le quedan 79px de espacio útil: entra
+entera. El encabezado «Medida», 55px en 79px, también. Antes los dos partían.
+
+Los tres mínimos de esa tabla suman 38ch (~300px), así que no reviven la barra
+de desplazamiento: el problema que documenta `MW-auto` aquí abajo empezaba en
+1001px.
 
 O sea: el navegador respeta el ancho escrito aun con `word-break: break-word`
 y con una columna llena de texto al lado. No hizo falta `table-layout: fixed`.
