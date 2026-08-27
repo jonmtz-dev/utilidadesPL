@@ -1607,6 +1607,7 @@ document.addEventListener('click', function (e) {
             return caja;
         }
 
+        if (campo.tipo === 'anchos') return anchosDeColumnas(campo, bloque);
         if (campo.tipo === 'rejilla') return rejillaDeTabla(bloque, card);
         if (campo.tipo === 'repetible') return repetible(campo, bloque);
         if (campo.tipo === 'hijos') return lienzoHijo(bloque, campo.etiqueta);
@@ -1854,28 +1855,6 @@ document.addEventListener('click', function (e) {
                 dibujarTodo();
             });
             th.append(inp, quitar);
-
-            /* La casilla del % solo aparece con «A la medida». Puesta siempre,
-               la rejilla se llenaría de campos que no hacen nada en los otros
-               dos modos. */
-            if (bloque.anchos === 'medida') {
-                const ancho = document.createElement('input');
-                ancho.type = 'number';
-                ancho.min = '0';
-                ancho.max = '100';
-                ancho.className = 'rejilla-ancho';
-                ancho.placeholder = 'auto';
-                ancho.title = 'Ancho de esta columna, en %';
-                ancho.value = (bloque.anchoCols || [])[c] || '';
-                ancho.addEventListener('input', () => {
-                    bloque.anchoCols = bloque.anchoCols || [];
-                    bloque.anchoCols[c] = ancho.value;
-                    programarRefresco();
-                    dibujarSuma();
-                });
-                ancho.addEventListener('focus', guardarUnaVez);
-                th.appendChild(ancho);
-            }
             trh.appendChild(th);
         });
         thead.appendChild(trh);
@@ -1934,28 +1913,106 @@ document.addEventListener('click', function (e) {
         });
         acciones.append(bFila, bCol);
 
-        /* La suma en vivo. Sin ella, pasarse de 100 se descubre hasta ver la
-           previa —y ahí el navegador reparte el sobrante a su manera, que es
-           justo lo que se vino a evitar—. */
-        const suma = document.createElement('span');
-        suma.className = 'rejilla-suma';
-        function dibujarSuma() {
-            if (bloque.anchos !== 'medida') { suma.textContent = ''; return; }
-            const total = (bloque.encabezados || []).reduce(
-                (t, _, c) => t + (Number((bloque.anchoCols || [])[c]) || 0), 0);
-            const redondo = Math.round(total * 100) / 100;
-            suma.textContent = total ? `Suma: ${redondo}%` : '';
-            suma.classList.toggle('rejilla-suma--pasada', redondo > 100);
-        }
-        if (bloque.anchos === 'medida') {
-            acciones.appendChild(suma);
-            dibujarSuma();
-        }
-
         const envoltura = document.createElement('div');
         envoltura.className = 'rejilla-scroll';
         envoltura.appendChild(tabla);
         caja.append(envoltura, acciones);
+        return caja;
+    }
+
+    /**
+     * El ancho de cada columna, en el panel y no dentro de la rejilla.
+     *
+     * Estuvo un rato como una casillita bajo el título de cada columna en la
+     * rejilla, alineada con ella, que sonaba mejor: se perdía. La rejilla es
+     * angosta y con scroll horizontal, así que la casilla de la tercera columna
+     * ni se veía. Aquí cada renglón dice de qué columna habla.
+     *
+     * Solo se dibuja con «A la medida»: en Automático y Parejas no hay nada que
+     * teclear.
+     */
+    function anchosDeColumnas(campo, bloque) {
+        const caja = document.createElement('div');
+        caja.className = 'campo';
+        if (bloque.anchos !== 'medida') return caja;
+
+        caja.appendChild(etiquetaDe(campo));
+        const lista = document.createElement('div');
+        lista.className = 'anchos-lista';
+
+        const suma = document.createElement('p');
+        suma.className = 'anchos-suma';
+        function dibujarSuma() {
+            const total = (bloque.encabezados || []).reduce(
+                (t, _, c) => t + (Number((bloque.anchoCols || [])[c]) || 0), 0);
+            const redondo = Math.round(total * 100) / 100;
+            suma.textContent = redondo ? `Suma: ${redondo}%` : 'Sin porcentajes, la columna se reparte sola.';
+            suma.classList.toggle('anchos-suma--pasada', redondo > 100);
+        }
+
+        (bloque.encabezados || []).forEach((titulo, c) => {
+            const fila = document.createElement('div');
+            fila.className = 'anchos-fila';
+
+            const nombre = document.createElement('span');
+            nombre.className = 'anchos-nombre';
+            nombre.textContent = titulo || `Columna ${c + 1}`;
+            nombre.title = nombre.textContent;
+
+            const inp = document.createElement('input');
+            inp.type = 'number';
+            inp.min = '0';
+            inp.max = '100';
+            inp.className = 'plain-input anchos-campo';
+            inp.placeholder = 'auto';
+            inp.value = (bloque.anchoCols || [])[c] || '';
+            inp.addEventListener('input', () => {
+                bloque.anchoCols = bloque.anchoCols || [];
+                bloque.anchoCols[c] = inp.value;
+                dibujarSuma();
+                programarRefresco();
+            });
+            inp.addEventListener('focus', guardarUnaVez);
+
+            const pct = document.createElement('span');
+            pct.className = 'anchos-pct';
+            pct.textContent = '%';
+
+            fila.append(nombre, inp, pct);
+            lista.appendChild(fila);
+        });
+
+        /* El botón que reparte lo que falta. Es lo que uno hace a mano —dar el
+           ancho a la columna que importa y dejar que el resto se acomode— y a
+           mano se pasa de 100 en el primer intento. */
+        const repartir = document.createElement('button');
+        repartir.type = 'button';
+        repartir.className = 'btn-secondary btn-chico';
+        repartir.innerHTML = '<i class="ph ph-equals"></i> Repartir lo que falta';
+        repartir.addEventListener('click', () => {
+            guardarHistorial();
+            const cols = (bloque.encabezados || []).length;
+            bloque.anchoCols = bloque.anchoCols || [];
+            const puestos = [];
+            let usado = 0;
+            for (let c = 0; c < cols; c++) {
+                const v = Number(bloque.anchoCols[c]) || 0;
+                if (v > 0) { puestos.push(c); usado += v; }
+            }
+            const libres = cols - puestos.length;
+            if (!libres) return;
+            const resto = Math.max(0, 100 - usado);
+            const cada = Math.round((resto / libres) * 100) / 100;
+            for (let c = 0; c < cols; c++) {
+                if (!(Number(bloque.anchoCols[c]) > 0)) bloque.anchoCols[c] = String(cada);
+            }
+            dibujarTodo();
+        });
+
+        dibujarSuma();
+        caja.append(lista, suma, repartir);
+        const ay = ayudaDe(campo);
+        if (ay) caja.appendChild(ay);
         return caja;
     }
 

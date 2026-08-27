@@ -915,6 +915,10 @@ const COMPONENTES = {
                 ]
             },
             {
+                k: 'anchoCols', tipo: 'anchos', etiqueta: 'El % de cada columna',
+                ayuda: 'Lo que dejes vacío se reparte solo. Si la suma pasa de 100, el navegador vuelve a repartir a su manera y se pierde lo elegido.'
+            },
+            {
                 k: 'tarjetas', tipo: 'check',
                 etiqueta: 'En celular, cada fila como tarjeta (recomendado)'
             },

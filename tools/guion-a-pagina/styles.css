@@ -319,20 +319,23 @@
 .rejilla-quitar { width: 30px; }
 .rejilla-acciones { display: flex; gap: 6px; margin-top: 7px; align-items: center; }
 
-/* La casilla del % de cada columna. Va DEBAJO del título y no a un lado: al
-   lado le comía el ancho al nombre de la columna, que es lo que más se lee. */
-.rejilla th .rejilla-ancho {
-    display: block;
-    width: 100%;
-    margin-top: 3px;
-    padding-right: 6px;
-    font-weight: 400;
-    font-size: 12px;
-    text-align: center;
-    opacity: .85;
+/* El % de cada columna, en el panel. Una fila por columna: el nombre encoge
+   con puntos suspensivos y la casilla NUNCA, que es la que se usa. */
+.anchos-lista { display: flex; flex-direction: column; gap: 5px; }
+.anchos-fila { display: flex; align-items: center; gap: 8px; }
+.anchos-nombre {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    color: var(--text-muted);
 }
-.rejilla-suma { font-size: 12px; color: var(--text-muted); }
-.rejilla-suma--pasada { color: var(--danger); font-weight: 700; }
+.anchos-campo { flex: 0 0 72px; width: 72px; text-align: right; }
+.anchos-pct { flex: none; font-size: 13px; color: var(--text-muted); }
+.anchos-suma { margin: 7px 0 6px; font-size: 12px; color: var(--text-muted); }
+.anchos-suma--pasada { color: var(--danger); font-weight: 700; }
 
 /* Fichas repetibles (apartados, tarjetas, pestañas) */
 .ficha {

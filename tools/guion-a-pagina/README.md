@@ -1674,7 +1674,7 @@ Por eso el bloque Tabla trae **Ancho de las columnas**:
 |---|---|
 | Automático | nada (lo de siempre) |
 | Parejas | `width` igual en cada `<th>`, recalculado si se agrega una columna |
-| A la medida | el % que se teclee en cada columna, en la rejilla del Contenido |
+| A la medida | el % que se teclee en cada columna, en el panel |
 
 **El ancho va en el `<th>` y en por ciento**, no en la `<table>` ni en un
 `<colgroup>`: es donde lo escribe el propio TinyMCE cuando alguien arrastra una
@@ -1682,11 +1682,23 @@ columna a mano, así que es lo único que se sabe que sobrevive al editor de
 Moodle. En celular no estorba: `.tabla-responsive-cards thead { display: none }`
 y las celdas pasan a bloque al 100%.
 
-En «A la medida» la rejilla muestra la **suma en vivo** y la marca en rojo si
-pasa de 100. Sin eso, pasarse se descubría hasta ver la previa, y ahí el
-navegador reparte el sobrante a su manera —justo lo que se vino a evitar—.
+**Las casillas del % van en el panel, no dentro de la rejilla.** Estuvieron un
+rato bajo el título de cada columna, alineadas con ella, que sonaba mejor: se
+perdían. La rejilla es angosta y con scroll horizontal, así que la casilla de la
+tercera columna ni se veía. En el panel cada renglón dice de qué columna habla,
+y ahí mismo va la **suma en vivo** —en rojo si pasa de 100— y el botón
+**Repartir lo que falta**, que llena las columnas vacías con lo que sobra.
 
-Medido en la previa con 25/75 y una tabla de 655px: 164px y 491px. Exacto.
+Medido en la previa con la Tabla 2 de medidas de tendencia central (tres
+columnas, la tercera con un párrafo largo), tabla de 655px:
+
+| Modo | Columna 1 | Columna 2 | Columna 3 |
+|---|---|---|---|
+| Automático | **60px (9%)** — parte «aritméti-ca» | 216px | 377px |
+| A la medida 20/35/45 | 131px (20%) | 229px (35%) | 294px (45%) |
+
+O sea: el navegador respeta el ancho escrito aun con `word-break: break-word`
+y con una columna llena de texto al lado. No hizo falta `table-layout: fixed`.
 
 ### `MW-auto`: la clase que deja encoger la tabla
 
