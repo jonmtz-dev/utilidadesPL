@@ -475,6 +475,52 @@ De paso se va la **banda gris** que salía alrededor de esos botones en Moodle y
 que en la herramienta no se veía: eran las `.card` vacías, que aquí la previa
 dibuja blancas y allá Moodle sombrea. Sin tarjetas no hay banda.
 
+### Y la tercera forma: «Con texto»
+
+La fila de tarjetas **sin ventana**: imagen arriba, título y contenido a la
+vista. Es la de los cuatro canales de comunicación (Estudiantado, Asesoría
+virtual, Tutoría, Asesoría tecnológica), que llegó preguntando "¿con qué botón
+hago esa tabla?" — y no es una tabla, es un `.card-group`:
+
+```html
+<div class="card-group">
+  <div class="card col-12 col-md-6 col-lg-3">
+    <img class="card-img-top img-fluid" src="@@PLUGINFILE@@/IMG001.png" alt="…">
+    <div class="card-body">
+      <h5 class="card-title text-center text-primary"><strong>Estudiantado</strong></h5>
+      …
+    </div>
+  </div>
+  …
+</div>
+```
+
+Se reusa el mismo bloque Tarjetas y el mismo dato: lo que en las otras formas es
+el contenido de la ventana, aquí es el cuerpo de la tarjeta. **No se genera
+ningún modal.** Las columnas salen del número de tarjetas (`COLUMNAS_FICHA`):
+cuatro dan `col-lg-3`, tres `col-lg-4`, dos `col-md-6`.
+
+Los hijos van en modo **desnudo**, como dentro de un `<li>`: en un `.card-body`,
+un `.row.bloque > .col-12` mete su propio gutter y despega el texto del borde.
+
+**El montaje de referencia venía con `style=` en cada tarjeta** —fondo blanco,
+borde, y el color del título— y nada de eso se copia, porque **es redundante**.
+Medido en la previa con la hoja del aula: la `.card` ya sale
+`rgb(255,255,255)` con borde `rgba(0,0,0,.176)`, y el `h5` ya sale
+`rgb(51,51,64)`, que son exactamente los tres valores que el montaje escribía a
+mano. Ese `style` es blindaje de una conversión de micrositio, no una decisión.
+
+Dato de paso: en ese `h5`, `text-primary` **no pinta nada**. La hoja trae
+`.mainPlantilla23 h1…h5 { color: var(--prepa-neutral-oscuro) !important }`, que
+le gana por especificidad a `.text-primary`. Se conserva la clase porque está en
+el montaje, pero es decorativa —el mismo caso que `flecha_btn`—.
+
+En esta forma el panel **esconde** el color, el tamaño y la alineación del
+botón, y el "Texto del botón": no hay botón. Y "Título de la ventana" se llama
+"Título de la tarjeta", que es lo que es. Todo con el `siOculta` que ya existía
+para los campos sueltos, extendido a los de una lista repetible —ahí recibe
+`(item, bloque)`, porque la decisión depende del bloque y no del renglón—.
+
 ## El contenedor lleva `ms-convertido` (y no es un adorno)
 
 La salida es

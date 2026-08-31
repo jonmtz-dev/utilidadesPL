@@ -1137,24 +1137,37 @@ const COMPONENTES = {
         campos: [
             {
                 k: 'formato', tipo: 'opciones', etiqueta: 'Se ve como',
-                ayuda: 'Automático: con imagen salen tarjetas; sin ninguna imagen sale solo la fila de botones, que es el "grupo de N botones" del guion.',
+                ayuda: 'Automático: con imagen salen tarjetas; sin ninguna imagen sale solo la fila de botones, que es el "grupo de N botones" del guion. «Con texto» no usa ventanas: el contenido de cada tarjeta se ve desde el principio, debajo de su imagen.',
                 ops: [
                     { v: 'auto', etiqueta: 'Automático', icono: 'magic-wand' },
                     { v: 'tarjetas', etiqueta: 'Tarjetas', icono: 'cards-three' },
+                    { v: 'fichas', etiqueta: 'Con texto', icono: 'article' },
                     { v: 'botones', etiqueta: 'Solo botones', icono: 'rectangle' }
                 ]
             },
-            CAMPO_TAMANO_BOTON,
-            Object.assign({}, CAMPO_ALINEACION, { etiqueta: 'Alineación de los botones' }),
+            /* En «Con texto» no hay botones: ni color, ni tamaño, ni
+               alineación. Dejarlos a la vista es dejar tres perillas muertas. */
+            Object.assign({}, CAMPO_TAMANO_BOTON, { siOculta: b => b.formato === 'fichas' }),
+            Object.assign({}, CAMPO_ALINEACION, {
+                etiqueta: 'Alineación de los botones',
+                siOculta: b => b.formato === 'fichas'
+            }),
             {
                 k: 'items', tipo: 'repetible', etiqueta: 'Tarjetas', nombreItem: 'Tarjeta',
                 nuevo: () => ({ img: '', alt: '', etiqueta: 'Nueva tarjeta', titulo: 'Nueva tarjeta', color: 'secondary', hijos: [] }),
                 campos: [
                     { k: 'img', tipo: 'url', imagen: true, etiqueta: 'Imagen', marcador: '@@PLUGINFILE@@/imagen.png' },
                     { k: 'alt', tipo: 'texto', etiqueta: 'Texto alternativo' },
-                    { k: 'etiqueta', tipo: 'texto', etiqueta: 'Texto del botón' },
-                    CAMPO_COLOR_BOTON,
-                    { k: 'titulo', tipo: 'texto', etiqueta: 'Título de la ventana' }
+                    Object.assign({}, { k: 'etiqueta', tipo: 'texto', etiqueta: 'Texto del botón' },
+                        { siOculta: (item, b) => b.formato === 'fichas' }),
+                    Object.assign({}, CAMPO_COLOR_BOTON, { siOculta: (item, b) => b.formato === 'fichas' }),
+                    /* El mismo campo con dos nombres: en «Con texto» no hay
+                       ventana que titular, es el título de la tarjeta. Dos
+                       fichas de campo y un solo dato (`titulo`). */
+                    { k: 'titulo', tipo: 'texto', etiqueta: 'Título de la ventana',
+                        siOculta: (item, b) => b.formato === 'fichas' },
+                    { k: 'titulo', tipo: 'texto', etiqueta: 'Título de la tarjeta',
+                        siOculta: (item, b) => b.formato !== 'fichas' }
                 ],
                 hijos: true
             }
@@ -1177,6 +1190,37 @@ const COMPONENTES = {
                montaje: el grupo de botones el grande, y el de dentro de una
                tarjeta el chico —ahí un `btn-lg` no cabe—. */
             const tamano = b.tamano || (formato === 'botones' ? 'grande' : 'chico');
+
+            /* "Con texto": el contenido va DENTRO de la tarjeta y no en una
+               ventana, así que no se genera ningún modal. Copiado de la página
+               del aula (los cuatro canales de comunicación): `.card-group` con
+               una `.card` por columna, la imagen arriba y un `.card-body` con
+               el título en `h5.card-title text-center text-primary` y debajo lo
+               que traiga la tarjeta.
+
+               Los hijos van en modo DESNUDO —igual que dentro de un `<li>`—:
+               dentro de un `.card-body`, un `.row.bloque > .col-12` mete su
+               propio gutter y despega el texto del borde de la tarjeta. */
+            if (formato === 'fichas') {
+                const cols = columnasDeFicha(items.length);
+                partes.push(`${ind(n)}<div class="card-group">`);
+                items.forEach(item => {
+                    partes.push(`${ind(n + 1)}<div class="card ${cols}">`);
+                    if ((item.img || '').trim()) {
+                        partes.push(`${ind(n + 2)}<img class="card-img-top img-fluid" src="${ligaSegura(item.img.trim())}" alt="${escapar(item.alt || '')}">`);
+                    }
+                    partes.push(`${ind(n + 2)}<div class="card-body">`);
+                    const titulo = (item.titulo || item.etiqueta || '').trim();
+                    if (titulo) {
+                        partes.push(`${ind(n + 3)}<h5 class="card-title text-center text-primary"><strong>${marcas(titulo)}</strong></h5>`);
+                    }
+                    const dentro = htmlDeBloques(item.hijos, n + 3, true);
+                    if (dentro) partes.push(dentro);
+                    partes.push(`${ind(n + 2)}</div>`, `${ind(n + 1)}</div>`);
+                });
+                partes.push(`${ind(n)}</div>`);
+                return partes.join('\n');
+            }
 
             if (formato === 'botones') {
                 partes.push(`${ind(n)}<div class="col-12 col-lg-12 mx-auto ${alineacionDe(b.alineacion).texto}">`);
@@ -1656,6 +1700,21 @@ const COMPONENTES = {
         html: (b, n) => `${ind(n)}<hr class="espacio-fino">`
     }
 };
+
+/* Cuántas columnas ocupa cada tarjeta en una fila "con texto", copiado del
+   montaje: `col-12 col-md-6 col-lg-3` para cuatro. En celular siempre una
+   debajo de otra, y a partir de tableta dos, que es donde la imagen todavía se
+   ve. Con más de cuatro se usa el reparto de cuatro: la fila se envuelve sola,
+   que es mejor que dejarlas de 200px. */
+const COLUMNAS_FICHA = {
+    1: 'col-12',
+    2: 'col-12 col-md-6',
+    3: 'col-12 col-md-6 col-lg-4',
+    4: 'col-12 col-md-6 col-lg-3'
+};
+function columnasDeFicha(cuantas) {
+    return COLUMNAS_FICHA[cuantas] || COLUMNAS_FICHA[4];
+}
 
 /**
  * El mínimo de cada columna: lo que mide su palabra más larga.

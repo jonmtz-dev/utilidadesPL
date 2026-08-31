@@ -2053,6 +2053,11 @@ document.addEventListener('click', function (e) {
             ficha.appendChild(cabeza);
 
             campo.campos.forEach(sub => {
+                /* El mismo `siOculta` de los campos sueltos, pero aquí la
+                   decisión suele depender del BLOQUE y no del renglón: el color
+                   del botón de una tarjeta sobra cuando el bloque entero salió
+                   con texto en vez de botón. Por eso van los dos. */
+                if (sub.siOculta && sub.siOculta(item, bloque)) return;
                 const c = dibujarCampo(sub, item, null);
                 c.querySelectorAll('input, textarea').forEach(inp => {
                     inp.addEventListener('input', () => {
