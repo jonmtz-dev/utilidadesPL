@@ -763,13 +763,19 @@
    Los chips saltan a ese bloque; la franja "+" agrega uno más ahí mismo. */
 .hijos-resumen { display: flex; flex-direction: column; gap: 6px; }
 .hijos-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+/* Ojo con el paréntesis: estas dos líneas tenían uno de más
+   —`var(--control-bg))`— y el navegador tiraba LAS DOS declaraciones por
+   inválidas. El chip es un <button>, así que sin fondo ni borde propios se caía
+   al del navegador: un óvalo blanco (el `border-radius` sí era válido) con la
+   letra clara encima, ilegible. Se veía como un bug de la herramienta y era una
+   tecla. */
 .hijo-chip {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 4px 9px; border-radius: 999px; cursor: pointer;
     font-size: 12.5px; font-family: inherit;
     color: inherit;
-    background: var(--control-bg));
-    border: 1px solid var(--control-border));
+    background: var(--control-bg);
+    border: 1px solid var(--control-border);
 }
 .hijo-chip:hover { border-color: var(--accent); }
 

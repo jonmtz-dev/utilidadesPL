@@ -1210,7 +1210,11 @@ const COMPONENTES = {
                         partes.push(`${ind(n + 2)}<img class="card-img-top img-fluid" src="${ligaSegura(item.img.trim())}" alt="${escapar(item.alt || '')}">`);
                     }
                     partes.push(`${ind(n + 2)}<div class="card-body">`);
-                    const titulo = (item.titulo || item.etiqueta || '').trim();
+                    /* Aquí NO se cae a `etiqueta` como en las otras formas: esa
+                       es el texto del botón, y en esta forma no hay botón ni se
+                       muestra su campo. Con la caída, borrar el título dejaba el
+                       nombre igual de vivo y sin ningún campo donde quitarlo. */
+                    const titulo = (item.titulo || '').trim();
                     if (titulo) {
                         partes.push(`${ind(n + 3)}<h5 class="card-title text-center text-primary"><strong>${marcas(titulo)}</strong></h5>`);
                     }
