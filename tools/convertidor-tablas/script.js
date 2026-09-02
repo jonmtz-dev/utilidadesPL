@@ -21,8 +21,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const previewMedida = document.getElementById('preview-medida');
     const paletaPrevia = document.getElementById('paleta-previa');
 
+    // Índice ficticio para "esta tabla no tiene fila de títulos": no hay nada
+    // que promover a <thead> ni que copiar a los data-label. El -1 sale gratis
+    // en el slice del cuerpo (-1 + 1 = 0).
+    const SIN_TITULOS = -1;
+
     let globalTempDiv = null;
     let globalOriginalTable = null;
+    // Con qué fila se generó la última vez, para poder rehacerlo cuando alguien
+    // mueve un toggle. Null = todavía no se ha elegido nada.
+    let ultimaFilaTitulos = null;
     // El HTML de la última tabla generada, para repintar la previa al cambiar
     // de aula sin obligar a rehacer los dos pasos.
     let ultimaSalida = '';
@@ -456,6 +464,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tabs[0].click();
         previewEmpty.classList.add('hidden');
+        // Tabla nueva: la fila de títulos de la anterior ya no significa nada,
+        // así que los toggles no deben repintar hasta que se elija otra vez.
+        ultimaFilaTitulos = null;
         // Paso 1: manda la tabla clicable, que es interfaz de la herramienta y
         // no una página de Moodle. La previa de verdad y su barra se guardan
         // hasta que haya una fila de títulos elegida.
@@ -467,11 +478,26 @@ document.addEventListener('DOMContentLoaded', () => {
         // que es una isla clara en ambos temas. Con var(--accent) el texto blanco
         // perdería contraste en modo oscuro.
         previewContainer.innerHTML = `
-            <div style="background-color: #0066cc; color: white; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-weight: 600; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; animation: pulse 2s infinite;">
+            <div style="background-color: #0066cc; color: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; font-weight: 600; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; animation: pulse 2s infinite;">
                 <i class="ph ph-cursor-click"></i> PASO 2: Haz clic sobre la fila de la tabla que contiene los TÍTULOS (data-labels)
             </div>
+            <button type="button" id="btn-sin-titulos" class="btn-sin-titulos">
+                <i class="ph ph-rows"></i> Esta tabla no tiene fila de títulos — déjala tal cual
+            </button>
         `;
-        
+
+        // No todas las tablas tienen fila de títulos: la de tipos de evaluación,
+        // por ejemplo, es nombre y explicación, y ahí no hay nada que copiar al
+        // data-label. Sin esta salida el paso 2 OBLIGABA a señalar como títulos
+        // una fila que es contenido, y esa fila se perdía del cuerpo.
+        previewContainer.querySelector('#btn-sin-titulos').addEventListener('click', () => {
+            try { generateFinalTable(globalOriginalTable, SIN_TITULOS); }
+            catch (e) {
+                console.error('[tablas] Paso 2 (sin fila de titulos):', e);
+                mostrarError('No se pudo generar el código.', escaparTexto(e.message));
+            }
+        });
+
         const selectionTable = document.createElement('table');
         selectionTable.className = "selection-table table";
         selectionTable.innerHTML = globalOriginalTable.innerHTML;
@@ -507,14 +533,18 @@ document.addEventListener('DOMContentLoaded', () => {
      * (data-label + tabla-responsive-cards); el diseño ya vive en la hoja de
      * Moodle y hay que respetarlo tal cual llega.
      */
-    function generateFinalTable(sourceTable, headerIndex) {
+    function generateFinalTable(sourceTable, headerIndex, opciones) {
         const outputDiv = globalTempDiv.cloneNode(true);
         const tabla = outputDiv.querySelector('table');
         if (!tabla) return;
 
         const filas = Array.from(tabla.querySelectorAll('tr'));
-        const headerRow = filas[headerIndex];
-        if (!headerRow) return;
+        // Con SIN_TITULOS (-1) todo es cuerpo: no se promueve nada a <thead> y
+        // no hay data-label que poner. Es el caso de una tabla de dos columnas
+        // tipo "nombre / explicación", donde señalar una fila como títulos le
+        // quitaba una fila al contenido.
+        const headerRow = headerIndex >= 0 ? filas[headerIndex] : null;
+        if (headerIndex >= 0 && !headerRow) return;
 
         const mapa = mapaDeColumnas(filas);
         const conEstilo = traeEstiloPropio(sourceTable);
@@ -522,10 +552,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // llega maquetada, pintarle encima le cambiaría el color que eligió su autor.
         const pintar = !conEstilo;
 
-        const titulos = titulosPorColumna(headerRow, mapa);
+        const titulos = headerRow ? titulosPorColumna(headerRow, mapa) : [];
 
         // Cuerpo: lo que va DESPUÉS de la fila de títulos. Las filas anteriores
         // (p. ej. un título con colspan) se quedan intactas y sin data-label.
+        // Con -1 el slice(0) devuelve la tabla entera, que es justo lo que toca.
         const filasCuerpo = filas.slice(headerIndex + 1);
 
         // Celdas combinadas (rowspan) que hay que repetir en las tarjetas. Se
@@ -594,7 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // La promovemos a <thead> con <th scope="col">, que es lo semántico y
             // lo que hace que los lectores de pantalla anuncien la columna. En una
             // tabla que ya llega maquetada NO se toca: su autor ya decidió.
-            if (!tabla.querySelector('thead')) {
+            if (headerRow && !tabla.querySelector('thead')) {
                 Array.from(headerRow.children).forEach(celda => {
                     if (celda.tagName === 'TH') return;
                     const th = document.createElement('th');
@@ -628,7 +659,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (optBordered.checked) tabla.classList.add('table-bordered', 'border-neutral');
-            if (optHeaderColor && optHeaderColor.checked) {
+            if (headerRow && optHeaderColor && optHeaderColor.checked) {
                 // Solo la CLASE, nunca un hex: el color lo resuelve el módulo de la
                 // página en Moodle (MM, M01, M02…). Aquí había un
                 // background-color:#d8a7b6 !important inline —el rosa de MM— que
@@ -682,11 +713,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
         outputCode.value = formatHTML(finalOutputHTML);
 
+        ultimaFilaTitulos = headerIndex;
+
         // Se queda en la Vista Previa a propósito: es donde están los anchos de
         // escritorio, tableta y celular, y revisar las tarjetas es justo lo que
         // no se podía hacer antes. El código está a un clic.
-        tabs[0].click();
+        //
+        // Salvo cuando la vuelta es por haber movido un toggle: ahí saltar de
+        // pestaña le quitaría al usuario el código que estaba leyendo.
+        if (!opciones || opciones.cambiarPestana !== false) tabs[0].click();
     }
+
+    /* Los toggles no repintaban nada: había que rehacer los dos pasos para ver
+       el efecto, y como la previa ahora sí se parece a Moodle, eso era justo lo
+       que había que poder comparar de un vistazo. Se rehace la salida con la
+       misma fila de títulos que se eligió. */
+    [optBordered, optAltColors, optHeaderColor, optRepetirCombinadas, optMoodleWrap]
+        .forEach(toggle => {
+            if (!toggle) return;
+            toggle.addEventListener('change', () => {
+                if (ultimaFilaTitulos === null || !globalOriginalTable) return;
+                try {
+                    generateFinalTable(globalOriginalTable, ultimaFilaTitulos, { cambiarPestana: false });
+                } catch (e) {
+                    console.error('[tablas] Repintado tras cambiar una opción:', e);
+                }
+            });
+        });
 
     function formatHTML(html) {
         let formatted = '';

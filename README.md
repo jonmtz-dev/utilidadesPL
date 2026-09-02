@@ -189,6 +189,26 @@ clic en la fila que contiene los títulos**. Esa fila se vuelve el `<thead>`
 (salvo el caso 1 de abajo) y sus textos se copian al `data-label` de cada celda
 de las filas siguientes.
 
+**O ninguna, si la tabla no tiene fila de títulos.** El paso 2 lleva un botón
+—"Esta tabla no tiene fila de títulos"— que genera la salida sin `<thead>`, sin
+`<th>` y sin `data-label`: solo las clases de las tarjetas y los toggles de
+color. Es el caso de las tablas de dos columnas tipo *nombre / explicación* (los
+tipos de evaluación, las categorías de una rúbrica), donde **antes había que
+señalar como títulos una fila que era contenido, y esa fila se perdía del
+cuerpo**. En celular cada `<tr>` sigue siendo una tarjeta y se lee solo: nombre
+arriba —con el color de la 1ª columna— y explicación debajo. Por dentro es
+`headerIndex = -1` (`SIN_TITULOS`), que además sale gratis en el corte del
+cuerpo: `slice(-1 + 1)` es la tabla entera.
+
+**Los toggles repintan la salida y la previa al vuelo.** No lo hacían: había que
+rehacer los dos pasos para ver el efecto de un interruptor, y desde que la
+previa se parece de verdad a Moodle eso era justo lo que había que poder
+comparar de un vistazo. Se recuerda con qué fila se generó (`ultimaFilaTitulos`)
+y se rehace con ella. Dos detalles que no son adorno: cargar otra tabla borra
+ese recuerdo (la fila de la anterior ya no significa nada), y el repintado **no
+cambia de pestaña** —saltar a la previa le quitaría de enfrente el código a
+quien lo estaba leyendo—.
+
 Salida típica (el contenedor Moodle solo si se enciende su toggle):
 
 ```html

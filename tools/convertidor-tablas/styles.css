@@ -150,6 +150,33 @@
 .preview-container td.bg-primary-10 { background-color: var(--prepa-primary-10); }
 .preview-container td.bg-secondary-10 { background-color: var(--prepa-secondary-10); }
 
+/* La salida del paso 2 para las tablas que no tienen fila de títulos.
+   Colores fijos y no tokens: vive dentro de .preview-container, que es una isla
+   clara en los dos temas. */
+.btn-sin-titulos {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-bottom: 15px;
+    padding: 9px 12px;
+    border: 1px dashed #9aa3b0;
+    border-radius: 8px;
+    background: transparent;
+    color: #4a5260;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .18s ease;
+}
+.btn-sin-titulos:hover {
+    border-color: #0066cc;
+    color: #0066cc;
+    background: rgba(0, 102, 204, .06);
+}
+
 /* Interactive Selection Table */
 .selection-table tr {
     cursor: pointer;
