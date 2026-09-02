@@ -185,28 +185,149 @@ escrito en el HTML de una herramienta.
 ### Convertidor de Tablas (`tools/convertidor-tablas/`)
 
 Flujo de dos pasos: pegas la tabla (desde Word o HTML crudo) y luego **haces
-clic en la fila que contiene los títulos**. Esa fila se vuelve el `<thead>` y
-sus textos se copian al `data-label` de cada celda de las filas siguientes.
+clic en la fila que contiene los títulos**. Esa fila se vuelve el `<thead>`
+(salvo el caso 1 de abajo) y sus textos se copian al `data-label` de cada celda
+de las filas siguientes.
 
-Salida típica:
+Salida típica (el contenedor Moodle solo si se enciende su toggle):
 
 ```html
-<div class="row bloque mt-3"><div class="col-12"><div class="table-responsive">
-  <table class="table tabla-responsive-cards table-bordered border-neutral">
-    <thead class="thead bg-primary-20">
-      <tr><th scope="col" class="text-center align-middle">Materia</th></tr>
-    </thead>
-    <tbody>
-      <tr class="align-middle">
-        <td class="bg-primary-10" data-label="Materia">Álgebra</td>
-      </tr>
-    </tbody>
-  </table>
-</div></div></div>
+<table class="table tabla-responsive-cards table-bordered border-neutral">
+  <thead class="thead bg-primary-20">
+    <tr><th scope="col" class="text-center align-middle">Materia</th></tr>
+  </thead>
+  <tbody>
+    <tr class="align-middle">
+      <td class="bg-primary-10" data-label="Materia">Álgebra</td>
+    </tr>
+  </tbody>
+</table>
 ```
 
 Opciones: bordes, colorear la 1ª columna alternando rosa/verde
-(`bg-primary-10` / `bg-secondary-10`), y envolver en contenedores Moodle.
+(`bg-primary-10` / `bg-secondary-10`), repetir las celdas combinadas en las
+tarjetas de celular, y envolver en contenedores Moodle.
+
+**El contenedor Moodle va APAGADO por omisión.** Casi siempre la tabla se pega
+dentro de una página que ya trae su `row > col-12`, y envolverla otra vez deja
+un `.table-responsive` dentro de otro; el código tiene que empezar en
+`<table class=`. Enciéndelo solo cuando la tabla vaya suelta: el
+`.table-responsive` es el que le da el scroll horizontal, y sin él una tabla de
+cinco columnas se desborda (la hoja de Moodle le pone
+`.mainPlantilla23 .table td { min-width: 200px }`). **La vista previa lo enseña**:
+en tableta, sin contenedor, la tabla se sale.
+
+**De una tabla desnuda de Word también se limpian los restos de Word**, con el
+mismo criterio que ya se usaba para el `style` en línea (solo si la tabla NO
+trae diseño propio):
+
+| Se quita | Dónde | Por qué |
+| --- | --- | --- |
+| `border`, `cellspacing`, `cellpadding`, `align`, `width`, `height`, `bgcolor` | solo en la `<table>` | `width="921"` le clava un ancho fijo en píxeles, justo lo que pelea con el diseño responsivo; `border="1"` pintaba bordes aunque el toggle estuviera apagado, o sea que el interruptor no servía; el `align` de una `<table>` no centra nada, la flota |
+| `width`, `height`, `bgcolor`, `nowrap` | en celdas, filas y `<col>` | Anchos fijos en píxeles, otra vez |
+| Clases `Mso*` (`MsoNormalTable`, `MsoNormal`, `MsoListParagraph`) | en todo | No existen en Moodle: no pintan nada y solo ensucian el código que hay que revisar a ojo |
+| Etiquetas con dos puntos (`<o:p>`, `<w:sdt>`…), comentarios condicionales (`<![if !supportLists]>`) y los `<span></span>` que quedan vacíos | en todo | Son de Office. Se quita la etiqueta y se conserva lo que traiga dentro |
+
+> ⚠️ **`align` y `valign` NO se tocan en celdas ni en párrafos.** Ahí sí son la
+> alineación que trae el Word —los números de la columna "Semana" van
+> centrados— y quitarlos la perdía. Ya pasó una vez: la limpieza empezó
+> borrándolos en todo y la tabla salió con todo pegado a la izquierda.
+
+**Las "viñetas" de Word no son una lista y aquí se vuelven una.** Word manda al
+portapapeles un `<p>` por renglón con un `<span style="font-family:Symbol">` que
+**dibuja** el punto, y la sangría en un `text-indent` negativo. Pegado en Moodle
+eso queda como párrafos sueltos con un carácter raro al principio: sin sangría
+francesa, sin la viñeta del tema y sin lista para el lector de pantalla. Los
+`<p>` seguidos de ese tipo se juntan en un `<ul>` con un `<li>` cada uno
+(`convertirVinetasDeWord()`), y el marcador se tira porque el punto ya lo pone
+la lista. Se hace **antes** de limpiar clases y estilos: parte de lo que los
+delata es justo lo que se va a borrar.
+
+**No hay UN formato de viñeta de Word, hay cuatro**, y reconocer solo el
+primero fue exactamente el error que dejó la fila 1 en lista y las demás en
+párrafos:
+
+| Cómo llega | Cómo se reconoce |
+| --- | --- |
+| `<p class=MsoListParagraph><![if !supportLists]><span style='font-family:Symbol'>·…` | la clase, o la fuente de símbolos |
+| `<span style='mso-list:Ignore'>●</span><span> Texto</span>` | la marca `mso-list` |
+| `<p class=MsoNormal><span>● Texto</span></p>` (el punto es TEXTO, sin nada que lo delate) | el párrafo **empieza** con un carácter de viñeta |
+| `<p>• Texto</p>` | igual que el anterior |
+
+Por eso la lista de caracteres (`VINETAS`) lleva `·`, `•`, `●`, `▪`… **y los del
+área privada** (`U+F0B7` y compañía), que es como los mandan Symbol y Wingdings:
+un documento hecho en Google Docs y exportado a `.docx` usa `U+25CF` donde Word
+usa `U+00B7`.
+
+Las listas **numeradas** no se tocan: su marcador viene como texto ("1.", "a)")
+y no se puede distinguir de un párrafo que de verdad empieza con un número sin
+adivinar. Un párrafo que abre con `-` tampoco cuenta, por lo mismo.
+
+> ⚠️ **Al probar esto, el fixture tiene que traer los cuatro sabores.** El
+> primer intento se probó con uno solo, generado a mano: pasó la prueba y falló
+> en la tabla real del usuario, donde cada fila traía un formato distinto.
+
+Y un efecto secundario de las listas: **la vista previa del paso 1 necesita
+devolverle la sangría al `<ul>`**. El reset de `shared.css` (`* { padding: 0 }`)
+se la quita, y como el punto de un `<li>` se dibuja FUERA de la caja
+(`list-style-position: outside`), sin ese hueco las viñetas salían pintadas
+encima del borde de la celda, fuera de la tabla. En Moodle no pasa —allá
+Bootstrap le da al `<ul>` sus 2rem—, así que la regla vive en el CSS de la
+herramienta, acotada a `.preview-container`.
+
+**La vista previa vive en un `<iframe>`** con los anchos de escritorio, tableta
+y celular, igual que Guion Instruccional a Página. No es un capricho: las media
+queries miran el ancho de la **ventana**, y la regla que vuelve la tabla en
+tarjetas es un `@media (max-width: 576px)`. Un `<div>` angosto no la dispara, así
+que la previa vieja —tabla suelta con el CSS de la herramienta— **no podía
+enseñar las tarjetas** y además mentía en el color del encabezado. Ahora usa las
+mismas hojas que el guion (`hoja-moodle-default.js` + `CSS_VISTA_PREVIA`, leídas
+de sus carpetas, sin copiarlas) y el contenido va envuelto en
+`container-fluid mainPlantilla23 <aula>`, que es de donde salen los colores. El
+selector de aula de la barra **solo pinta la previa**: no cambia ni una letra
+del código.
+
+**La fuente se trae de Google Fonts, y va DESPUÉS de la hoja del tema.** La hoja
+pide `'Atkinson Hyperlegible Next'` por nombre, pero sus veinte `@font-face`
+apuntan a `[[font:theme|…]]`, un marcador que solo resuelve dentro de Moodle:
+fuera, no carga ninguna y la previa salía en Segoe UI. El `@import` de Google va
+al principio de `CSS_EXTRA_PREVIA` —el bloque que se pega después del tema— y no
+en un `<link>` del `<head>`, porque **cuando dos `@font-face` declaran la misma
+familia gana la última**: puesta antes, las declaraciones rotas del tema la
+tapaban y seguía sin cargar. (Esas rutas rotas siguen dando dos 404 en la
+consola de la previa; son inofensivos y le pasan igual a Guion Instruccional,
+que carga la misma hoja.)
+
+> Consecuencia que la previa dejó a la vista: con el encabezado en un `<thead>`,
+> el `bg-primary-20` **nunca se ve** en Moodle, porque Bootstrap pinta el fondo
+> en cada celda y la tapa. Es lo mismo que ya documenta Guion Instruccional en
+> su opción "Encabezado con el color del aula". El toggle "Colorear encabezado"
+> se dejó como está: cambiarlo alteraría el color de todo lo ya publicado.
+
+**Dos trampas del formato de Word con fila de título y celdas combinadas** (el
+típico "Contenido de Aprendizaje 1" con `colspan` arriba de los encabezados, y
+columnas verticalmente combinadas):
+
+1. **Si hay filas ARRIBA de los títulos, la fila de títulos NO se promueve a
+   `<thead>`.** Un `<thead>` es `table-header-group`: el navegador lo pinta
+   siempre primero, esté donde esté en el DOM. Promoverlo subía los títulos de
+   columna por encima del título de la tabla y se veía **invertido**. En ese
+   caso la fila se queda en su sitio —ya con sus `<th scope="col">`— y se
+   esconde en celular con `d-none d-sm-table-row`, que es exactamente lo que
+   hacía `.tabla-responsive-cards thead { display: none }`. Bonus: así el
+   título con `colspan` sigue visible como primera tarjeta. Cuando los títulos
+   son la primera fila (el caso común) todo sigue igual que siempre: `<thead>`.
+2. **El `rowspan` no existe en celular.** Las tarjetas son `display: block`, y
+   una celda combinada solo vive en el DOM de la PRIMERA fila que abarca: la
+   tarjeta de la semana 1 salía completa y las de las semanas 2 y 3 perdían
+   "Bloque de contenido" y compañía. Por eso se deja una **copia** de esa celda
+   en cada fila heredera, **en su columna real** (`celdasHeredadas()` de
+   `assets/tablas.js`), marcada `d-sm-none`: invisible de 576px hacia arriba
+   —ahí sigue mandando el `rowspan` de verdad, la tabla de escritorio no
+   cambia— y visible por debajo. Insertarla en su posición y no al final es lo
+   que hace que la tarjeta se lea en el mismo orden que el renglón. Las copias
+   llevan `data-celda-combinada` y se borran al cargar, para que volver a pegar
+   una tabla ya convertida no las duplique ni corra los `data-label`.
 
 ### Generador de Bibliografías (`tools/generador-bibliografias/`)
 
@@ -604,6 +725,13 @@ de reescribirlos**: `.app-container`, `.glass-panel`, `.app-header`, `.logo`,
 `.toggle-switch` + `.slider`, `.btn-primary`, `.btn-secondary`, `.tabs` +
 `.tab-btn` + `.tab-content`, `.empty-state`, `.code-wrapper` + `.code-output`,
 `.btn-icon`, `.hidden`.
+
+También el **reparto de la pantalla** (`.divisor`, con `assets/reparto.js`) y la
+**barra de la vista previa**: `.preview-barra`, `.preview-nota`,
+`.btn-icono-barra`, los anchos `.anchos` + `.ancho-btn`, la medida
+`.preview-medida` y el marco `.preview-caja` con su `<iframe>`. Los comparten
+Guion Instruccional a Página y el Convertidor de Tablas; cada herramienta solo
+decide el ancho de SUS columnas, con la variable `--col-editor`.
 
 ### Temas
 

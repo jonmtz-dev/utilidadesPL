@@ -81,3 +81,45 @@ function traeEstiloPropio(tabla) {
         '[class*="bg-primary"], [class*="bg-secondary"], [class*="bg-neutral"], [class*="bg-resalte"],' +
         '[class*="text-primary"], [class*="text-secondary"]');
 }
+
+/**
+ * Qué celdas le CAEN ENCIMA a cada fila desde un `rowspan` de una fila anterior.
+ *
+ * En escritorio el `rowspan` funciona solo: la celda combinada se ve estirada a
+ * lo largo de las filas que abarca. Pero en celular el CSS de Moodle vuelve cada
+ * `<tr>` una tarjeta con `display: block`, y ahí el `rowspan` deja de existir:
+ * la celda pertenece al DOM de UNA sola fila, así que la tarjeta de la semana 1
+ * sale completa y las de las semanas 2 y 3 pierden esas columnas.
+ *
+ * Esto devuelve, por fila, las celdas heredadas y en qué columna real caen, para
+ * que quien llame pueda dejar una copia solo-celular en su lugar correcto.
+ *
+ * @param {HTMLTableRowElement[]} filas Filas a revisar, en orden. Los `rowspan`
+ *   que nacen ANTES de la primera de la lista no se cuentan (así el llamador
+ *   puede pasar solo el cuerpo y no arrastrar celdas del encabezado).
+ * @param {Map<Element, {col:number, colspan:number, rowspan:number}>} mapa
+ *   El de `mapaDeColumnas()`.
+ * @returns {Map<HTMLTableRowElement, Array<{col:number, celda:Element}>>}
+ *   Una entrada por fila (vacía si no hereda nada), ordenada por columna.
+ */
+function celdasHeredadas(filas, mapa) {
+    const heredadas = new Map();
+    filas.forEach(fila => heredadas.set(fila, []));
+
+    filas.forEach((fila, r) => {
+        [...fila.children].forEach(celda => {
+            const pos = mapa.get(celda);
+            if (!pos || pos.rowspan < 2) return;
+            for (let i = 1; i < pos.rowspan; i++) {
+                const destino = filas[r + i];
+                if (!destino) break;
+                heredadas.get(destino).push({ col: pos.col, celda });
+            }
+        });
+    });
+
+    // Por columna: así las copias se insertan en el orden de la tabla y la
+    // tarjeta lee igual que el renglón de escritorio.
+    heredadas.forEach(lista => lista.sort((a, b) => a.col - b.col));
+    return heredadas;
+}

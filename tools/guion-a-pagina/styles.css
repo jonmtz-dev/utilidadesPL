@@ -412,50 +412,9 @@
 /* --------------------------------------------------------------------------
    Panel derecho: vista previa
    -------------------------------------------------------------------------- */
-.anchos { display: flex; gap: 3px; background: var(--control-bg); border-radius: 11px; padding: 4px; }
-.ancho-btn {
-    display: inline-flex; align-items: center; gap: 7px;
-    border: 0; background: transparent; color: var(--text-muted);
-    font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
-    padding: 7px 12px; border-radius: 8px; transition: all .18s ease;
-}
-.ancho-btn i { font-size: 17px; }
-.ancho-btn:hover { color: var(--text-main); }
-.ancho-btn.active { background: var(--surface-raised); color: var(--text-main); box-shadow: 0 2px 8px rgba(0, 0, 0, .06); }
-.preview-medida {
-    margin-left: auto; flex-shrink: 0;
-    font-size: 11.5px; font-weight: 600; color: var(--text-muted);
-    font-variant-numeric: tabular-nums;
-}
-
-/* Con la previa angosta el nombre del dispositivo estorba; el icono ya se
-   entiende y el título lo dice. */
-@media (max-width: 1400px) {
-    .ancho-btn span { display: none; }
-    .ancho-btn { padding: 7px 10px; }
-}
-
-/* La previa es una isla clara a propósito: imita la página real de Moodle, que
-   siempre es clara. No la ates a los tokens del tema. */
-.preview-caja {
-    flex: 1; min-height: 0; display: flex; justify-content: center;
-    background: #f3f4f6; border: 1px solid var(--control-border); border-radius: 12px;
-    padding: 10px; overflow: auto;
-}
-.preview-caja iframe {
-    width: 100%; height: 100%; min-height: 320px;
-    border: 0; border-radius: 8px; background: #fff;
-    transition: width .2s ease;
-}
-/* En tableta y celular el marco flota centrado sobre el fondo gris: la sombra es
-   la que hace leer el hueco de los lados como "así de ancho es el aparato" y no
-   como una previa que no llenó. */
-.preview-caja[data-ancho="tableta"] iframe,
-.preview-caja[data-ancho="celular"] iframe {
-    box-shadow: 0 8px 28px rgba(0, 0, 0, .16);
-}
-.preview-caja[data-ancho="tableta"] iframe { width: 768px; max-width: 100%; }
-.preview-caja[data-ancho="celular"] iframe { width: 380px; max-width: 100%; }
+/* Los anchos de la previa (.anchos, .ancho-btn, .preview-medida) y el marco
+   .preview-caja con su <iframe> viven en assets/shared.css: los comparte el
+   Convertidor de Tablas. */
 
 /* --------------------------------------------------------------------------
    Panel derecho: revisión

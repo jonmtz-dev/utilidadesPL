@@ -34,7 +34,7 @@
         <div class="shape shape-3"></div>
     </div>
 
-    <main class="app-container glass-panel">
+    <main class="app-container glass-panel tablas-app">
         <header class="app-header">
             <div class="logo">
                 <i class="ph ph-table"></i>
@@ -48,9 +48,9 @@
             </a>
         </header>
 
-        <div class="workspace">
+        <div class="workspace tablas-workspace" id="workspace">
             <!-- Columna Izquierda: Input y Opciones -->
-            <section class="panel-section glass-panel input-section">
+            <section class="panel-section glass-panel input-section editor-panel">
                 <div class="section-header">
                     <h2><i class="ph ph-clipboard-text"></i> 1. Pega tu tabla aquí</h2>
                 </div>
@@ -75,9 +75,19 @@
                         <span class="label-text">Colorear encabezado (Rosa)</span>
                     </label>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="opt-moodle-wrap" checked>
+                        <input type="checkbox" id="opt-repetir-combinadas" checked>
                         <span class="slider"></span>
-                        <span class="label-text">Envolver en contenedores Moodle (row > col-12)</span>
+                        <span class="label-text" title="En celular el rowspan no existe: sin esto, las filas que heredan una celda combinada pierden esas columnas">Repetir celdas combinadas en celular</span>
+                    </label>
+                    <!-- Apagado por omisión: casi siempre la tabla se pega DENTRO
+                         de una página que ya trae su row > col-12, y el código
+                         debe empezar en <table class=. Enciéndelo solo si la
+                         tabla va suelta y necesita su propio contenedor (el
+                         .table-responsive es el que le da scroll horizontal). -->
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="opt-moodle-wrap">
+                        <span class="slider"></span>
+                        <span class="label-text" title="Agrega row > col-12 > table-responsive alrededor de la tabla. Apagado, el código empieza en &lt;table class=">Envolver en contenedores Moodle</span>
                     </label>
                 </div>
 
@@ -86,22 +96,60 @@
                 </button>
             </section>
 
+            <div class="divisor" id="divisor" role="separator" aria-orientation="vertical"
+                 aria-label="Ancho del panel izquierdo" tabindex="0"
+                 title="Arrástralo para repartir el espacio · doble clic para restablecer"></div>
+
             <!-- Columna Derecha: Vista Previa y Código -->
-            <section class="panel-section glass-panel output-section">
-                
+            <section class="panel-section glass-panel output-section output-panel">
+
                 <div class="tabs">
                     <button class="tab-btn active" data-target="preview"><i class="ph ph-eye"></i> Vista Previa</button>
                     <button class="tab-btn" data-target="code"><i class="ph ph-code"></i> Código Moodle</button>
                 </div>
 
                 <div class="tab-content active" id="preview-content">
+                    <!-- Solo aparece con la tabla ya generada: en el paso 1 lo que
+                         se ve es la tabla clicable, que es interfaz de la
+                         herramienta y no una página de Moodle. -->
+                    <div class="preview-barra hidden" id="preview-barra">
+                        <div class="anchos" role="group" aria-label="Ancho de la vista previa">
+                            <button class="ancho-btn active" data-ancho="escritorio" title="Escritorio"><i class="ph ph-desktop"></i> <span>Escritorio</span></button>
+                            <button class="ancho-btn" data-ancho="tableta" title="Tableta"><i class="ph ph-device-tablet"></i> <span>Tableta</span></button>
+                            <button class="ancho-btn" data-ancho="celular" title="Celular (la tabla se vuelve tarjetas)"><i class="ph ph-device-mobile"></i> <span>Celular</span></button>
+                        </div>
+                        <!-- El aula solo pinta la previa: el color real lo resuelve
+                             la hoja de Moodle con la clase del contenedor de la
+                             página. Aquí no cambia ni una letra del código que se
+                             copia, y por eso vive en la barra de la previa y no
+                             entre las opciones de formato. -->
+                        <span class="field-row previa-paleta">
+                            <label for="paleta-previa" title="Colores del aula, solo para la vista previa"><i class="ph ph-palette"></i> <span>Aula</span></label>
+                            <select id="paleta-previa"></select>
+                        </span>
+                        <!-- El ancho real en px: es la diferencia entre creer que
+                             se está viendo un escritorio y verlo. -->
+                        <span class="preview-medida" id="preview-medida"></span>
+                        <button class="btn-icono-barra" id="btn-previa-max" type="button" aria-pressed="false" title="Ampliar la vista previa"><i class="ph ph-corners-out"></i></button>
+                    </div>
                     <div class="empty-state" id="preview-empty">
                         <i class="ph ph-table"></i>
                         <p>Pega y procesa una tabla para ver la vista previa</p>
                     </div>
+                    <!-- Paso 1: avisos y la tabla sobre la que se hace clic. -->
                     <div id="preview-container" class="preview-container hidden">
                         <!-- Tabla previsualizada aquí -->
                     </div>
+                    <!-- Paso 2: la tabla ya convertida, dentro de un <iframe> con la
+                         hoja real de Moodle. Va en iframe y no en un div porque las
+                         media queries miran el ancho de la VENTANA: solo así, al
+                         estrechar el marco, se disparan las tarjetas de celular.
+                         El sandbox NO lleva allow-scripts: adentro no corre una
+                         sola línea de JS, que es lo que importa con HTML pegado
+                         de fuera. El allow-same-origin solo sirve para poder
+                         asomarse a la previa desde aquí (y comprobar, por
+                         ejemplo, que la fuente del aula sí cargó). -->
+                    <div id="preview-caja" class="preview-caja hidden"><iframe id="preview-frame" sandbox="allow-same-origin" title="Vista previa de la tabla en Moodle"></iframe></div>
                 </div>
 
                 <div class="tab-content" id="code-content">
@@ -118,6 +166,14 @@
     </main>
 
     <script src="../../assets/tablas.js"></script>
+    <script src="../../assets/paletas.js"></script>
+    <script src="../../assets/reparto.js"></script>
+    <!-- La vista previa se arma con las MISMAS hojas que Guion Instruccional a
+         Página: la del tema de Moodle (que solo retoca Bootstrap) y el
+         subconjunto de Bootstrap que la acompaña. Se leen de sus carpetas en vez
+         de copiarlas aquí; una copia es la que deja vivo un bug durante meses. -->
+    <script src="../micrositio-a-pagina/hoja-moodle-default.js"></script>
+    <script src="../guion-a-pagina/vista-previa.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

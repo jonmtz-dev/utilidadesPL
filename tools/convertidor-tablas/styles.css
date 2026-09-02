@@ -4,6 +4,47 @@
    (toggles, botones, pestañas, salida de código) vienen de /assets/shared.css.
    ========================================================================== */
 
+/* --------------------------------------------------------------------------
+   Reparto de la pantalla
+
+   Esta herramienta se sale del tope de 1400px del resto, igual que Guion
+   Instruccional a Página y Bibliografías: con el 50/50 la previa quedaba en
+   ~600px, y una tabla de cinco columnas nunca se veía como se va a ver. El
+   ancho de escritorio hay que tenerlo para poder juzgarlo.
+   -------------------------------------------------------------------------- */
+.tablas-app { max-width: 1760px; }
+
+/* Tres columnas: opciones · divisor · salida. El ancho de la izquierda es una
+   variable porque el divisor se arrastra (assets/reparto.js la fija y la
+   recuerda); el clamp es el reparto por omisión, generoso con la previa. El
+   divisor hace de gutter, así que aquí el gap va en cero. */
+.tablas-workspace {
+    grid-template-columns: var(--col-editor, clamp(380px, 30%, 520px)) 20px minmax(0, 1fr);
+    gap: 0;
+}
+.editor-panel, .output-panel { min-height: 0; }
+
+/* Previa a pantalla completa: un clic cuando toca revisar de verdad, Esc para
+   volver. */
+.tablas-workspace.previa-max { grid-template-columns: minmax(0, 1fr); }
+.tablas-workspace.previa-max .editor-panel,
+.tablas-workspace.previa-max .divisor { display: none; }
+
+/* Selector de aula, en la barra de la previa. El <select> lo viste shared.css
+   (.field-row select), compartido con el Integrador HTML; aquí solo el acomodo.
+   Va en la barra y no entre las opciones porque no toca el código: solo decide
+   con qué colores se pinta la previa. */
+.previa-paleta { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.previa-paleta label { font-size: 12px; font-weight: 600; color: var(--text-muted); display: inline-flex; align-items: center; gap: 5px; }
+.previa-paleta select { padding: 5px 7px; font-size: 12px; border-radius: 8px; }
+
+/* Con la previa angosta la palabra estorba; queda el icono, el title del
+   <label> lo dice y las opciones traen el nombre del aula completo. Mismo
+   criterio que los nombres de los anchos en shared.css. */
+@media (max-width: 1400px) {
+    .previa-paleta label span { display: none; }
+}
+
 /* Paste Area */
 .paste-area {
     flex-grow: 1;
@@ -67,6 +108,17 @@
     min-height: 0;
 }
 
+/* Con la tabla ya generada, este contenedor solo lleva los avisos: la isla
+   clara pasa a ser el marco de la previa, y aquí sobran el fondo y el estirón
+   (dos cajas peleándose el alto dejaban el <iframe> en nada). */
+.preview-container--avisos {
+    background: none;
+    border: 0;
+    padding: 0;
+    flex: none;
+    overflow: visible;
+}
+
 .preview-container table {
     width: 100%;
     border-collapse: collapse;
@@ -77,6 +129,18 @@
     padding: 12px;
     border: 1px solid var(--preview-border);
 }
+
+/* Las listas necesitan su sangría de vuelta. El reset de shared.css
+   (`* { padding: 0 }`) se la quita, y como el punto de un <li> se dibuja FUERA
+   de la caja (list-style-position: outside), sin ese hueco las viñetas salían
+   pintadas encima del borde de la celda, fuera de la tabla. En Moodle no pasa:
+   allá Bootstrap le da al <ul> sus 2rem. Esto es solo la isla del paso 1. */
+.preview-container ul,
+.preview-container ol {
+    padding-left: 1.5rem;
+    margin: 0.4rem 0;
+}
+.preview-container li + li { margin-top: 0.25rem; }
 
 .preview-container th {
     background: var(--prepa-primary-20);
@@ -106,12 +170,32 @@
     color: white !important;
 }
 
+/* En una laptop (720p y parecidas) el panel de opciones no cabía entero y el
+   botón de "Cargar Tabla" quedaba debajo del corte. El área de pegado crece con
+   lo que sobre (flex-grow), así que bajarle el piso no la encoge cuando hay
+   espacio: solo evita que se coma el que no hay. Va ANTES de la regla de
+   apilado para que ahí gane la de 220px. */
+@media (min-width: 1025px) and (max-height: 860px) {
+    .paste-area { min-height: 92px; }
+}
+
 /* Con las columnas apiladas el alto ya no lo manda la ventana, así que el área
    de pegado necesita un alto propio para no quedar aplastada. */
 @media (max-width: 1024px), (max-height: 620px) {
     .paste-area {
         min-height: 220px;
     }
+
+    /* Apilado no hay dos columnas que repartir: el divisor sobra y el gutter
+       vuelve a ser el gap de la rejilla. (La regla de shared.css solo lo
+       esconde por ancho; con la ventana bajita también hay que esconderlo.) */
+    .tablas-workspace { grid-template-columns: 1fr; gap: 24px; }
+    .divisor { display: none; }
+    .editor-panel { overflow: visible; }
+
+    /* Con el scroll de la página mandando, el marco de la previa toma su alto
+       natural en vez de quedarse clavado en el flex del panel. */
+    .preview-caja iframe { min-height: 460px; }
 }
 
 @media (max-width: 640px) {

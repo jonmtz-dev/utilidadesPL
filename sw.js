@@ -13,7 +13,7 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.61.0';
+const VERSION = '1.66.0';
 const CACHE = `panel-herramientas-v${VERSION}`;
 
 // Rutas relativas a propósito: en GitHub Pages la app vive en un subdirectorio
