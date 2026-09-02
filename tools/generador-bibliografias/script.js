@@ -137,15 +137,30 @@ function initBiblio() {
         return rules.join('; ');
     }
 
+    /**
+     * ⚠️ EL ORDEN DEL span.nolink NO ES INDIFERENTE: va DENTRO del enlace.
+     *
+     *   BIEN  <a href=… target="_blank"><span class="nolink">url</span></a>
+     *   MAL   <span class="nolink"><a href=… target="_blank">url</a></span>
+     *
+     * Comprobado contra dos páginas reales: la del M20, con el span dentro,
+     * conserva el enlace; la del M19, con el span envolviendo, quedó así:
+     *
+     *   …YouTube. <span class="nolink"></span></p>
+     *   <div class="mediaplugin mediaplugin_videojs">…reproductor…</div>
+     *
+     * es decir, el filtro multimedia de Moodle se llevó el <a> y dejó el span
+     * hueco. La razón es que ese filtro busca `<a …>…</a>` y descarta la
+     * coincidencia solo si el `nolink` aparece DENTRO de lo que casó; envolver
+     * el ancla lo deja fuera del match y no protege nada.
+     */
     function linkify(text) {
         return text.replace(REGEX_URL, (url) => {
-            const anchor = `<a href="${url}" target="_blank">${url}</a>`;
-            // El span.nolink evita que Moodle convierta el enlace de YouTube
-            // en un reproductor incrustado.
             const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-            return isYouTube && optNolink.checked
-                ? `<span class="nolink">${anchor}</span>`
-                : anchor;
+            const contenido = isYouTube && optNolink.checked
+                ? `<span class="nolink">${url}</span>`
+                : url;
+            return `<a href="${url}" target="_blank">${contenido}</a>`;
         });
     }
 
@@ -264,19 +279,24 @@ function initBiblio() {
         var sinEnlace = urlsPag.filter(function (u) {
             return !anclas.some(function (h) { return h && (h === u || h.indexOf(u) === 0 || u.indexOf(h) === 0); });
         });
-        // El generador entrega <span class="nolink"><a>…</a></span>, pero el
-        // editor de Moodle puede INVERTIR la estructura al guardar y dejar
-        // <a …><span class="nolink">url</span></a> (comprobado en M18). Ambas
-        // formas bloquean el reproductor, así que el span cuenta como ancestro,
-        // como hijo del enlace o como clase del propio <a>.
+        // El span.nolink tiene que estar DENTRO del enlace. Envolverlo NO
+        // protege: el filtro multimedia de Moodle se lleva el <a> igual.
+        // Comprobado en el M19 —span envolviendo, enlace convertido en
+        // reproductor— contra el M20 —span dentro, enlace intacto—.
         var ytSinNolink = [].slice.call(m.nodo.querySelectorAll('a')).filter(function (a) {
             var h = a.getAttribute('href') || '';
             var esYT = h.indexOf('youtube.com') !== -1 || h.indexOf('youtu.be') !== -1;
             if (!esYT) return false;
-            var protegido = a.closest('.nolink') || a.querySelector('.nolink') ||
-                (' ' + a.className + ' ').indexOf(' nolink ') !== -1;
-            return !protegido;
+            return !a.querySelector('.nolink');
         }).map(function (a) { return a.getAttribute('href'); });
+
+        /* Y el destrozo ya consumado: cuando Moodle SÍ convirtió el enlace, no
+           queda ningún <a> que revisar —solo el span.nolink hueco
+           que dejó el filtro—, así que ninguna de las comprobaciones de arriba
+           lo ve. Esa cáscara vacía es la firma exacta de «esta fuente se volvió
+           reproductor» y hay que volver a montarla. */
+        var vueltoReproductor = [].slice.call(m.nodo.querySelectorAll('span.nolink'))
+            .filter(function (n) { return !limpiar(n.textContent); }).length;
 
         // En bibliografías los enlaces DEBEN abrir en pestaña nueva: es la regla
         // del equipo para este espacio. Sin target="_blank" el alumno sale del
@@ -285,7 +305,7 @@ function initBiblio() {
             return (a.getAttribute('target') || '').toLowerCase() !== '_blank';
         }).map(function (a) { return a.getAttribute('href') || '(sin href)'; });
 
-        if (!difTexto && !sinEnlace.length && !ytSinNolink.length && !sinTarget.length) { iguales++; return; }
+        if (!difTexto && !sinEnlace.length && !ytSinNolink.length && !sinTarget.length && !vueltoReproductor) { iguales++; return; }
 
         problemas.push({
             nodo: m.nodo,
@@ -295,7 +315,8 @@ function initBiblio() {
             urlsDistintas: urlsDistintas,
             sinEnlace: sinEnlace,
             ytSinNolink: ytSinNolink,
-            sinTarget: sinTarget
+            sinTarget: sinTarget,
+            vueltoReproductor: vueltoReproductor
         });
     });
 
@@ -375,7 +396,8 @@ function initBiblio() {
             else if (p.difTexto) etiquetas.push('Texto distinto');
             if (p.sinEnlace.length) etiquetas.push(p.sinEnlace.length + ' URL sin enlace');
             if (p.sinTarget.length) etiquetas.push(p.sinTarget.length + ' sin abrir en pestaña nueva');
-            if (p.ytSinNolink.length) etiquetas.push('YouTube sin nolink');
+            if (p.ytSinNolink.length) etiquetas.push('YouTube sin nolink dentro del enlace');
+            if (p.vueltoReproductor) etiquetas.push('Se volvió reproductor: se perdió el enlace');
             html += '<div style="font-weight:700;color:#c62828">' + esc(etiquetas.join(' · ')) + '</div>';
             if (p.difTexto) {
                 html += '<div style="margin-top:3px"><span style="color:#666">Word:</span> ' + esc(corta(p.word, 170)) + '</div>' +
@@ -385,7 +407,8 @@ function initBiblio() {
             }
             if (p.sinEnlace.length) html += '<div style="color:#c62828;margin-top:3px">Sin &lt;a&gt;: ' + esc(p.sinEnlace.join(', ')) + '</div>';
             if (p.sinTarget.length) html += '<div style="color:#c62828;margin-top:3px">Sin target="_blank": ' + esc(p.sinTarget.join(', ')) + '</div>';
-            if (p.ytSinNolink.length) html += '<div style="color:#c62828;margin-top:3px">YouTube sin span.nolink: ' + esc(p.ytSinNolink.join(', ')) + '</div>';
+            if (p.ytSinNolink.length) html += '<div style="color:#c62828;margin-top:3px">YouTube con el span.nolink fuera del &lt;a&gt; (no protege): ' + esc(p.ytSinNolink.join(', ')) + '</div>';
+            if (p.vueltoReproductor) html += '<div style="color:#c62828;margin-top:3px">Moodle convirtió este enlace en reproductor y lo borró. Vuelve a generar la fuente y pégala.</div>';
             html += '</div>';
         });
         html += '<div style="margin-top:10px;color:#666">Los párrafos con diferencia quedaron recuadrados en rojo; ' +

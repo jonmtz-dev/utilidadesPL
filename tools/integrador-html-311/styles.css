@@ -125,3 +125,17 @@
 .bloque-previa--activo { outline: 2px solid rgba(0, 102, 204, .45); outline-offset: 2px; border-radius: 4px; }
 /* La tarjeta a la que salta la previa no debe quedar pegada al borde de la lista. */
 .block { scroll-margin: 16px; }
+
+/* El "Empieza en" del bloque Lista: un número corto, no un campo de texto a lo
+   ancho. Sirve para continuar la numeración después de una sublista a/b/c —el
+   Word usa otro numId al volver a la lista de arriba y por eso reiniciaba en 1. */
+.block-inicio {
+    width: 72px;
+    padding: 6px 8px;
+    background: var(--input-bg);
+    color: var(--text-main);
+    border: 1px solid var(--control-border);
+    border-radius: 8px;
+    font: inherit;
+    font-size: 13px;
+}

@@ -49,11 +49,24 @@ const TOOLS = [
         grupo: 'rm',
         moodle: '3.11',
         title: 'Integrador HTML',
-        description: 'Maqueta actividades por bloques, importa la estructura del Word y genera HTML con QA de textos y enlaces.',
+        description: 'Maqueta actividades por bloques, importa la estructura del Word y genera el HTML listo para pegar en Moodle.',
         icon: 'layout',
         accent: ['#934C98', '#F05825'],
-        tags: ['Actividades', 'Word', 'HTML', 'QA'],
+        tags: ['Actividades', 'Word', 'HTML'],
         url: 'tools/integrador-html-311/index.html',
+        status: 'ready'
+    },
+    /* ---------- Moodle 3.11 · Revisión ---------- */
+    {
+        slug: 'qa-311',
+        grupo: 'qa',
+        moodle: '3.11',
+        title: 'QA de Actividad y Rúbrica',
+        description: 'Sube el guion y la rúbrica: coteja la actividad montada (textos, negritas, listas, tablas y enlaces) y la rúbrica ya guardada. Señala la palabra que falta o sobra, no el párrafo entero.',
+        icon: 'shield-check',
+        accent: ['#0f9d58', '#1f6f4a'],
+        tags: ['QA', 'Actividades', 'Rúbricas', 'Word'],
+        url: 'tools/qa-311/index.html',
         status: 'ready'
     },
     /* ---------- Moodle 5.1 ---------- */

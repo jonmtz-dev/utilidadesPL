@@ -1,9 +1,19 @@
 /* ==========================================================================
-   QA de Actividad y Rúbrica (Moodle 5.1)
+   QA de Actividad (Moodle 3.11)
 
-   Qué hace: lee el guion y la rúbrica que mandó producción (los dos en Word) y
-   arma un verificador que se ejecuta sobre la página YA MONTADA en Moodle para
-   cotejar que sea lo mismo.
+   Qué hace: lee el guion que mandó producción y arma un verificador que se
+   ejecuta sobre la página YA MONTADA en Moodle para cotejar que sea lo mismo.
+
+   Es el gemelo del QA de 5.1 y comparte con él TODO el lector del guion
+   (`assets/qa-guion.js`): el Word es el mismo documento en las dos versiones.
+   Lo que cambia vive en `verificador.js` —la página de Moodle— y aquí abajo:
+   el MÓDULO, que en 3.11 decide la clase del contenedor (`prepa-M{n}-body`), y
+   las FÓRMULAS, que en 3.11 viajan como `$$…$$` y hay que cotejar aparte.
+
+   La RÚBRICA se lee con `assets/qa-rubrica.js`, el MISMO lector que usa
+   Adaptador de Rúbricas para escribirla. Tiene que ser el mismo: si el QA
+   armara su propia versión del texto esperado, cualquier diferencia entre las
+   dos daría falsas alarmas o, peor, aprobaría algo mal escrito.
 
    Tres decisiones que conviene no deshacer:
 
@@ -25,74 +35,14 @@
 
     const datos = { actividad: null, rubrica: null };
     const archivos = { guion: '', rubrica: '' };
+    /* El módulo manda la clase del contenedor en 3.11. Se recuerda porque quien
+       revisa suele encadenar varias actividades del mismo módulo. */
+    let modulo = Number(localStorage.getItem('qa311-modulo')) || 1;
 
     /* El lector del guion —desmarcar(), dondeEmpieza(), construirActividad()
        y sus ayudantes— vive en assets/qa-guion.js: lo comparte el QA de
        Actividad de Moodle 3.11. El guion es el MISMO Word en las dos
        versiones; lo que cambia es la página contra la que se coteja. */
-
-    /**
-     * Rúbrica → { criterios, total, descriptores }.
-     *
-     * La tabla de la rúbrica 5.1 gasta DOS filas por criterio: una con el texto
-     * del criterio y los nombres de los niveles, y otra —"Escala de valoración"—
-     * con los puntos. La fila "Total" no es un criterio: es la comprobación de
-     * que la suma da lo que debe.
-     */
-    function construirRubrica(tablas, bloques) {
-        const tabla = tablas[0];
-        const criterios = [];
-        let total = '';
-        let pendiente = null;
-
-        const clave = (s) => String(s || '').toLowerCase()
-            .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-
-        (tabla ? tabla.filas : []).forEach(fila => {
-            const celdas = fila.celdas.map(c => (c.texto || '').trim());
-            const primera = clave(celdas[0]);
-
-            if (primera.startsWith('escala de valoracion')) {
-                if (pendiente) {
-                    pendiente.puntos = celdas.slice(1).map(x => x.replace(/[^\d.,-]/g, ''));
-                    criterios.push(pendiente);
-                    pendiente = null;
-                }
-                return;
-            }
-            if (primera === 'total') {
-                total = (celdas[1] || '').replace(/[^\d.,-]/g, '');
-                return;
-            }
-            // Encabezado de la tabla: "Categorías e indicadores | Niveles de logro".
-            if (celdas.length < 3) return;
-            pendiente = { nombre: celdas[0], niveles: celdas.slice(1), puntos: [] };
-        });
-
-        // Los descriptores cualitativos son los párrafos de después de la tabla.
-        const NIVELES = ['No evaluable', 'Requiere apoyo', 'Suficiente', 'Satisfactorio', 'Destacado'];
-        const descriptores = [];
-        bloques.forEach(b => {
-            if (b.tipo !== 'parrafo') return;
-            const d = desmarcar(b.texto);
-            const nivel = NIVELES.find(n => clave(d.texto).indexOf(clave(n)) === 0);
-            if (nivel && d.texto.length > nivel.length + 10) {
-                descriptores.push({ nivel, texto: d.texto });
-            }
-        });
-
-        return { criterios, total, descriptores };
-    }
-
-    /* ---------------------------------------------------------------------
-       Carga de los dos Word
-       --------------------------------------------------------------------- */
-
-    /** "SM2_S3_AA3_Rubrica.docx" -> "2-3-3", para compararla con la del guion. */
-    function claveDeArchivo(nombre) {
-        const m = String(nombre || '').match(/SM\s*0?(\d+)\s*_?\s*S\s*0?(\d+)\s*_?\s*AA\s*0?(\d+)/i);
-        return m ? m.slice(1, 4).map(Number).join('-') : '';
-    }
 
     /* La clave con que se nombra la evidencia: `SM1S1_AA1`, sacada de
        `01S.03_PR_SM1S1-AA1_La_tecnologia_en_tu_entorno.docx`. Se calcula UNA
@@ -102,13 +52,16 @@
        (`SM1S1-AA1`, `SM1S1_AA1`, `SM1S1AA1`) y los ceros a la izquierda se
        quitan.
 
-       Solo esta forma, a propósito: los guiones de módulo (`M17_AI3`) son de
-       Moodle 3.11 y esta herramienta es de 5.1. Reconocerlos le pondría un
-       nombre creíble a una evidencia hecha con la herramienta equivocada, que
-       es justo lo que no debe pasar desapercibido; sin clave cae al nombre del
-       archivo y ahí se nota. */
+       Aquí manda la forma de 3.11 —`M17_AI3`, `M20_S2_AI1`— y se reconoce
+       TAMBIÉN la de 5.1 para no dejar sin nombre a un guion mixto. Lo que no
+       se hace es inventar: si no coincide ninguna, la evidencia se llama como
+       el archivo, y ahí se nota que el guion no tenía la nomenclatura. */
     function claveDeEvidencia(nombre) {
         const texto = String(nombre || '');
+        const m311 = texto.match(/M\s*0?(\d+)\s*[_\-\s]?\s*(?:S\s*0?(\d+)\s*[_\-\s]?\s*)?(AI|AA|AC)\s*0?(\d+)/i);
+        if (m311) {
+            return 'M' + m311[1] + (m311[2] ? 'S' + m311[2] : '') + '_' + m311[3].toUpperCase() + m311[4];
+        }
         const clave = texto.match(/SM\s*0?(\d+)\s*[_\-\s]?\s*S\s*0?(\d+)\s*[_\-\s]?\s*AA\s*0?(\d+)/i);
         if (clave) return `SM${clave[1]}S${clave[2]}_AA${clave[3]}`;
         const base = texto.replace(/\.[a-z0-9]+$/i, '').trim();
@@ -128,9 +81,6 @@
             const bloques = await leerBloquesDeDocx(file, { saltos: true, cursivas: true });
             datos.actividad = construirActividad(bloques);
             archivos.guion = file.name;
-            if (datos.actividad.enlaceRubrica && archivos.rubrica) {
-                datos.actividad.enlaceRubrica.archivo = archivos.rubrica.replace(/\.docx$/i, '');
-            }
             $('#zona-guion').classList.add('dropzone--cargada');
             avisar('');
         } catch (e) {
@@ -139,18 +89,52 @@
         dibujar();
     }
 
+    /* La rúbrica. La fila de encabezado —la de los nombres de nivel— se busca
+       sola: es la primera cuyas celdas después de la primera están todas
+       llenas y son cortas. Se enseña cuál eligió en el resumen, y se puede
+       cambiar, porque en una rúbrica rara puede equivocarse y entonces todos
+       los criterios saldrían corridos. */
+    function filaDeNiveles(estructura) {
+        const filas = estructura.filas || [];
+        for (let i = 0; i < filas.length; i++) {
+            const resto = (filas[i].celdas || []).slice(1);
+            if (resto.length >= 2 && resto.every(c => (c.texto || '').trim())
+                && resto.every(c => (c.texto || '').trim().length <= 40)) return i;
+        }
+        return 0;
+    }
+
     async function cargarRubrica(file) {
         avisar('Leyendo la rúbrica…');
         try {
-            const [tablas, bloques] = await Promise.all([
-                leerTablasDeDocx(file),
-                leerBloquesDeDocx(file, { saltos: true })
-            ]);
-            datos.rubrica = construirRubrica(tablas, bloques);
+            const tablas = await leerTablasDeDocx(file);
+            if (!tablas.length) throw new Error('el Word no trae ninguna tabla');
+            /* La rúbrica es la tabla con más columnas: los Word traen antes la
+               hoja de control, que son tablas de dos. */
+            const tabla = tablas.slice().sort((a, b) =>
+                (b.filas[0] ? b.filas[0].celdas.length : 0) - (a.filas[0] ? a.filas[0].celdas.length : 0))[0];
+            const estructura = { filas: tabla.filas };
+            const cabecera = filaDeNiveles(estructura);
+            datos.rubrica = analizarRubrica(estructura, cabecera);
+            datos.rubrica.filaCabecera = cabecera;
+
+            /* El nombre del nivel va ANTEPUESTO en el primer criterio:
+               «EXPERTO - Utiliza un procesador…». Así están las rúbricas
+               reales en Moodle —en el Word esos nombres viven en el
+               encabezado de la tabla y al montar solo hacen falta una vez—, y
+               es lo que escribe Adaptador de Rúbricas. Sin esto, el QA
+               reportaba los seis niveles del primer criterio como «el texto no
+               coincide», resaltando justo el «EXPERTO - » que sí debía estar.
+               El separador es " - " en la misma línea, igual que allá. */
+            datos.rubrica.criterios.forEach((crit, ci) => {
+                if (ci !== 0) return;
+                crit.celdas.forEach((celda, li) => {
+                    const nivel = datos.rubrica.niveles[li];
+                    if (!nivel) return;
+                    celda.texto = celda.texto ? `${nivel} - ${celda.texto}` : nivel;
+                });
+            });
             archivos.rubrica = file.name;
-            if (datos.actividad && datos.actividad.enlaceRubrica) {
-                datos.actividad.enlaceRubrica.archivo = file.name.replace(/\.docx$/i, '');
-            }
             $('#zona-rubrica').classList.add('dropzone--cargada');
             avisar('');
         } catch (e) {
@@ -161,10 +145,10 @@
 
     function quitar(cual) {
         datos[cual] = null;
-        archivos[cual === 'actividad' ? 'guion' : 'rubrica'] = '';
-        const zona = $(cual === 'actividad' ? '#zona-guion' : '#zona-rubrica');
-        zona.classList.remove('dropzone--cargada');
-        $(cual === 'actividad' ? '#input-guion' : '#input-rubrica').value = '';
+        const esGuion = cual === 'actividad';
+        archivos[esGuion ? 'guion' : 'rubrica'] = '';
+        $(esGuion ? '#zona-guion' : '#zona-rubrica').classList.remove('dropzone--cargada');
+        $(esGuion ? '#input-guion' : '#input-rubrica').value = '';
         dibujar();
     }
 
@@ -204,13 +188,14 @@
     function codigoVerificador() {
         const paquete = Object.assign({}, datos, {
             archivos: archivos,
-            // La rúbrica se verifica en su propia pantalla: si solo hay rúbrica,
-            // la clave sale de ella.
+            // El módulo viaja en los datos: de él sale la clase del contenedor
+            // que el verificador busca en la página (`prepa-M{n}-body`).
+            modulo: modulo,
             clave: claveDeEvidencia(archivos.guion || archivos.rubrica)
         });
         return 'void (function () {\n'
             + 'var evidencia = ' + window.EVIDENCIA_QA.toString() + ';\n'
-            + '(' + window.VERIFICADOR_QA.toString() + ')(' + JSON.stringify(paquete) + ', evidencia);\n'
+            + '(' + window.VERIFICADOR_QA_311.toString() + ')(' + JSON.stringify(paquete) + ', evidencia);\n'
             + '}());';
     }
 
@@ -225,7 +210,8 @@
 
         $('#incluye').innerHTML =
             `<span class="${datos.actividad ? 'puesto' : ''}">${datos.actividad ? '✓' : '○'} Actividad</span>` +
-            `<span class="${datos.rubrica ? 'puesto' : ''}">${datos.rubrica ? '✓' : '○'} Rúbrica</span>`;
+            `<span class="${datos.rubrica ? 'puesto' : ''}">${datos.rubrica ? '✓' : '○'} Rúbrica</span>` +
+            `<span class="puesto">✓ Módulo ${modulo}</span>`;
 
         const codigo = codigoVerificador();
         $('#codigo').value = codigo;
@@ -267,35 +253,18 @@
         }
         if (datos.rubrica) {
             const r = datos.rubrica;
-            const suma = r.criterios.reduce((n, c) => n + (Number(c.puntos[0]) || 0), 0);
+            const cuenta = r.criterios.filter(c => c.incluir).length;
             partes.push(`
                 <div class="resumen-bloque">
                     <h3><span class="resumen-titulo"><i class="ph ph-list-checks"></i> Rúbrica</span>
                         <button class="btn-quitar" type="button" data-quitar="rubrica"
                                 title="Quitar la rúbrica"><i class="ph ph-x"></i></button></h3>
                     <div class="resumen-dato"><span>Archivo</span><span><code>${escapar(archivos.rubrica)}</code></span></div>
-                    <div class="resumen-dato"><span>Criterios</span><span>${r.criterios.length}</span></div>
-                    <div class="resumen-dato"><span>Total del Word</span><span>${escapar(r.total || '—')}</span></div>
-                    <div class="resumen-dato"><span>Suma del nivel más alto</span><span>${suma}${r.total && suma !== Number(r.total) ? ' ⚠️ no cuadra' : ''}</span></div>
-                    <div class="resumen-dato"><span>Descriptores</span><span>${r.descriptores.length} de 5</span></div>
+                    <div class="resumen-dato"><span>Niveles</span><span>${escapar(r.niveles.join(' · '))}</span></div>
+                    <div class="resumen-dato"><span>Criterios por cotejar</span><span>${cuenta}</span></div>
+                    <div class="resumen-dato"><span>Fila de niveles</span><span>la ${r.filaCabecera + 1}ª de la tabla</span></div>
                 </div>`);
         }
-        /* Los dos Word tienen que ser de la MISMA actividad: con el guion de una
-           y la rúbrica de otra, el verificador reporta errores que no existen. Se
-           comparan los códigos (SM02S3AA3 contra SM2_S3_AA3_Rubrica.docx). */
-        if (datos.actividad && datos.rubrica) {
-            const a = datos.actividad.clave;
-            const b = claveDeArchivo(archivos.rubrica);
-            if (a && b && a !== b) {
-                partes.unshift(`
-                    <div class="aviso-pareja"><i class="ph ph-warning-circle"></i>
-                    <span><strong>Estos dos Word no parecen de la misma actividad.</strong>
-                    El guion pide guardar el archivo como
-                    <code>${escapar(datos.actividad.codigoTexto)}</code> y la rúbrica se llama
-                    <code>${escapar(archivos.rubrica)}</code>. Revisa antes de verificar.</span></div>`);
-            }
-        }
-
         caja.innerHTML = partes.join('');
         caja.querySelectorAll('[data-quitar]').forEach(b =>
             b.addEventListener('click', () => quitar(b.dataset.quitar)));
@@ -316,24 +285,51 @@
                     ${t.cursivas.length ? ` <em>· cursivas: ${escapar(t.cursivas.join(' / '))}</em>` : ''}</span></div>`).join('')}
                 </div></div>`);
         }
-        if (datos.rubrica) {
-            const r = datos.rubrica;
-            partes.push(`<div class="check-bloque">
-                <h3><i class="ph ph-list-checks"></i> Criterios de la rúbrica (${r.criterios.length})</h3>
-                <div class="qa-lista-textos">${r.criterios.map((c, i) => `
-                    <div class="qa-linea"><span class="qa-etiqueta">Criterio ${i + 1}</span>
-                    <span class="qa-texto">${escapar(c.nombre.split('\n')[0])}
-                    <strong>· ${escapar(c.puntos.join(' / '))}</strong></span></div>`).join('')}
-                </div>
-                <p class="check-nota">Se coteja el texto del criterio, los cinco niveles con sus puntos y que la suma
-                del nivel más alto dé ${escapar(r.total || 'el total del Word')}.</p></div>`);
-        }
         caja.innerHTML = partes.join('');
     }
 
     /* --------------------------------------------------------------- Arranque */
 
+    /* El selector de módulo. La lista sale de assets/modulos-311.js, la misma
+       que usan el Integrador HTML y el Generador de Bibliografías: el número de
+       módulos no se teclea dos veces. */
+    function prepararModulo() {
+        const sel = $('#modulo');
+        if (!sel || typeof MODULOS_311 === 'undefined') return;
+        Object.keys(MODULOS_311).forEach(n => {
+            const op = document.createElement('option');
+            op.value = n;
+            op.textContent = 'Módulo ' + n;
+            sel.appendChild(op);
+        });
+        sel.value = String(modulo);
+
+        /* La muestra de color: fondo, barra y contenido del módulo, el mismo
+           componente `.paleta` que enseña el Integrador HTML. No es adorno —es
+           lo que deja ver de un vistazo que se eligió el módulo correcto, que
+           aquí decide dónde busca el verificador. */
+        const eco = $('#modulo-echo');
+        const muestra = $('#paleta');
+        const refrescar = () => {
+            if (eco) eco.textContent = String(modulo);
+            if (muestra && typeof MODULOS_311 !== 'undefined') {
+                muestra.innerHTML = (MODULOS_311[modulo] || [])
+                    .map(c => `<i style="background:${c}"></i>`).join('');
+            }
+        };
+        refrescar();
+
+        sel.addEventListener('change', () => {
+            modulo = Number(sel.value) || 1;
+            localStorage.setItem('qa311-modulo', String(modulo));
+            refrescar();
+            // El módulo va DENTRO del verificador: si cambia, hay que rehacerlo.
+            dibujar();
+        });
+    }
+
     function init() {
+        prepararModulo();
         prepararZona('#zona-guion', '#input-guion', cargarGuion);
         prepararZona('#zona-rubrica', '#input-rubrica', cargarRubrica);
 

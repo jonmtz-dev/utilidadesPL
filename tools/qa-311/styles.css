@@ -1,0 +1,174 @@
+/* ==========================================================================
+   QA de Actividad y Rúbrica (Moodle 5.1) — estilos propios.
+   Los componentes compartidos (.glass-panel, .tabs, .divisor, .code-output…)
+   viven en assets/shared.css; aquí solo lo que es de esta herramienta.
+   La `.dropzone` NO es compartida: cada herramienta define la suya.
+   ========================================================================== */
+
+.logo--qa { background: linear-gradient(135deg, #0f9d58, #1f6f4a); box-shadow: 0 4px 12px rgba(15, 157, 88, .34); }
+
+/* Tres columnas: los Word · divisor · el verificador. Mismo contrato que las
+   demás herramientas con reparto (ver assets/reparto.js). */
+.qa-workspace {
+    grid-template-columns: var(--col-editor, clamp(400px, 42%, 640px)) 20px minmax(0, 1fr);
+    gap: 0;
+}
+.editor-panel, .output-panel { min-height: 0; }
+
+/* Las dos zonas de carga, una junto a otra: son dos documentos distintos y
+   verlos en paralelo dice de un vistazo cuál falta.
+
+   ⚠️ `.dropzone` NO vive en shared.css: cada herramienta tiene la suya (las de
+   Micrositio e Integrador ni siquiera se parecen). Por eso se define aquí. */
+.zona-doble { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 132px;
+    padding: 18px 14px;
+    text-align: center;
+    background: var(--input-bg);
+    border: 2px dashed var(--input-border);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all .2s ease;
+}
+.dropzone:hover,
+.dropzone--active { border-color: var(--accent); background: var(--input-bg-focus); }
+.dropzone:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(0, 102, 204, .18); }
+.dropzone > i { font-size: 32px; color: var(--text-muted); }
+.dropzone-titulo { font-size: 14px; }
+.dropzone-nota { font-size: 12px; color: var(--text-muted); }
+
+/* Cargada: el borde entero y el icono en verde. De un vistazo se ve cuál de los
+   dos documentos falta, que es la pregunta que uno se hace al llegar. */
+.dropzone--cargada { border-style: solid; border-color: var(--success); background: var(--control-bg); }
+.dropzone--cargada > i { color: var(--success); }
+
+/* Resumen de lo leído: qué trae cada Word. Es la única forma de notar, antes de
+   ir a Moodle, que el Word no era el que se creía. */
+.resumen {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 10px;
+    margin-top: 14px;
+}
+.resumen:empty { display: none; }
+.resumen-bloque {
+    border: 1px solid var(--control-border); border-radius: 12px;
+    padding: 12px 14px; background: var(--control-bg);
+}
+.resumen-bloque h3 {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 14px; margin-bottom: 8px;
+}
+.resumen-dato { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 3px 0; }
+.resumen-dato span:last-child { color: var(--text-muted); text-align: right; }
+.resumen-bloque code {
+    font-family: 'Courier New', Courier, monospace; font-size: 12px;
+    background: var(--input-bg); padding: 1px 5px; border-radius: 5px;
+}
+
+/* Lo que se revisará, en la pestaña de al lado. */
+.check-lista { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.check-bloque { border: 1px solid var(--control-border); border-radius: 12px; padding: 12px 14px; background: var(--control-bg); }
+.check-bloque h3 { display: flex; align-items: center; gap: 7px; font-size: 14px; margin-bottom: 8px; }
+.check-bloque code { font-family: 'Courier New', monospace; font-size: 12px; background: var(--input-bg); padding: 1px 5px; border-radius: 5px; }
+.check-archivos { list-style: none; display: flex; flex-direction: column; gap: 7px; font-size: 13px; line-height: 1.5; }
+.check-nota { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+
+/* Los puntos de color de la leyenda: los mismos tres que usa el panel del
+   verificador dentro de Moodle, para que se lean igual en los dos lados. */
+.punto { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 3px; }
+.punto--error { background: #c62828; }
+.punto--aviso { background: #ef6c00; }
+.punto--ok { background: #2e7d32; }
+
+.opcion-entrega { margin-bottom: 18px; }
+.opcion-entrega h3 { display: flex; align-items: center; gap: 7px; font-size: 14px; margin-bottom: 5px; }
+.opcion-entrega .field-hint { margin-bottom: 9px; }
+.bookmarklet-link { display: inline-flex; cursor: grab; }
+.code-wrapper { position: relative; }
+#codigo { min-height: 200px; }
+
+.qa-lista-textos { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.qa-linea { display: flex; gap: 8px; align-items: baseline; line-height: 1.45; }
+.qa-etiqueta {
+    flex-shrink: 0; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .03em; color: var(--accent); min-width: 74px;
+}
+.qa-texto { color: var(--text-muted); }
+.qa-texto strong { color: var(--text-main); }
+
+@media (max-width: 1024px), (max-height: 620px) {
+    .qa-workspace { grid-template-columns: 1fr; gap: 24px; }
+    .divisor { display: none; }
+    .resumen { max-height: none; }
+}
+@media (max-width: 640px) {
+    .zona-doble { grid-template-columns: 1fr; }
+}
+
+/* Cabecera de cada tarjeta del resumen: el nombre a la izquierda y el botón de
+   quitar a la derecha. Sin esa salida, cambiar de actividad obligaba a recargar
+   la página —y no era evidente que el otro documento seguía cargado—. */
+.resumen-bloque h3 { justify-content: space-between; }
+.resumen-titulo { display: flex; align-items: center; gap: 7px; }
+.btn-quitar {
+    border: 0; background: transparent; color: var(--text-muted);
+    font: inherit; font-size: 15px; line-height: 1; cursor: pointer;
+    padding: 3px 5px; border-radius: 6px; transition: all .16s ease;
+}
+.btn-quitar:hover { color: var(--danger); background: var(--input-bg); }
+
+/* Aviso de que los dos Word no son de la misma actividad. */
+.aviso-pareja {
+    display: flex; align-items: flex-start; gap: 8px;
+    border-left: 3px solid var(--danger); border-radius: 0 10px 10px 0;
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+    padding: 10px 12px; font-size: 12.5px; line-height: 1.5;
+}
+.aviso-pareja i { font-size: 16px; color: var(--danger); flex-shrink: 0; margin-top: 1px; }
+
+/* Qué documentos lleva el verificador que se está copiando. */
+.incluye { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.incluye span {
+    font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+    background: var(--control-bg); border: 1px solid var(--control-border); color: var(--text-muted);
+}
+.incluye span.puesto { border-color: var(--success); color: var(--success); }
+
+/* --------------------------------------------------------------------------
+   Selector de módulo
+
+   Va en la misma fila que las dos zonas de carga, así que necesita respirar
+   igual que ellas. La muestra de color (.paleta, de shared.css) es la misma
+   que enseña el Integrador HTML: elegir el módulo equivocado aquí manda al
+   verificador a buscar el contenido en una clase que no existe, y el color es
+   lo que lo delata de un vistazo.
+   -------------------------------------------------------------------------- */
+.campo-modulo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--control-border);
+}
+.campo-modulo label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+.campo-modulo select { min-width: 130px; }
+.campo-modulo .paleta { flex-shrink: 0; }
+/* La explicación se va al renglón de abajo cuando no cabe, en vez de estrujar
+   al selector. */
+.campo-modulo .field-hint { flex: 1 1 220px; min-width: 0; }

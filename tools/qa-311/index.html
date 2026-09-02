@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QA de Actividad y Rúbrica 5.1 - Moodle</title>
+    <title>QA de Actividad y Rúbrica 3.11 - Moodle</title>
     <link rel="manifest" href="../../manifest.json">
     <meta name="theme-color" content="#f0f2f5">
     <link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32">
@@ -34,9 +34,9 @@
 
         <div class="aviso aviso-info">
             <i class="ph ph-info"></i>
-            <span><strong>Solo lee, nunca escribe.</strong> Sube los dos Word, copia el verificador y ejecútalo
-            <strong>en la página ya montada</strong> (la actividad o la pantalla de la rúbrica). Señala las diferencias
-            sobre la página; no toca ni guarda nada en Moodle.</span>
+            <span><strong>Solo lee, nunca escribe.</strong> Sube los dos Word, elige el módulo, copia el verificador y
+            ejecútalo <strong>en la página ya montada</strong> (la actividad o «Definir rúbrica»). Señala las
+            diferencias sobre la página; no toca ni guarda nada en Moodle.</span>
         </div>
 
         <div class="workspace qa-workspace">
@@ -49,16 +49,25 @@
                          aria-label="Subir el guion de la actividad en Word">
                         <i class="ph ph-file-doc"></i>
                         <span class="dropzone-titulo"><strong>Guion de la actividad</strong></span>
-                        <span class="dropzone-nota">.docx — el que se montó como página</span>
+                        <span class="dropzone-nota">.docx — el que se montó con el Integrador HTML</span>
                         <input id="input-guion" type="file" accept=".docx" hidden>
                     </div>
                     <div class="dropzone" id="zona-rubrica" tabindex="0" role="button"
                          aria-label="Subir la rúbrica en Word">
                         <i class="ph ph-list-checks"></i>
                         <span class="dropzone-titulo"><strong>Rúbrica</strong></span>
-                        <span class="dropzone-nota">.docx — el calificador de Moodle</span>
+                        <span class="dropzone-nota">.docx — la que se vacía en «Definir rúbrica»</span>
                         <input id="input-rubrica" type="file" accept=".docx" hidden>
                     </div>
+                </div>
+
+                <div class="field-row campo-modulo">
+                        <label for="modulo"><i class="ph ph-palette"></i> Módulo</label>
+                        <select id="modulo"></select>
+                        <span id="paleta" class="paleta" title="Colores del módulo"></span>
+                        <span class="field-hint">De aquí sale la clase <code>prepa-M<span id="modulo-echo">1</span>-body</code>,
+                        que es donde el verificador busca el contenido montado.</span>
+                </div
                 </div>
 
                 <p class="field-hint" id="aviso-lectura"></p>
@@ -153,6 +162,8 @@
     <script src="../../assets/evidencia-qa.js"></script>
     <!-- El lector del guion es común con el QA de Moodle 3.11: el Word que manda
          producción es el mismo, lo que cambia es la página que se coteja. -->
+    <script src="../../assets/modulos-311.js"></script>
+    <script src="../../assets/qa-rubrica.js"></script>
     <script src="../../assets/qa-guion.js"></script>
     <script src="verificador.js"></script>
     <script src="script.js"></script>

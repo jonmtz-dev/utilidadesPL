@@ -13,7 +13,7 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.68.0';
+const VERSION = '1.77.0';
 const CACHE = `panel-herramientas-v${VERSION}`;
 
 // Rutas relativas a propósito: en GitHub Pages la app vive en un subdirectorio
@@ -38,6 +38,8 @@ const APP_SHELL = [
     'assets/scroll-pista.js',
     // La evidencia imprimible que comparten las dos herramientas de QA.
     'assets/evidencia-qa.js',
+    'assets/qa-guion.js',
+    'assets/qa-rubrica.js',
     'assets/icons/icon-192.png',
     'assets/icons/icon-512.png',
     'assets/icons/icon-maskable-512.png',
@@ -77,6 +79,10 @@ const APP_SHELL = [
     'tools/guion-a-pagina/importar-html.js',
     'tools/guion-a-pagina/vista-previa.js',
     'tools/guion-a-pagina/styles.css',
+    'tools/qa-311/index.html',
+    'tools/qa-311/script.js',
+    'tools/qa-311/verificador.js',
+    'tools/qa-311/styles.css',
     'tools/qa-51/index.html',
     'tools/qa-51/script.js',
     'tools/qa-51/verificador.js',
