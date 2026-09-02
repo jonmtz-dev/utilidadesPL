@@ -244,6 +244,112 @@
         return items.length ? { tipo: 'acordeon', items } : null;
     }
 
+    /* Botón desplegable: una `.row` en la que CADA columna trae su disparador
+       (`data-bs-toggle="collapse"`) y su propio panel. Lo que lo separa del
+       acordeón es justo lo que no tiene: ni `.accordion` ni `data-bs-parent`.
+
+       Es de los lectores más exigentes a propósito. Reclamar de más aquí sale
+       caro —una fila con dos columnas cualesquiera y un colapsable perdido
+       adentro volvería a publicarse con otra rejilla—, así que en cuanto algo
+       no encaja devuelve null y el nodo se va a `crudo`, que se republica
+       idéntico. */
+    const REJILLA_INVERSA = { 6: '2', 4: '3', 3: '4', 2: '6' };
+
+    /**
+     * Lo que hay dentro del `.card` de un desplegable, como bloques.
+     *
+     * Los dos primeros casos no son adorno, son lo que traen las páginas
+     * publicadas y lo que se perdía sin mirarlos:
+     *
+     * · texto PELADO dentro del `.card-body`, sin ni un `<p>`. `leerHijos`
+     *   recorre elementos, así que devolvía [] y el texto desaparecía —el peor
+     *   caso que este módulo promete no tener—.
+     * · solo `<p>`: entran como un bloque Texto editable. Nodo por nodo cada
+     *   `<p>` suelto se iría a `crudo` (`leerTexto` pide su `.col-12`), y este
+     *   contenido se importa justo para poder editarlo.
+     */
+    function contenidoDePanel(tarjeta, leerHijos) {
+        const hijos = [...tarjeta.children];
+        if (!hijos.length) {
+            const suelto = aMarcas(tarjeta);
+            return suelto ? [{ tipo: 'texto', texto: suelto, destacado: false, alineacion: 'izquierda' }] : [];
+        }
+        if (hijos.every(h => h.tagName.toLowerCase() === 'p') && !conVentanaCompleja(tarjeta)) {
+            const texto = parrafosDe(tarjeta);
+            if (texto) return [{ tipo: 'texto', texto, destacado: false, alineacion: 'izquierda' }];
+        }
+        return leerHijos(tarjeta);
+    }
+
+    function leerDesplegable(el, leerHijos) {
+        if (!el.classList.contains('row')) return null;
+        const cols = [...el.children].filter(c => /(^|\s)col-/.test(c.className));
+        if (!cols.length || cols.length !== el.children.length) return null;
+
+        let estilo = null, cuantas = null, ancho = null;
+        let panel = 'blanco', flecha = false, tamano = 'normal';
+        const items = [];
+
+        for (const col of cols) {
+            /* La página publicada mete un <div> sin clase entre la columna y su
+               contenido (ruido del editor). Se baja por él para que ese montaje
+               también se pueda importar; al volver a generar ya no sale. */
+            let caja = col;
+            const unico = [...col.children];
+            if (unico.length === 1 && unico[0].tagName.toLowerCase() === 'div' && !unico[0].className) {
+                caja = unico[0];
+            }
+
+            const disp = caja.querySelector(':scope > [data-bs-toggle="collapse"]');
+            const cuerpo = caja.querySelector(':scope > .collapse');
+            if (!disp || !cuerpo) return null;
+            const tarjeta = cuerpo.querySelector('.card');
+            if (!tarjeta) return null;
+
+            // Un data-bs-parent es un acordeón disfrazado: no es esto.
+            if (cuerpo.hasAttribute('data-bs-parent')) return null;
+
+            const img = disp.querySelector('img');
+            const marca = disp.querySelector('mark');
+            const cara = disp.tagName.toLowerCase() === 'button' ? 'boton'
+                : (img ? 'imagen' : (marca ? 'resalte' : null));
+            if (!cara) return null;
+            // Una fila con dos caras mezcladas no es un bloque de estos.
+            if (estilo && estilo !== cara) return null;
+            estilo = cara;
+
+            const md = /(^|\s)col-md-(\d+)/.exec(col.className);
+            const n = md && REJILLA_INVERSA[Number(md[2])];
+            if (!n || (cuantas && cuantas !== n)) return null;
+            cuantas = n;
+
+            const w = /(^|\s)w-(50|75|100)(\s|$)/.exec(disp.className);
+            ancho = w ? w[2] : (cara === 'boton' ? '100' : '75');
+
+            if (tarjeta.classList.contains('bg-resalte-10')) panel = 'resalte';
+            if (cara === 'boton') {
+                flecha = disp.classList.contains('flecha_btn');
+                tamano = disp.classList.contains('btn-sm') ? 'chico'
+                    : (disp.classList.contains('btn-lg') ? 'grande' : 'normal');
+            }
+
+            const rotulo = caja.querySelector(':scope > .texto-titulo');
+            items.push({
+                titulo: rotulo ? aMarcas(rotulo) : '',
+                img: img ? (img.getAttribute('src') || '') : '',
+                alt: img ? (img.getAttribute('alt') || '') : '',
+                etiqueta: cara === 'resalte'
+                    ? aMarcas(disp.querySelector('strong') || marca)
+                    : (cara === 'boton' ? aMarcas(disp) : ''),
+                color: disp.classList.contains('btn-secondary') ? 'secondary' : 'primary',
+                hijos: contenidoDePanel(tarjeta, leerHijos)
+            });
+        }
+
+        if (!items.length) return null;
+        return { tipo: 'desplegable', estilo, cuantas, ancho, panel, flecha, tamano, items };
+    }
+
     function leerVideo(el) {
         const marco = el.querySelector('.ratio iframe, iframe');
         if (!marco) return null;
@@ -281,6 +387,7 @@
 
         const lectores = [
             () => leerAcordeon(el, leerHijos),
+            () => leerDesplegable(el, leerHijos),
             () => leerInstruccion(el),
             () => leerTabla(el),
             () => leerVideo(el),

@@ -238,13 +238,20 @@
 document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-bs-toggle="collapse"]');
     if (b) {
-        var panel = document.querySelector(b.getAttribute('data-bs-target'));
+        /* OJO: esto vive dentro de una plantilla de texto; ni un acento
+           invertido aquí.
+           El disparador puede ser un <a>, y ahí Bootstrap toma el destino del
+           href en vez de data-bs-target — así están publicados los botones
+           desplegables con imagen y con texto resaltado. Sin esta caída, en la
+           previa no abrían: el atributo venía null. */
+        var destino = b.getAttribute('data-bs-target') || b.getAttribute('href');
+        var panel = destino && /^#/.test(destino) ? document.querySelector(destino) : null;
         if (!panel) return;
         var abierto = panel.classList.contains('show');
         var padre = panel.getAttribute('data-bs-parent');
         if (padre) document.querySelectorAll(padre + ' .accordion-collapse.show').forEach(function (p) {
             p.classList.remove('show');
-            var btn = document.querySelector('[data-bs-target="#' + p.id + '"]');
+            var btn = document.querySelector('[data-bs-target="#' + p.id + '"], a[href="#' + p.id + '"]');
             if (btn) { btn.classList.add('collapsed'); btn.setAttribute('aria-expanded', 'false'); }
         });
         panel.classList.toggle('show', !abierto);
@@ -601,6 +608,21 @@ document.addEventListener('click', function (e) {
             if (b.tipo === 'acordeon' && (b.items || []).some(i => !(i.hijos || []).length)) {
                 avisos.push({ tono: 'aviso', texto: 'Un apartado del acordeón está vacío: en Moodle abrirá en blanco.' });
             }
+            if (b.tipo === 'desplegable') {
+                if ((b.items || []).some(i => !(i.hijos || []).length)) {
+                    avisos.push({ tono: 'aviso', texto: 'Un botón desplegable no tiene contenido: en Moodle abrirá una caja en blanco.' });
+                }
+                /* Cuando el disparador ES la imagen, la liga no tiene más texto
+                   que el alt: sin él, un lector de pantalla anuncia un enlace
+                   sin nombre y no hay forma de saber qué despliega. Por eso aquí
+                   es error y en un Imagen suelto es aviso. */
+                if (b.estilo === 'imagen' && (b.items || []).some(i => !(i.img || '').trim())) {
+                    avisos.push({ tono: 'error', texto: 'Un botón desplegable está en «Imagen» y no tiene imagen: la imagen ES lo que se hace clic, así que en Moodle no habrá nada que abrir.' });
+                }
+                if (b.estilo === 'imagen' && (b.items || []).some(i => (i.img || '').trim() && !(i.alt || '').trim())) {
+                    avisos.push({ tono: 'error', texto: 'Un botón desplegable con imagen no tiene texto alternativo. Como la imagen es la liga que abre el panel, sin alt el enlace se anuncia vacío.' });
+                }
+            }
             if (b.tipo === 'tabla' && !(b.encabezados || []).filter(t => String(t).trim()).length) {
                 avisos.push({ tono: 'error', texto: 'Una tabla no tiene encabezados. Sin ellos no hay data-label y en celular las tarjetas salen sin título de columna.' });
             }
@@ -680,7 +702,7 @@ document.addEventListener('click', function (e) {
                     : 'Ninguna: la página no usa imágenes propias.'}</p>`}
             </div>`);
 
-        const conteo = { acordeon: 0, modal: 0, tabla: 0, pestanas: 0 };
+        const conteo = { acordeon: 0, modal: 0, tabla: 0, pestanas: 0, desplegable: 0 };
         const contar = lista => (lista || []).forEach(b => {
             if (b.tipo in conteo) conteo[b.tipo]++;
             if (b.tipo === 'tarjetas') conteo.modal += (b.items || []).length;
@@ -697,6 +719,7 @@ document.addEventListener('click', function (e) {
                 <h3><i class="ph ph-eye"></i> Qué revisar ya publicado</h3>
                 <ul class="check-archivos">
                     ${conteo.acordeon ? `<li><i class="ph ph-rows"></i> ${conteo.acordeon} acordeón(es): que abran y cierren.</li>` : ''}
+                    ${conteo.desplegable ? `<li><i class="ph ph-caret-circle-down"></i> ${conteo.desplegable} fila(s) de botones desplegables: que cada uno abra el SUYO (no llevan data-bs-parent, así que pueden quedar varios abiertos a la vez).</li>` : ''}
                     ${tooltips ? `<li><i class="ph ph-cursor-click"></i> ${tooltips} ventana(s) emergente(s): abren con <code>&lt;details&gt;</code>, sin JavaScript, y cierran al hacer clic en el fondo.</li>` : ''}
                     ${conteo.tabla ? `<li><i class="ph ph-table"></i> ${conteo.tabla} tabla(s): angosta la ventana y confirma que cada fila se vuelve tarjeta con su encabezado.</li>` : ''}
                     ${conteo.pestanas ? `<li><i class="ph ph-browsers"></i> ${conteo.pestanas} juego(s) de pestañas.</li>` : ''}
@@ -2975,6 +2998,7 @@ document.addEventListener('click', function (e) {
     const DECISIONES = [
         { v: 'tabla', nombre: 'Tabla', mini: MINI.tabla, ayuda: 'Se queda como tabla, ya responsiva' },
         { v: 'acordeon', nombre: 'Acordeón', mini: MINI.acordeon, ayuda: 'Cada fila es un apartado plegable' },
+        { v: 'desplegable', nombre: 'Botón desplegable', mini: MINI.desplegable, ayuda: 'Cada fila es un botón en fila que despliega su texto debajo' },
         { v: 'tarjetas', nombre: 'Tarjetas', mini: MINI.tarjetas, ayuda: 'Cada fila es una tarjeta con ventana' },
         { v: 'texto', nombre: 'Texto', mini: MINI.texto, ayuda: 'Solo el contenido, sin tabla' },
         { v: 'cuadro', nombre: 'Cuadro', mini: MINI.envolvente, ayuda: 'Una caja de color con el texto adentro' },
@@ -3868,9 +3892,11 @@ document.addEventListener('click', function (e) {
             return { titulo, etiqueta: titulo, img: '', alt: '', color: i % 2 ? 'secondary' : 'primary', hijos };
         }).filter(it => it.titulo || it.hijos.length);
 
-        const compuesto = decision === 'tarjetas'
-            ? Object.assign(crearBloque('tarjetas', false), { items })
-            : Object.assign(crearBloque('acordeon', false), { items });
+        /* Las tres formas comen el MISMO item —título/etiqueta, imagen y sus
+           hijos—, así que cambiar de opinión en el asistente no vuelve a leer
+           el Word: es el mismo dato con otro envoltorio. */
+        const armar = { tarjetas: 'tarjetas', desplegable: 'desplegable' };
+        const compuesto = Object.assign(crearBloque(armar[decision] || 'acordeon', false), { items });
         return antes.concat(compuesto);
     }
 

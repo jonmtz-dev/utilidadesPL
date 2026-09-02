@@ -18,7 +18,7 @@ encabezado, que sirve en cualquier momento). Las fichas de control editorial del
 inicio se saltan solas: la página empieza en la **primera tabla de una celda con
 texto**, que es la barra del título. Luego se abre el **asistente**: cada tabla
 real del guion se muestra con su contenido y tú eliges qué es — *Tabla,
-Acordeón, Tarjetas, Texto* o *No va*. Las tablas de una celda no se preguntan:
+Acordeón, Botón desplegable, Tarjetas, Texto* o *No va*. Las tablas de una celda no se preguntan:
 son barras de título y se convierten solas.
 
 **B. De cero.** Seis plantillas de arranque (presentación de semana, actividad
@@ -520,6 +520,98 @@ botón, y el "Texto del botón": no hay botón. Y "Título de la ventana" se lla
 "Título de la tarjeta", que es lo que es. Todo con el `siOculta` que ya existía
 para los campos sueltos, extendido a los de una lista repetible —ahí recibe
 `(item, bloque)`, porque la decisión depende del bloque y no del renglón—.
+
+## Botón desplegable (y por qué no es el acordeón)
+
+El acordeón es una **pila**: los apartados van uno debajo de otro, comparten
+`data-bs-parent` y abrir uno cierra el anterior. El **Botón desplegable** es una
+**fila**: 2, 3, 4 o 6 columnas, cada disparador con su propio panel y **sin**
+`data-bs-parent`, así que pueden quedar varios abiertos a la vez. Son dos
+montajes distintos del aula y por eso son dos bloques distintos, no un campo del
+mismo.
+
+Aparece con tres caras, que es lo que decide **Se ve como**. Las tres salen de
+páginas ya publicadas, no del CSS:
+
+| Cara | Disparador | De dónde salió |
+|---|---|---|
+| **Botón** | `<button class="btn btn-… w-100 rounded-4 border border-4 border-primary-10 flecha_btn collapsed">` | las expresiones en inglés |
+| **Imagen** | `p.texto-titulo` arriba y `<a class="w-75" href="#id">` con la imagen dentro | las licencias Creative Commons |
+| **Texto resaltado** | `<a>` con `<mark class="bg-resalte-…"><strong class="interactivo">` | los minerales |
+
+Y el panel, igual en las tres:
+
+```html
+<div id="desplegable1" class="collapse">
+  <div class="card card-body">…</div>
+</div>
+```
+
+Los campos del bloque son **Columnas en escritorio** (la rejilla), **Ancho del
+disparador** (50/75/100 %), **Lo que se despliega** (la tarjeta blanca, o la
+amarilla `bg-resalte-10 border-0` de los minerales) y, solo cuando es botón,
+**Tamaño** y **Flechita**. Dentro de cada desplegable va cualquier bloque: texto,
+tabla, imagen, otra ventana emergente.
+
+### La rejilla NO es la de `REJILLA`
+
+`REJILLA` —la del bloque **Columnas**— viene de los "Bloque con contenido de N"
+de la plantilla de pestañas y corta en `lg`. Las tres páginas de desplegables
+cortan en `md`: `col-12 col-md-4` con tres, `col-12 col-md-3` con cuatro. Son
+montajes distintos; reusar la constante de al lado habría cambiado en qué ancho
+se apila la fila. Por eso hay un `REJILLA_DESPLEGABLE` aparte, y por eso lleva
+comentario: para que el siguiente no "unifique" las dos.
+
+### Cuatro cosas del montaje que NO se copiaron
+
+1. **El `style=` del panel** (`background-color: rgb(255,255,255) !important;
+   border: 1px solid rgba(0,0,0,.176) !important`). Es redundante: `.card` ya
+   sale con esos dos valores exactos —lo mismo que ya se había medido para las
+   tarjetas «Con texto»—.
+2. **El `style="background-color: rgb(231,210,149)"` del `<mark>`.** Un hex en
+   línea es el bug del `#d8a7b6`. El tono lo pone `bg-resalte-*`, y el **nivel**
+   es el de la página (`RESALTE_VENTANA`), para no acabar con dos intensidades
+   de resaltado en un mismo recurso.
+3. **`Rounded-4`, con R mayúscula.** Las clases de CSS distinguen mayúsculas, o
+   sea que esa clase no existe y no redondea nada. Sale `rounded-4`, que es la
+   que ya usa `clasesBoton()` y está cotejada en otro montaje. **Consecuencia
+   visible:** el botón queda un poco más redondeado que en la página original.
+4. **Los `aria-controls` rotos.** En la página de los minerales los cuatro
+   apuntaban a `desplegable1`, y en la de licencias un `aria-expanded="false"`
+   describía un panel que venía abierto. Eso no es estilo: es un lector de
+   pantalla mintiendo.
+
+Lo que **sí** se copia es el `<a href="#id">` de las dos primeras caras
+(Bootstrap toma el destino del `href`). Cuesta que la hoja del aula lo pinte
+azul y subrayado bajo `.ms-convertido` —lo mismo que ya pasa con los demás
+enlaces, ver la sección de `ms-convertido`—; se acepta a sabiendas.
+
+### Dos clases del aula que la copia de la hoja no trae
+
+`flecha_btn` y `texto-titulo` **no están** en `hoja-moodle-default.js`. En Moodle
+sí pintan (la tabla de `ms-convertido` lo registra para `flecha_btn`), así que
+las dos salen al HTML; lo que falta es la copia local de la hoja. Consecuencias:
+
+- `texto-titulo` se ve sin estilo en la previa. Se emite igual.
+- Para `flecha_btn` hay en `CSS_VISTA_PREVIA` una **aproximación** —el único
+  renglón de ese bloque que no está cotejado— para que la previa no muestre un
+  botón mudo. **Cuando se pegue la regla real de `conjunto_unificado.scss`, esa
+  aproximación se borra.**
+
+De paso, la previa reproducía el acordeón (`.accordion-collapse`) pero no el
+colapsable suelto ni las utilidades `w-50/75/100`: sin ellas los paneles salían
+siempre abiertos y el botón tomaba el ancho de su texto. Están agregadas.
+
+### Al importar, el `.card-body` con texto pelado
+
+Las páginas publicadas traen el contenido **suelto dentro del `.card-body`**, sin
+ni un `<p>`. `leerHijos` recorre elementos, así que devolvía `[]` y **el texto
+desaparecía** — justo lo que este módulo promete no hacer. `contenidoDePanel()`
+lo atiende: sin elementos, arma un bloque Texto con lo que haya; si son solo
+`<p>`, también, para que entre editable en vez de como `crudo`.
+
+El rótulo con `<br>` (`Para mostrar <br>agradecimiento:`, que es como se emparejan
+las cuatro columnas) llega como `\n` y se vuelve a publicar como `<br>`.
 
 ## El contenedor lleva `ms-convertido` (y no es un adorno)
 

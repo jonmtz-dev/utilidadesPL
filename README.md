@@ -412,11 +412,11 @@ Word.
 
 Importando el `.docx` (se salta las fichas de control editorial y arranca en el
 título), abre un **asistente** donde cada tabla del guion se muestra con su
-contenido para elegir en qué se convierte —*Tabla, Acordeón, Tarjetas, Texto,
-No va*— y deja todo en un lienzo de bloques que se arrastran. Hay 15 piezas
-(título, texto, lista, **pasos**, imagen con texto a un lado, caja de
-instrucción, tabla, acordeón, ventana emergente, tarjetas, pestañas, video,
-botón, aviso, separador) y **se anidan**: dentro de un apartado del acordeón
+contenido para elegir en qué se convierte —*Tabla, Acordeón, Botón desplegable,
+Tarjetas, Texto, No va*— y deja todo en un lienzo de bloques que se arrastran.
+Hay 16 piezas (título, texto, lista, **pasos**, imagen con texto a un lado, caja
+de instrucción, tabla, acordeón, **botón desplegable**, ventana emergente,
+tarjetas, pestañas, video, botón, aviso, separador) y **se anidan**: dentro de un apartado del acordeón
 caben una tabla, una imagen y otro tooltip.
 
 **Pasos** es la pieza de las actividades de aprendizaje: la lista numerada de la

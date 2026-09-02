@@ -257,6 +257,23 @@ const REJILLA = {
     '12': 'col-12 col-sm-6 col-md-4 col-lg-1 mb-2'
 };
 
+/* Rejilla de los desplegables. NO se reusa `REJILLA`: aquella sale de los
+   "Bloque con contenido de N" de la plantilla de pestañas y corta en `lg`, y
+   las tres páginas de desplegables ya publicadas cortan en `md`
+   (`col-12 col-md-4` con tres, `col-12 col-md-3` con cuatro). Son dos montajes
+   distintos; copiar el de al lado habría cambiado en qué ancho se apilan. */
+const REJILLA_DESPLEGABLE = {
+    '2': 'col-12 col-md-6',
+    '3': 'col-12 col-md-4',
+    '4': 'col-12 col-md-3',
+    '6': 'col-12 col-md-2'
+};
+
+/* Ancho del disparador. En las páginas publicadas la imagen y el texto
+   resaltado van en `w-75` (la liga no ocupa todo el ancho de su columna) y el
+   botón en `w-100`. Se deja elegir porque las tres conviven en el mismo aula. */
+const ANCHOS_DESPLEGABLE = { '50': 'w-50', '75': 'w-75', '100': 'w-100' };
+
 /* Color del botón. `primary` es el color del aula (M01, M02, M03, MM, reg) y
    `secondary` el gris fuerte; en el grupo de botones de la página publicada se
    alternan uno con otro, y por eso se elige por botón y no por bloque.
@@ -411,6 +428,9 @@ const MINI = {
     tarjetas: '<rect x="1" y="5" width="11" height="22" rx="3" opacity=".8"/><rect x="14.5" y="5" width="11" height="22" rx="3" opacity=".55"/><rect x="28" y="5" width="11" height="22" rx="3" opacity=".35"/><rect x="3" y="21" width="7" height="4" rx="2" fill="#fff" opacity=".9"/>',
     pestanas: '<rect x="1" y="4" width="13" height="7" rx="2.5" opacity=".9"/><rect x="15" y="5" width="12" height="6" rx="2.5" opacity=".35"/><rect x="28" y="5" width="11" height="6" rx="2.5" opacity=".35"/><rect x="1" y="12" width="38" height="15" rx="3" opacity=".25"/>',
     video: '<rect x="1" y="5" width="38" height="22" rx="4" opacity=".8"/><path d="M17 11l9 5-9 5z" fill="#fff"/>',
+    /* Un disparador con su flechita y, debajo, el panel ya desplegado: es
+       lo que lo distingue del acordeón en la paleta. */
+    desplegable: '<rect x="4" y="4" width="32" height="9" rx="4.5" opacity=".9"/><path d="M28 7l2.5 2.5L33 7" stroke="#fff" stroke-width="1.6" fill="none" opacity=".95"/><rect x="4" y="16" width="32" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".55"/><rect x="8" y="19.5" width="20" height="2.4" rx="1.2" opacity=".4"/><rect x="8" y="23.5" width="14" height="2.4" rx="1.2" opacity=".4"/>',
     boton: '<rect x="7" y="10" width="26" height="12" rx="6" opacity=".9"/><rect x="12" y="14.5" width="16" height="3" rx="1.5" fill="#fff" opacity=".9"/>',
     alerta: '<rect x="1" y="7" width="38" height="18" rx="4" opacity=".28"/><rect x="1" y="7" width="4" height="18" rx="2" opacity=".9"/><circle cx="12" cy="16" r="3.4" opacity=".8"/><rect x="19" y="14.5" width="18" height="3" rx="1.5" opacity=".5"/>',
     separador: '<rect x="1" y="14" width="38" height="3" rx="1.5" opacity=".5"/>',
@@ -1078,6 +1098,176 @@ const COMPONENTES = {
                 if (dentro) partes.push(dentro);
                 partes.push(`${ind(n + 3)}</div>`, `${ind(n + 2)}</div>`, `${ind(n + 1)}</div>`);
             });
+            partes.push(`${ind(n)}</div>`);
+            return partes.join('\n');
+        }
+    },
+
+    /* ---- Botón desplegable ----
+       El primo del acordeón, y no el mismo componente: aquí cada disparador
+       lleva SU panel y no hay `data-bs-parent`, así que pueden quedar varios
+       abiertos a la vez. Van en fila —2, 3, 4 o 6 columnas— y en las páginas
+       publicadas aparece con tres caras distintas, que es lo que decide el
+       campo «Se ve como»:
+
+       · `imagen`  — un título arriba (`p.texto-titulo`) y la imagen como liga
+                     que despliega. Es la de las licencias Creative Commons.
+       · `resalte` — la palabra sombreada con la flechita (`<mark>` con
+                     `<strong class="interactivo">`). La de los minerales.
+       · `boton`   — el botón del aula con `flecha_btn`. La de las expresiones
+                     en inglés.
+
+       El markup viene de esas tres páginas ya montadas, con cuatro cosas que NO
+       se copiaron y conviene tener escritas:
+
+       1. El `style="background-color: rgb(255,255,255); border: 1px solid
+          rgba(0,0,0,.176)"` del panel. Es redundante: `.card` ya sale con esos
+          dos valores exactos, medido en la previa con la hoja del aula. Es el
+          mismo caso ya resuelto en las tarjetas «Con texto» (README §Tarjetas).
+       2. El `style="background-color: rgb(231,210,149)"` del `<mark>`. Un hex
+          en línea es el bug del `#d8a7b6`: el tono sale de `bg-resalte-*`, y el
+          NIVEL es el de la página (`RESALTE_VENTANA`), para no mezclar dos
+          intensidades en un mismo recurso.
+       3. `Rounded-4` con R mayúscula. Las clases de CSS distinguen mayúsculas,
+          así que esa no existe y no redondea nada; sale `rounded-4`, que es la
+          que ya usa `clasesBoton()` y está cotejada en otro montaje.
+       4. Los `aria-controls` de la página apuntaban todos al primer panel
+          (`desplegable1`) y un `aria-expanded="false"` describía un panel que
+          venía abierto. Eso no es estilo, es un lector de pantalla mintiendo.
+
+       Sí se copia, en cambio, el `<a href="#id">` como disparador de las dos
+       primeras caras: Bootstrap toma el destino del `href` y así está publicado.
+       Cuesta que la hoja del aula lo pinte azul y subrayado bajo
+       `.ms-convertido` —lo mismo que ya pasa con los enlaces de la página, ver
+       README §`ms-convertido`—; se acepta a sabiendas, porque es como se ven
+       las páginas del aula. */
+    desplegable: {
+        nombre: 'Botón desplegable',
+        ayuda: 'Disparadores en fila; cada uno despliega su contenido debajo',
+        icono: 'caret-circle-down',
+        mini: MINI.desplegable,
+        nuevo: () => ({
+            estilo: 'boton', cuantas: '4', ancho: '100', panel: 'blanco',
+            tamano: 'normal', flecha: true,
+            items: [
+                { titulo: '', img: '', alt: '', etiqueta: 'Primer botón', color: 'primary', hijos: [] },
+                { titulo: '', img: '', alt: '', etiqueta: 'Segundo botón', color: 'primary', hijos: [] }
+            ]
+        }),
+        resumen: b => `${(b.items || []).length} desplegables`,
+        campos: [
+            {
+                k: 'estilo', tipo: 'opciones', etiqueta: 'Se ve como',
+                ayuda: 'Las tres caras salen de páginas ya publicadas. «Imagen» lleva su título arriba y despliega al hacer clic en la imagen; «Texto resaltado» es la palabra sombreada con la flechita; «Botón» es el botón del aula.',
+                ops: [
+                    { v: 'boton', etiqueta: 'Botón', icono: 'rectangle' },
+                    { v: 'imagen', etiqueta: 'Imagen', icono: 'image' },
+                    { v: 'resalte', etiqueta: 'Texto resaltado', icono: 'highlighter' }
+                ]
+            },
+            {
+                k: 'cuantas', tipo: 'opciones', etiqueta: 'Columnas en escritorio',
+                ops: [{ v: '2', etiqueta: '2' }, { v: '3', etiqueta: '3' },
+                      { v: '4', etiqueta: '4' }, { v: '6', etiqueta: '6' }],
+                ayuda: 'En celular siempre se apilan. El número es lo que se ve en pantalla ancha.'
+            },
+            {
+                k: 'ancho', tipo: 'opciones', etiqueta: 'Ancho del disparador',
+                ops: [{ v: '50', etiqueta: '50 %' }, { v: '75', etiqueta: '75 %' }, { v: '100', etiqueta: '100 %' }],
+                ayuda: 'Cuánto de su columna ocupa la imagen, la palabra o el botón. En las páginas publicadas la imagen y el texto van al 75 % y el botón al 100 %.'
+            },
+            {
+                k: 'panel', tipo: 'opciones', etiqueta: 'Lo que se despliega',
+                ayuda: '«Blanco con borde» es la tarjeta tal cual (el borde ya lo pone .card, no se escribe ningún color). «Resalte, sin borde» es la caja amarilla suave de la página de los minerales.',
+                ops: [
+                    { v: 'blanco', etiqueta: 'Blanco con borde', icono: 'square' },
+                    { v: 'resalte', etiqueta: 'Resalte, sin borde', icono: 'highlighter' }
+                ]
+            },
+            Object.assign({}, CAMPO_TAMANO_BOTON, { siOculta: b => b.estilo !== 'boton' }),
+            {
+                k: 'flecha', tipo: 'check', etiqueta: 'Flechita en el botón',
+                siOculta: b => b.estilo !== 'boton',
+                ayuda: 'La clase flecha_btn, que solo pinta dentro de .ms-convertido —y la salida de esta herramienta lo lleva—. Aquí sí va: es lo que anuncia que el botón despliega algo.'
+            },
+            {
+                k: 'items', tipo: 'repetible', etiqueta: 'Desplegables', nombreItem: 'Desplegable',
+                nuevo: () => ({ titulo: '', img: '', alt: '', etiqueta: 'Nuevo desplegable', color: 'primary', hijos: [] }),
+                campos: [
+                    { k: 'titulo', tipo: 'texto', etiqueta: 'Título, ARRIBA de la imagen',
+                      siOculta: (item, b) => b.estilo !== 'imagen' },
+                    { k: 'img', tipo: 'url', imagen: true, etiqueta: 'Imagen',
+                      marcador: '@@PLUGINFILE@@/imagen.png',
+                      siOculta: (item, b) => b.estilo !== 'imagen' },
+                    { k: 'alt', tipo: 'texto', etiqueta: 'Texto alternativo',
+                      siOculta: (item, b) => b.estilo !== 'imagen' },
+                    { k: 'etiqueta', tipo: 'texto', etiqueta: 'Texto del disparador',
+                      siOculta: (item, b) => b.estilo === 'imagen' },
+                    Object.assign({}, CAMPO_COLOR_BOTON, { siOculta: (item, b) => b.estilo !== 'boton' })
+                ],
+                hijos: true
+            }
+        ],
+        html: (b, n) => {
+            const items = b.items || [];
+            if (!items.length) return '';
+            const estilo = ['imagen', 'resalte', 'boton'].indexOf(b.estilo) >= 0 ? b.estilo : 'boton';
+            /* El rótulo de un disparador es UNA línea, así que el salto va como
+               <br> y no como párrafo. En los botones publicados el texto se
+               parte a mano ("Para mostrar <br>agradecimiento:") para que las
+               cuatro columnas queden parejas; sin esto, al importar uno de esos
+               el salto se publicaba crudo, que en HTML es un espacio. */
+            const rotulo = t => marcas(t || '').replace(/\n/g, '<br>');
+            const col = REJILLA_DESPLEGABLE[b.cuantas] || REJILLA_DESPLEGABLE['3'];
+            const ancho = ANCHOS_DESPLEGABLE[b.ancho] || (estilo === 'boton' ? 'w-100' : 'w-75');
+            /* El panel: `.card.card-body` y nada más. El fondo blanco y el borde
+               ya los da `.card`; el resalte suave es una clase de la paleta del
+               aula, nunca un hex. */
+            const panel = 'card card-body' + (b.panel === 'resalte' ? ' bg-resalte-10 border-0' : '');
+            /* La fila es distinta en cada montaje y no es capricho: `bloque` le
+               pone a la del resaltado los 8px de aire que la hoja le da bajo
+               `.ms-convertido`, y la de botones trae su `mb-3`. */
+            const fila = estilo === 'imagen' ? 'row' : (estilo === 'resalte' ? 'row bloque' : 'row mb-3');
+            const partes = [`${ind(n)}<div class="${fila}">`];
+
+            items.forEach(item => {
+                const id = nuevoId('desplegable');
+                /* Solo la cara del resaltado centra y separa: así está la
+                   página de los minerales, y es la única con el disparador
+                   angosto en medio de su columna. */
+                partes.push(`${ind(n + 1)}<div class="${col}${estilo === 'resalte' ? ' text-center mb-4' : ''}">`);
+
+                if (estilo === 'imagen') {
+                    const titulo = (item.titulo || '').trim();
+                    if (titulo) partes.push(`${ind(n + 2)}<p class="texto-titulo">${marcas(titulo)}</p>`);
+                    /* Sin imagen NO se escribe un <img src="#">: el
+                       disparador es la imagen, así que un src inventado sería
+                       una liga rota publicada. Se deja el <a> vacío —que en la
+                       previa se ve como el hueco que es— y la revisión de
+                       «Antes de subir» lo reclama. */
+                    const fuente = (item.img || '').trim();
+                    partes.push(`${ind(n + 2)}<a class="${ancho} collapsed" href="#${id}" data-bs-toggle="collapse" aria-expanded="false" aria-controls="${id}">` +
+                        (fuente ? `<img class="img-fluid w-100" src="${ligaSegura(fuente)}" alt="${escapar(item.alt || '')}">` : '') + '</a>');
+                } else if (estilo === 'resalte') {
+                    partes.push(`${ind(n + 2)}<a class="${ancho} collapsed" href="#${id}" data-bs-toggle="collapse" aria-expanded="false" aria-controls="${id}">` +
+                        `<mark class="${RESALTE_VENTANA} border-0"><strong class="interactivo">${rotulo(item.etiqueta)}</strong></mark></a>`);
+                } else {
+                    const clases = [clasesBoton(item.color, b.tamano || 'normal'), ancho,
+                        b.flecha === false ? '' : 'flecha_btn', 'collapsed'].filter(Boolean).join(' ');
+                    partes.push(`${ind(n + 2)}<button class="${clases}" type="button" data-bs-toggle="collapse" data-bs-target="#${id}" aria-expanded="false" aria-controls="${id}">${rotulo(item.etiqueta)}</button>`);
+                }
+
+                partes.push(
+                    `${ind(n + 2)}<div id="${id}" class="collapse">`,
+                    `${ind(n + 3)}<div class="${panel}">`);
+                /* Desnudo, igual que dentro de un `<li>` o de una tarjeta «Con
+                   texto»: en un `.card-body`, un `.row.bloque > .col-12` mete
+                   su propio gutter y despega el texto del borde de la caja. */
+                const dentro = htmlDeBloques(item.hijos, n + 4, true);
+                if (dentro) partes.push(dentro);
+                partes.push(`${ind(n + 3)}</div>`, `${ind(n + 2)}</div>`, `${ind(n + 1)}</div>`);
+            });
+
             partes.push(`${ind(n)}</div>`);
             return partes.join('\n');
         }
@@ -1789,7 +1979,7 @@ function idDeYoutube(url) {
 /* Orden de la paleta: primero lo de toda página, luego lo compuesto.
    `presentacion` va al frente porque es lo primero de una página de semana. */
 const ORDEN_PALETA = ['presentacion', 'titulo', 'texto', 'lista', 'pasos', 'imagen', 'instruccion', 'tabla',
-    'envolvente', 'columnas', 'acordeon', 'modal', 'tarjetas', 'pestanas', 'conversacion', 'video', 'escribir',
+    'envolvente', 'columnas', 'acordeon', 'desplegable', 'modal', 'tarjetas', 'pestanas', 'conversacion', 'video', 'escribir',
     'boton', 'alerta', 'separador', 'crudo'];
 
 /* Paletas del aula. Las clases son las del tema (mainPlantilla23.M01 …); los

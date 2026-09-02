@@ -170,6 +170,20 @@ caption { caption-side: top; padding: .5rem; }
 .accordion-collapse.show { display: block; }
 .accordion-body { padding: 1.25rem; }
 
+/* --- Colapsables sueltos (el Botón desplegable) ---
+   La regla de Bootstrap tal cual. El acordeón ya tenía la suya y nadie la
+   echaba en falta; un panel que NO es de acordeón salía siempre abierto y el
+   bloque parecía roto en la previa sin estarlo en Moodle. */
+.collapse:not(.show) { display: none; }
+.collapse.show { display: block; }
+
+/* Utilidades de ancho. Moodle las trae con Bootstrap; la copia de la hoja del
+   aula que viaja con la herramienta no, y sin ellas el botón desplegable salía
+   del ancho de su texto en vez del de su columna. */
+.w-50 { width: 50%; }
+.w-75 { width: 75%; }
+.w-100 { width: 100%; }
+
 /* --- Pestañas --- */
 .nav-tabs { display: flex; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; border-bottom: 1px solid #d5dce3; }
 .nav-tabs .nav-link { border: 0; background: transparent; padding: .7rem 1.1rem; font: inherit; cursor: pointer; }
@@ -349,6 +363,23 @@ details[open] > summary { position: relative; z-index: 98; }
 .ms-convertido .card-deck { display: block; }
 .ms-convertido .card.img-contenedor { background: #fff; border: 1px solid rgba(0, 0, 0, .17); }
 .ms-convertido .table-responsive .container-fluid.rounded-top p { font-weight: bold; text-align: center; }
+
+/* --- .flecha_btn: APROXIMACION, no copia ---
+   Es el unico renglon de este bloque que NO viene cotejado de
+   conjunto_unificado.scss: la copia de la hoja que trae la herramienta
+   (hoja-moodle-default.js) no incluye la clase, asi que no hay de donde
+   copiarla. En Moodle la flechita SI se pinta —por eso el boton desplegable la
+   manda—; aqui se dibuja una equivalente para que la previa no muestre un
+   boton mudo. Si algun dia se pega la regla real, esta se borra. */
+.ms-convertido .flecha_btn { position: relative; padding-right: 2.2em; text-align: left; }
+.ms-convertido .flecha_btn::after {
+    content: ""; position: absolute; right: .9em; top: 50%;
+    width: .5em; height: .5em; margin-top: -.35em;
+    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    transform: rotate(45deg); transition: transform .2s;
+}
+.ms-convertido .flecha_btn.collapsed::after { transform: rotate(45deg); }
+.ms-convertido .flecha_btn:not(.collapsed)::after { transform: rotate(-135deg); margin-top: -.1em; }
 `;
 
 /* ==========================================================================
