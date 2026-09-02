@@ -668,6 +668,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const thead = tabla.querySelector('thead');
                 (thead && thead.contains(headerRow) ? thead : headerRow)
                     .classList.add('bg-primary-20');
+
+                /* Y TAMBIÉN en cada celda, que es donde de verdad se ve.
+                   Bootstrap pinta el fondo de la tabla CELDA POR CELDA
+                   (`.table > :not(caption) > * > * { background-color: … }`),
+                   así que el color puesto en el <thead> o en el <tr> queda
+                   tapado por el blanco de los <th> encima: medido en la previa,
+                   el thead salía #d8a7b6 y el th salía #fff. Por eso este toggle
+                   no se veía —ni aquí ni en Moodle— y las tablas ya publicadas
+                   tienen el encabezado blanco aunque traigan la clase.
+                   La clase lleva !important en la hoja del tema, así que en la
+                   celda sí gana. */
+                Array.from(headerRow.children).forEach(celda => {
+                    if (celda.tagName === 'TD' || celda.tagName === 'TH') {
+                        celda.classList.add('bg-primary-20');
+                    }
+                });
             }
         }
 

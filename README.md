@@ -318,11 +318,17 @@ tapaban y seguía sin cargar. (Esas rutas rotas siguen dando dos 404 en la
 consola de la previa; son inofensivos y le pasan igual a Guion Instruccional,
 que carga la misma hoja.)
 
-> Consecuencia que la previa dejó a la vista: con el encabezado en un `<thead>`,
-> el `bg-primary-20` **nunca se ve** en Moodle, porque Bootstrap pinta el fondo
-> en cada celda y la tapa. Es lo mismo que ya documenta Guion Instruccional en
-> su opción "Encabezado con el color del aula". El toggle "Colorear encabezado"
-> se dejó como está: cambiarlo alteraría el color de todo lo ya publicado.
+**El color del encabezado va en las CELDAS, no solo en la fila.** Bootstrap
+pinta el fondo de la tabla celda por celda
+(`.table > :not(caption) > * > * { background-color: … }`), así que un
+`bg-primary-20` puesto en el `<thead>` o en el `<tr>` queda **tapado** por el
+blanco de los `<th>` de encima. Medido en la previa: el `<thead>` salía
+`#d8a7b6` y el `<th>` salía `#fff`. Por eso el toggle "Colorear encabezado" no
+se veía —ni aquí ni en Moodle— y las tablas ya publicadas tienen el encabezado
+blanco aunque traigan la clase. Ahora la clase va en la fila **y** en cada
+celda; en la celda gana, porque la hoja del tema la declara con `!important`.
+Es lo mismo que documenta Guion Instruccional en su opción "Encabezado con el
+color del aula".
 
 **Dos trampas del formato de Word con fila de título y celdas combinadas** (el
 típico "Contenido de Aprendizaje 1" con `colspan` arriba de los encabezados, y
