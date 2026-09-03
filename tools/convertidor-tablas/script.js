@@ -637,6 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ? celdasHeredadas(filasCuerpo, mapa)
             : null;
 
+        // Cuenta las celdas de la 1ª columna que SE PINTAN, no las filas.
         let indiceCuerpo = 0;
         filasCuerpo.forEach(fila => {
             const celdas = Array.from(fila.children)
@@ -680,7 +681,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (pintar && optAltColors.checked) {
-                const primera = celdas[0];
+                /* La celda de la PRIMERA COLUMNA REAL, no la primera del <tr>.
+                   Con `rowspan` no son la misma cosa: en la tabla del bloque 2,
+                   la segunda fila NO tiene celda de "Semana" —la cubre el
+                   rowspan de arriba— y su primera celda física es la de
+                   "Contenidos formativos". Esa era la que acababa pintada de
+                   verde en mitad de la tabla, en una columna que no se colorea.
+                   El `mapa` ya sabe en qué columna empieza cada celda de verdad;
+                   es el mismo que arregló los `data-label` corridos. */
+                const primera = celdas.find(c => {
+                    const pos = mapa.get(c);
+                    return pos && pos.col === 0;
+                });
                 if (primera) {
                     /* Tres casos, porque los tres salen en tablas reales del
                        equipo: alternada (la de siempre), toda rosa y toda
@@ -692,9 +704,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         modo === 'primary' ? 'bg-primary-10' :
                         modo === 'secondary' ? 'bg-secondary-10' :
                         (indiceCuerpo % 2 === 0 ? 'bg-primary-10' : 'bg-secondary-10'));
+                    /* La alternancia cuenta CELDAS PINTADAS, no filas. Contando
+                       filas, una fila sin celda propia se llevaba un turno y dos
+                       semanas seguidas salían del mismo color. En una tabla sin
+                       celdas combinadas es exactamente lo de antes: ahí cada
+                       fila pinta una. */
+                    indiceCuerpo++;
                 }
             }
-            indiceCuerpo++;
         });
 
         // Lo único que se agrega siempre: las clases que activan las tarjetas.

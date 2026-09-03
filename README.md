@@ -440,6 +440,20 @@ selector se esconde con el interruptor apagado —una perilla que no pinta nada 
 tiene por qué estar a la vista—. Es la misma escala de tres que Guion
 Instruccional ofrece en su bloque Tabla («Alternado» / «Un solo tono»).
 
+**Y pinta la primera COLUMNA REAL, no la primera celda del `<tr>`.** Con
+`rowspan` no son la misma cosa: si la celda de "Semana" abarca dos filas, la
+segunda fila no tiene celda propia en esa columna y su primera celda física es
+la de otra columna —"Contenidos formativos"—, que acababa pintada de verde en
+mitad de la tabla. Se busca con el mismo `mapa` de `assets/tablas.js` que ya
+arreglaba los `data-label` corridos: se pinta la celda cuyo `col` es 0, y si la
+fila no tiene ninguna no se pinta nada (lo que se ve ahí es la celda combinada
+de arriba, que ya trae su color).
+
+De paso, **la alternancia cuenta celdas pintadas, no filas**. Contando filas, una
+fila sin celda propia se llevaba un turno y dos semanas seguidas salían del mismo
+color. En una tabla sin celdas combinadas el resultado es idéntico al de antes,
+porque ahí cada fila pinta una.
+
 **Dos trampas del formato de Word con fila de título y celdas combinadas** (el
 típico "Contenido de Aprendizaje 1" con `colspan` arriba de los encabezados, y
 columnas verticalmente combinadas):
