@@ -13,6 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const optBordered = document.getElementById('opt-bordered');
     const optAltColors = document.getElementById('opt-alt-colors');
     const optHeaderColor = document.getElementById('opt-header-color');
+    const optAnchos = document.getElementById('opt-anchos');
+    const optCol1Modo = document.getElementById('opt-col1-modo');
+    const filaCol1 = document.getElementById('fila-col1');
     const optRepetirCombinadas = document.getElementById('opt-repetir-combinadas');
     const optMoodleWrap = document.getElementById('opt-moodle-wrap');
     const previewBarra = document.getElementById('preview-barra');
@@ -113,6 +116,18 @@ document.addEventListener('DOMContentLoaded', () => {
     .d-sm-none { display: none !important; }
     .d-sm-table-row { display: table-row !important; }
 }
+/* --- El titulo de la tarjeta, centrado ---
+   (OJO: esto vive dentro de una plantilla de texto; ni un acento invertido.)
+
+   En celular la hoja imprime el data-label con un ::before, y hereda el
+   text-align: left que la misma hoja le da a la celda. Un pseudo-elemento no se
+   puede tocar desde el HTML —no hay style= que valga—, asi que centrarlo es
+   forzosamente una regla de CSS.
+
+   ESPEJO: esta linea tiene que estar tambien en el tema de Moodle. Si alla no
+   esta, aqui se ve centrado y en el aula no. */
+.tabla-responsive-cards td[data-label]::before { text-align: center; }
+
 /* El contenedor de la pagina no mete ancho propio: la previa YA es del ancho
    del aparato. */
 .container-fluid { width: 100%; padding: 0 12px; }
@@ -524,6 +539,57 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * El `width: N%` de cada `<th>` de títulos, como en el montaje.
+     *
+     * NO es un adorno: va en pareja con `MW-auto`. Esa clase suelta el
+     * `min-width: 200px` de la hoja —que es lo que desbordaba la tabla en
+     * pantallas medianas—, pero al soltarlo el navegador reparte por contenido
+     * y una columna corta se queda sin ancho. Medido en una caja de 746px, con
+     * cinco columnas: sin anchos, "Semana" cae a **47px** y el título se parte
+     * en "Se / ma / na"; con 10/15/25/25/25 queda en 72px y la tabla sigue
+     * cabiendo. La tabla de referencia del aula lleva las dos cosas.
+     *
+     * Sin reparto escrito se van todas iguales: no es el diseño fino del
+     * montaje, pero nunca apachurra ninguna. Si lo que se escribe no cuadra con
+     * el número de columnas se ignora —mejor iguales que un reparto a medias—.
+     */
+    function anchosDeColumna(cuantas) {
+        const crudo = (optAnchos && optAnchos.value || '').trim();
+        const partes = crudo ? crudo.split(/[\/,\s]+/).map(n => parseFloat(n)).filter(n => n > 0) : [];
+        if (partes.length === cuantas) return partes.map(n => `${n}%`);
+        const igual = Math.round((100 / cuantas) * 100) / 100;
+        return Array.from({ length: cuantas }, () => `${igual}%`);
+    }
+
+    /**
+     * Deja el contenido de una celda de encabezado como en el montaje: texto
+     * pelado, sin el `<p align="center"><strong>…</strong></p>` que entrega
+     * Word.
+     *
+     * No es cosmética. Medido en las dos aulas, con la misma hoja:
+     *
+     *   academico5 (correcta)   `<th>Semana</th>`                    -> 700
+     *   margaritamaza (nuestra) `<th><p><strong>Semana</strong></p>` -> 900
+     *
+     * `strong` es `font-weight: bolder`, o sea RELATIVO: dentro de un `<th>`
+     * —que ya viene en 700— sube a 900. Por eso el encabezado salía «mucho más
+     * grueso» aunque las clases fueran las correctas. Y el `<p>` de más mete su
+     * propia caja, que es lo que hacía el renglón más alto.
+     *
+     * Se quitan los DOS envoltorios y nada más: un `<em>` o un `<br>` dentro del
+     * título se conservan, porque eso sí es contenido.
+     */
+    function limpiarCeldaDeEncabezado(celda) {
+        celda.querySelectorAll('p, strong, b').forEach(env => {
+            while (env.firstChild) env.parentNode.insertBefore(env.firstChild, env);
+            env.remove();
+        });
+        // Word deja espacios alrededor (" Semana "); en una celda centrada no se
+        // ven, pero ensucian el HTML que se pega.
+        celda.innerHTML = celda.innerHTML.trim();
+    }
+
+    /**
      * ANOTA la tabla en su sitio; NO la reconstruye.
      *
      * Antes se armaba una tabla nueva con createElement copiando solo el texto,
@@ -558,6 +624,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // (p. ej. un título con colspan) se quedan intactas y sin data-label.
         // Con -1 el slice(0) devuelve la tabla entera, que es justo lo que toca.
         const filasCuerpo = filas.slice(headerIndex + 1);
+
+        /* Y las de ARRIBA: el renglón de Word con `colspan` que cruza la tabla
+           ("Contenido de Aprendizaje 1"). Ese es el ENCABEZADO de la tabla, y
+           por eso se lleva el rosa fuerte. Sin banda, la lista queda vacía. */
+        const filasBanda = headerIndex > 0 ? filas.slice(0, headerIndex) : [];
 
         // Celdas combinadas (rowspan) que hay que repetir en las tarjetas. Se
         // calcula solo sobre el cuerpo: así un rowspan que nace en el encabezado
@@ -611,14 +682,32 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pintar && optAltColors.checked) {
                 const primera = celdas[0];
                 if (primera) {
-                    primera.classList.add(indiceCuerpo % 2 === 0 ? 'bg-primary-10' : 'bg-secondary-10');
+                    /* Tres casos, porque los tres salen en tablas reales del
+                       equipo: alternada (la de siempre), toda rosa y toda
+                       verde —la Tabla 1 de las presentaciones lleva
+                       `bg-secondary-10` en todas sus filas—. Siempre por
+                       CLASE: el tono lo resuelve el aula del wrapper. */
+                    const modo = optCol1Modo ? optCol1Modo.value : 'alternado';
+                    primera.classList.add(
+                        modo === 'primary' ? 'bg-primary-10' :
+                        modo === 'secondary' ? 'bg-secondary-10' :
+                        (indiceCuerpo % 2 === 0 ? 'bg-primary-10' : 'bg-secondary-10'));
                 }
             }
             indiceCuerpo++;
         });
 
         // Lo único que se agrega siempre: las clases que activan las tarjetas.
-        tabla.classList.add('table', 'tabla-responsive-cards');
+        /* `MW-auto` va SIEMPRE, junto a las clases de las tarjetas.
+           La hoja del aula trae `.mainPlantilla23 .table td { min-width: 200px }`
+           —o sea 1000px de ancho mínimo en una tabla de cinco columnas— y
+           `.mainPlantilla23 .table.MW-auto td { min-width: auto }` es lo único
+           que lo suelta. Sin ella, entre los 576px donde acaban las tarjetas y
+           los ~1000px que la tabla exige, la tabla se sale de su caja: es lo que
+           se veía «feo» en pantallas medianas. Las dos reglas están cotejadas en
+           la hoja del aula, y la tabla de referencia lleva la clase.
+           Guion Instruccional ya la ponía; esta herramienta no. */
+        tabla.classList.add('table', 'tabla-responsive-cards', 'MW-auto');
 
         if (pintar) {
             // Word entrega la fila de títulos como <td> sueltos dentro del tbody.
@@ -630,10 +719,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (celda.tagName === 'TH') return;
                     const th = document.createElement('th');
                     th.setAttribute('scope', 'col');
-                    th.className = 'text-center align-middle';
+                    /* La clase `thead` va en CADA <th>, no solo en el <thead>.
+                       Copiado del montaje publicado, donde los títulos salen
+                       `class="thead text-center align-middle bg-primary-10"`.
+                       En la copia de la hoja que trae la herramienta esa clase
+                       no existe y no cambia nada; en el aula sí, y sin ella los
+                       títulos salían con el peso y el tamaño de un <th> pelado
+                       —más gruesos y más grandes que en las páginas ya
+                       publicadas—. Mismo caso que `flecha_btn`: la clase viaja
+                       aunque la copia local no sepa pintarla. */
+                    th.className = 'thead text-center align-middle';
                     if (celda.getAttribute('colspan')) th.setAttribute('colspan', celda.getAttribute('colspan'));
                     if (celda.getAttribute('rowspan')) th.setAttribute('rowspan', celda.getAttribute('rowspan'));
                     th.innerHTML = celda.innerHTML;
+                    limpiarCeldaDeEncabezado(th);
                     celda.replaceWith(th);
                 });
 
@@ -658,6 +757,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            /* La banda también va como <th class="text-center">, no como el
+               <td> que entrega Word. No es cosmético: medido en la previa, el
+               <td> sale en peso 400 y alineado a la izquierda, y el <th> del
+               montaje en 700 y centrado. Es la misma fila, con la etiqueta que
+               le corresponde: es un encabezado, no un dato.
+
+               No lleva `scope`: abarca varias columnas y no titula ninguna, y
+               así está en la página de referencia. */
+            filasBanda.forEach(fila => {
+                Array.from(fila.children).forEach(celda => {
+                    if (celda.tagName !== 'TD') return;
+                    const th = document.createElement('th');
+                    ['colspan', 'rowspan'].forEach(attr => {
+                        if (celda.getAttribute(attr)) th.setAttribute(attr, celda.getAttribute(attr));
+                    });
+                    th.className = `text-center ${celda.getAttribute('class') || ''}`.trim();
+                    const estilo = celda.getAttribute('style');
+                    if (estilo) th.setAttribute('style', estilo);
+                    th.innerHTML = celda.innerHTML;
+                    limpiarCeldaDeEncabezado(th);
+                    celda.replaceWith(th);
+                });
+            });
+
+            /* El reparto de anchos, en los <th> de títulos. Va aquí y no antes
+               porque necesita las celdas YA promovidas a <th>.
+
+               Solo si ninguna celda del encabezado lleva `colspan`: con una
+               celda que abarca dos columnas, el ancho i-ésimo deja de
+               corresponder a la columna i-ésima y el reparto mentiría. Ahí se
+               deja que el navegador decida, que es lo que hacía antes. */
+            const celdasTitulo = headerRow
+                ? Array.from(headerRow.children).filter(c => c.tagName === 'TH' || c.tagName === 'TD')
+                : [];
+            if (celdasTitulo.length && !celdasTitulo.some(c => c.hasAttribute('colspan'))) {
+                const anchos = anchosDeColumna(celdasTitulo.length);
+                celdasTitulo.forEach((celda, i) => { celda.style.width = anchos[i]; });
+            }
+
             if (optBordered.checked) tabla.classList.add('table-bordered', 'border-neutral');
             if (headerRow && optHeaderColor && optHeaderColor.checked) {
                 // Solo la CLASE, nunca un hex: el color lo resuelve el módulo de la
@@ -665,25 +803,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 // background-color:#d8a7b6 !important inline —el rosa de MM— que
                 // pintaba del color equivocado cualquier página de otro módulo.
                 // Mismo bug que ya se quitó en Micrositio a Página (REGLAS.md §6-bis).
-                const thead = tabla.querySelector('thead');
-                (thead && thead.contains(headerRow) ? thead : headerRow)
-                    .classList.add('bg-primary-20');
 
-                /* Y TAMBIÉN en cada celda, que es donde de verdad se ve.
-                   Bootstrap pinta el fondo de la tabla CELDA POR CELDA
+                /* Y en cada CELDA, que es donde de verdad se ve. Bootstrap pinta
+                   el fondo de la tabla CELDA POR CELDA
                    (`.table > :not(caption) > * > * { background-color: … }`),
                    así que el color puesto en el <thead> o en el <tr> queda
                    tapado por el blanco de los <th> encima: medido en la previa,
-                   el thead salía #d8a7b6 y el th salía #fff. Por eso este toggle
-                   no se veía —ni aquí ni en Moodle— y las tablas ya publicadas
-                   tienen el encabezado blanco aunque traigan la clase.
-                   La clase lleva !important en la hoja del tema, así que en la
-                   celda sí gana. */
-                Array.from(headerRow.children).forEach(celda => {
-                    if (celda.tagName === 'TD' || celda.tagName === 'TH') {
-                        celda.classList.add('bg-primary-20');
-                    }
-                });
+                   el thead salía #d8a7b6 y el th salía #fff. La clase lleva
+                   !important en la hoja del tema, así que en la celda sí gana. */
+                const pintarFila = (fila, clase) => {
+                    fila.classList.add(clase);
+                    Array.from(fila.children).forEach(celda => {
+                        if (celda.tagName === 'TD' || celda.tagName === 'TH') celda.classList.add(clase);
+                    });
+                };
+
+                /* DOS renglones, DOS tonos, como en las tablas ya publicadas:
+                   la BANDA que cruza la tabla ("Contenido de Aprendizaje 1")
+                   va en `bg-primary-20` —el rosa fuerte— y la fila de TÍTULOS
+                   de abajo en `bg-primary-10`, el claro.
+
+                   Salía al revés: los títulos se llevaban el fuerte y la banda
+                   se quedaba en blanco, porque este bloque solo miraba la fila
+                   de títulos y las de arriba no existían para él. */
+                filasBanda.forEach(fila => pintarFila(fila, 'bg-primary-20'));
+
+                // Sin banda, la fila de títulos ES el encabezado de la tabla y
+                // se queda con el fuerte: si no, no habría nada oscuro arriba.
+                const claseTitulos = filasBanda.length ? 'bg-primary-10' : 'bg-primary-20';
+                pintarFila(headerRow, claseTitulos);
+
+                const thead = tabla.querySelector('thead');
+                if (thead && thead.contains(headerRow)) thead.classList.add(claseTitulos);
             }
         }
 
@@ -744,17 +895,30 @@ document.addEventListener('DOMContentLoaded', () => {
        el efecto, y como la previa ahora sí se parece a Moodle, eso era justo lo
        que había que poder comparar de un vistazo. Se rehace la salida con la
        misma fila de títulos que se eligió. */
-    [optBordered, optAltColors, optHeaderColor, optRepetirCombinadas, optMoodleWrap]
+    /* El "cómo" de la 1ra columna no existe si no se va a colorear: un
+       selector vivo que no pinta nada es una perilla muerta. */
+    function sincronizarCol1() {
+        if (filaCol1) filaCol1.hidden = !optAltColors.checked;
+    }
+    optAltColors.addEventListener('change', sincronizarCol1);
+    sincronizarCol1();
+
+    [optBordered, optAltColors, optCol1Modo, optAnchos, optHeaderColor, optRepetirCombinadas, optMoodleWrap]
         .forEach(toggle => {
             if (!toggle) return;
-            toggle.addEventListener('change', () => {
+            // El campo de texto además con `input`: con solo `change` el
+            // reparto no se veía hasta salir del campo, y lo que se quiere es
+            // teclear 10/15/25/25/25 y ver la tabla acomodarse.
+            const eventos = toggle.tagName === 'INPUT' && toggle.type === 'text'
+                ? ['change', 'input'] : ['change'];
+            eventos.forEach(ev => toggle.addEventListener(ev, () => {
                 if (ultimaFilaTitulos === null || !globalOriginalTable) return;
                 try {
                     generateFinalTable(globalOriginalTable, ultimaFilaTitulos, { cambiarPestana: false });
                 } catch (e) {
                     console.error('[tablas] Repintado tras cambiar una opción:', e);
                 }
-            });
+            }));
         });
 
     function formatHTML(html) {

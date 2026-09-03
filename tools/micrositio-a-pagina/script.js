@@ -710,13 +710,25 @@ async function blindarLigero(doc, cssMoodle) {
         for (let i = 0; i < src.length; i++) {
             const bg = getComputedStyle(src[i]).backgroundColor;
             if (esTransparente(bg)) continue;
-            if (!tieneInline(theads[i], 'background')) {
+            /* El <thead> mismo NO se estampa: su clase de fondo ya es
+               `!important` en la hoja y el Bootstrap de Moodle no pinta el
+               <thead>, pinta las CELDAS (`.table > :not(caption) > * > *`).
+               Estampar aquí solo dejaría clavado el color del módulo —lo que
+               REGLAS §6-bis prohíbe— sin cambiar un pixel. Lo que sí hace falta
+               es el bucle de abajo, que es donde Moodle tapa. */
+            if (!tieneInline(theads[i], 'background') && !RE_BG.test(clases(theads[i]))) {
                 theads[i].style.setProperty('background-color', bg, 'important');
             }
             // th O td: hay micrositios que arman el encabezado con <td>, y lo que
             // decide no es la etiqueta sino la posición (REGLAS §9).
             theads[i].querySelectorAll('th, td').forEach(celda => {
                 if (tieneInline(celda, 'background')) return;
+                /* Si la celda YA trae su propia clase de fondo no hay nada que
+                   reponer: esa clase es `!important` en la hoja y le gana al
+                   fondo que Moodle pinta en cada celda. Estampar aquí el hex
+                   volvería a congelar el módulo —justo lo que acaba de soltar
+                   `descongelarTema()`, que a estas celdas les puso la clase—. */
+                if (RE_BG.test(clases(celda))) return;
                 celda.style.setProperty('background-color', bg, 'important');
                 cuenta.encabezados++;
             });
@@ -724,6 +736,100 @@ async function blindarLigero(doc, cssMoodle) {
     } finally {
         iframe.remove();
     }
+    return cuenta;
+}
+
+/* Clases de tema cuyo color DEPENDE del aula del wrapper (M01/M02/M03/MM/reg).
+   `neutral` queda fuera A PROPÓSITO: sus tonos viven en `:root` y valen igual en
+   las cinco, así que un inline con ese valor no miente y quitarlo no arregla
+   nada —solo mueve HTML—. Igual que `.card` con su blanco y su borde, que son
+   defaults de Bootstrap, no de la paleta. */
+const RE_AULA_BG = /(^|\s)bg-(primary|secondary|resalte)(-|\s|$)/;
+const RE_AULA_TX = /(^|\s)text-(primary|secondary|resalte)(-|\s|$)/;
+const RE_AULA_BD = /(^|\s)border-(primary|secondary|resalte)(-|\s|$)/;
+
+/** La clase de fondo de aula que lleva un elemento, o ''. */
+function claseDeAula(el) {
+    const m = /(^|\s)(bg-(?:primary|secondary|resalte)(?:-\d+)?)(?=\s|$)/.exec(
+        typeof el.className === 'string' ? el.className : '');
+    return m ? m[2] : '';
+}
+
+/**
+ * Quita declaraciones de un `style=` usando el CSSOM, no cortando por `;`.
+ * Cortar el texto parece más simple hasta que aparece un `url(data:…;base64,…)`
+ * y la declaración de al lado se parte a la mitad. `removeProperty` respeta el
+ * `!important` de lo que se queda y devuelve el valor viejo (o '' si no había).
+ */
+function quitarInline(el, props) {
+    let n = 0;
+    props.forEach(p => { if (el.style.removeProperty(p)) n++; });
+    if (n && !el.getAttribute('style')) el.removeAttribute('style');
+    return n;
+}
+
+/**
+ * Descongela los colores de tema que quedaron escritos en el HTML (REGLAS §6-quinquies).
+ *
+ * EL PROBLEMA. El blindaje de una conversión mide el color contra la hoja del
+ * micrositio y lo fija inline con `!important` (§4). Para los defaults de
+ * componente eso es justo lo que hace falta, pero para las utilidades de tema
+ * (`bg-primary-20`, `bg-resalte-10`, `text-primary`…) **sobra y hace daño**: en
+ * la hoja de Moodle esas clases ya son `!important` —ningún default de Bootstrap
+ * les gana—, así que el inline no aporta nada y sí deja el color de ESE módulo
+ * clavado. Una página convertida desde un micrositio MM y publicada como M01 se
+ * queda con el rosa y el amarillo pálido de MM, y cambiar el wrapper ya no
+ * repinta. Es el mismo daño del hex `#d8a7b6` de §6-bis, por otra puerta.
+ *
+ * `blindarLigero()` (§ "Corregir HTML") ya no lo hace y su comentario explica el
+ * porqué; esto es lo que faltaba: deshacerlo en las páginas que ya salieron así.
+ *
+ * QUÉ QUITA. Solo la declaración de color, y solo si el elemento lleva la clase
+ * de aula que ya resuelve ese color:
+ *
+ *   `bg-(primary|secondary|resalte)`     -> background-color / background
+ *   `text-(primary|secondary|resalte)`   -> color
+ *   `border-(primary|secondary|resalte)` -> border-color
+ *
+ * Todo lo demás del `style=` se queda: `flex-shrink`, `cursor`, `max-width`,
+ * `margin`… Y lo que NO depende del aula tampoco se toca (los `bg-neutral-*`,
+ * el blanco y el borde de las `.card`): ahí el inline dice la verdad.
+ *
+ * LA EXCEPCIÓN, Y POR QUÉ. Una celda de `<thead>` sin clase propia se pinta con
+ * el color del `<thead>`, y el Bootstrap de Moodle lo tapa pintando el fondo de
+ * cada celda encima (§9). Quitarle el inline a secas la dejaría GRIS. Así que a
+ * esa celda se le pone antes **la clase del `<thead>`**: pinta igual, es
+ * `!important` en la hoja y sigue repintando si cambia el aula. Clases, nunca un
+ * color literal — la regla de §6-bis.
+ *
+ * Devuelve el conteo para el reporte. No lee CSS ni rinde nada: es DOM puro.
+ */
+function descongelarTema(doc) {
+    if (!doc.body) return null;
+    const cuenta = { fondos: 0, textos: 0, bordes: 0, celdasConClase: 0, celdasSinClase: 0 };
+
+    // 1) Las celdas de encabezado primero: heredan la clase antes de que el
+    //    barrido de abajo les quite el inline (ya con clase, entra sola).
+    doc.querySelectorAll('thead').forEach(thead => {
+        const clase = claseDeAula(thead);
+        thead.querySelectorAll('th, td').forEach(celda => {
+            if (!celda.style.getPropertyValue('background-color') &&
+                !celda.style.getPropertyValue('background')) return;
+            if (claseDeAula(celda)) return;               // ya tiene la suya
+            if (!clase) { cuenta.celdasSinClase++; return; }  // no hay de dónde copiarla
+            celda.classList.add(clase);
+            cuenta.celdasConClase++;
+        });
+    });
+
+    // 2) El barrido: quitar la declaración a quien ya la tiene por clase.
+    doc.querySelectorAll('[style]').forEach(el => {
+        const cls = ' ' + (typeof el.className === 'string' ? el.className : '') + ' ';
+        if (RE_AULA_BG.test(cls)) cuenta.fondos += quitarInline(el, ['background-color', 'background']);
+        if (RE_AULA_TX.test(cls)) cuenta.textos += quitarInline(el, ['color']);
+        if (RE_AULA_BD.test(cls)) cuenta.bordes += quitarInline(el, ['border-color']);
+    });
+
     return cuenta;
 }
 
@@ -1310,6 +1416,7 @@ function initMicrositio() {
         colorear: document.getElementById('opt-colorear'),
         colorearHeader: document.getElementById('opt-colorear-header'),
         blindar: document.getElementById('opt-blindar'),
+        descongelar: document.getElementById('opt-descongelar'),
         previewMoodle: document.getElementById('opt-preview-moodle')
     };
     const btnDescargarImgs = document.getElementById('btn-descargar-imgs');
@@ -1385,6 +1492,11 @@ function initMicrositio() {
             });
         }
 
+        /* Antes que nada: quitar los colores de tema que quedaron escritos
+           en el HTML. Va PRIMERO para que el blindaje ligero de abajo vea la
+           página ya limpia —él nunca pisa un inline existente, así que con el
+           color viejo puesto no repondría nada—. */
+        r.descongelado = opt.descongelar.checked ? descongelarTema(doc) : null;
         r.montaje = arreglosDeMontaje(doc);
         r.saneado = sanearParaTinyMCE(doc);
         marcarConvertido(doc);
@@ -1414,6 +1526,7 @@ function initMicrositio() {
         const bloques = [];
         const b = r.blindaje || {};
         const m = r.montaje || {};
+        const d = r.descongelado || {};
         const hechos = [];
         const punto = (n, texto) => { if (n) hechos.push(`<li><i class="ph ph-check-circle"></i> ${texto.replace('%n', n)}</li>`); };
 
@@ -1435,6 +1548,10 @@ function initMicrositio() {
         punto(m.tablasAncho, '%n tabla acotada a <code>max-width: 100%</code> (en vez de sacar barra de desplazamiento).');
         punto(m.sinSubrayado, '%n enlace con <code>.text-decoration-none</code> reforzado (Moodle los volvía a subrayar).');
         punto(m.formulas, '%n fórmula <code>&lt;math&gt;</code> en línea conservada en su renglón.');
+        punto(d.fondos, '%n fondo de tema congelado (<code>style=</code>) quitado: el color vuelve a salir de la clase y del aula del wrapper.');
+        punto(d.textos, '%n color de texto de tema congelado quitado.');
+        punto(d.bordes, '%n color de borde de tema congelado quitado.');
+        punto(d.celdasConClase, '%n celda de <code>&lt;thead&gt;</code> que heredó la clase de color de su <code>&lt;thead&gt;</code> (en vez del hex que traía escrito).');
         punto(b.tarjetas, '%n <code>.card</code> con su blanco y su borde de vuelta (Moodle las pinta grises y sin marco).');
         punto(b.encabezados, '%n celda de encabezado con el color del <code>&lt;thead&gt;</code> (el Bootstrap de Moodle lo tapaba).');
         punto(b.bs53, '%n clase de fondo que solo existe en Bootstrap 5.3 apagada (en el micrositio no pintaba nada).');

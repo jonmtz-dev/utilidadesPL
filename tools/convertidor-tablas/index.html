@@ -67,12 +67,30 @@
                     <label class="toggle-switch">
                         <input type="checkbox" id="opt-alt-colors" checked>
                         <span class="slider"></span>
-                        <span class="label-text">Colorear 1ra columna (Rosa/Verde)</span>
+                        <span class="label-text">Colorear 1ra columna</span>
                     </label>
+                    <!-- Los tres casos que pide el equipo. El color sale de la
+                         clase del aula, nunca de un hex. -->
+                    <div class="field-row field-col1" id="fila-col1">
+                        <label for="opt-col1-modo">Cómo</label>
+                        <select id="opt-col1-modo">
+                            <option value="alternado">Alternada (rosa / verde)</option>
+                            <option value="primary">Toda rosa</option>
+                            <option value="secondary">Toda verde</option>
+                        </select>
+                    </div>
+                    <!-- Los anchos van con MW-auto: esa clase suelta el
+                         min-width de 200px, y sin un reparto la columna corta
+                         ("Semana") se apachurra. -->
+                    <div class="field-row field-anchos">
+                        <label for="opt-anchos">Ancho de columnas</label>
+                        <input type="text" id="opt-anchos" placeholder="10/15/25/25/25" autocomplete="off">
+                    </div>
+                    <p class="pista-anchos">En %, separados por <code>/</code> o espacios. Vacío = todas iguales.</p>
                     <label class="toggle-switch">
                         <input type="checkbox" id="opt-header-color" checked>
                         <span class="slider"></span>
-                        <span class="label-text">Colorear encabezado (Rosa)</span>
+                        <span class="label-text" title="La banda que cruza la tabla va en rosa fuerte y la fila de títulos en rosa claro">Colorear encabezado</span>
                     </label>
                     <label class="toggle-switch">
                         <input type="checkbox" id="opt-repetir-combinadas" checked>

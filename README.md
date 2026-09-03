@@ -330,6 +330,116 @@ celda; en la celda gana, porque la hoja del tema la declara con `!important`.
 Es lo mismo que documenta Guion Instruccional en su opción "Encabezado con el
 color del aula".
 
+**Y la banda va en el tono FUERTE, los títulos en el claro.** Salía al revés: el
+toggle solo miraba la fila de títulos, así que se llevaban el `bg-primary-20` y
+la banda del `colspan` ("Contenido de Aprendizaje 1") se quedaba en blanco. En
+los montajes publicados es al contrario —la banda `bg-primary-20`, la fila de
+títulos `bg-primary-10`—, que es justo lo que Guion Instruccional ya tenía
+cotejado contra dos páginas (una de MM y otra de M03) y advertido en su código.
+En MM la diferencia se nota muchísimo: el `-20` es el rosa fuerte `#d8a7b6` y el
+`-10` el clarito `#f4e9ed`.
+
+Cuando la tabla **no trae banda**, la fila de títulos sigue llevando el
+`bg-primary-20`: es el único encabezado que hay, y dejarla en el claro la
+borraría.
+
+**Y las dos filas llevan el markup del montaje, etiqueta por etiqueta.** Dos
+diferencias que no eran cosméticas:
+
+- **La banda sale como `<th class="text-center">`, no como el `<td>` que entrega
+  Word.** Medido en la previa: el `<td>` computa peso `400` y alineado a la
+  izquierda; el `<th>` del montaje, `700` y centrado.
+- **Los `<th>` de títulos llevan la clase `thead`**, no solo el elemento
+  `<thead>`. En la copia de la hoja que viaja con la herramienta esa clase no
+  existe y no cambia nada, pero en el aula sí: sin ella los títulos salían con
+  el peso y el tamaño de un `<th>` pelado —más gruesos y más grandes que en las
+  páginas publicadas—. Mismo caso que `flecha_btn` en Guion Instruccional: la
+  clase viaja aunque la copia local no sepa pintarla.
+
+Lo único del montaje que **no** se reproduce es el `style="width: N%"` de cada
+`<th>`: ese reparto es una decisión editorial por tabla y no se puede deducir
+del Word. Sin él las columnas las reparte el navegador, así que una columna con
+título largo puede partirse en más renglones que en la página de referencia.
+
+**Las celdas de encabezado salen sin el `<p><strong>` de Word.** Es lo que hacía
+que el encabezado se viera «mucho más grueso» aunque las clases ya fueran las
+correctas. Medido con la misma hoja, en las dos aulas del equipo:
+
+| Página | Celda de título | `font-weight` |
+|---|---|---|
+| `academico5` (la buena) | `<th>Semana</th>` | **700** |
+| `margaritamaza` (la nuestra) | `<th><p align="center"><strong>Semana</strong></p></th>` | **900** |
+
+`strong` es `font-weight: bolder`, o sea **relativo**: dentro de un `<th>` —que ya
+viene en 700— sube a 900. Y el `<p>` de más metía su propia caja, que es lo que
+hacía el renglón más alto. Se quitan los dos envoltorios **solo en las celdas de
+encabezado**; un `<em>` o un `<br>` dentro del título se conservan, y el cuerpo
+de la tabla no se toca (ahí el montaje sí lleva `<p>`).
+
+**Y la tabla sale con `MW-auto`.** La hoja del aula trae dos reglas que van
+juntas:
+
+```css
+.mainPlantilla23 .table td          { min-width: 200px; }
+.mainPlantilla23 .table.MW-auto td  { min-width: auto; }
+```
+
+O sea **1000 px de ancho mínimo en una tabla de cinco columnas**. Entre los 576 px
+donde acaban las tarjetas y esos 1000 px, la tabla no cabe en su caja y se
+desborda: es lo que se veía roto en pantallas medianas. Medido en la previa, la
+misma tabla en un contenedor de 797 px: **sin `MW-auto` pide 1001 px; con ella,
+737 px**. Guion Instruccional ya la ponía en su bloque Tabla; esta herramienta
+no, y por eso solo pasaba aquí.
+
+> Las tablas **ya publicadas** no se arreglan solas: hay que volver a pasarlas
+> por la herramienta y pegar el HTML de nuevo.
+
+**Y `MW-auto` no va sola: va con el reparto de anchos.** Soltar el `min-width`
+sin decir cuánto mide cada columna deja que el navegador reparta por contenido,
+y una columna corta se queda sin ancho. Medido en una caja de 746 px con cinco
+columnas:
+
+| | Anchos resultantes | Total |
+|---|---|---|
+| Sin `MW-auto` | `200 · 200 · 200 · 200 · 200` | 1001 px — **se desborda** |
+| Con `MW-auto`, sin anchos | `47 · 103 · 293 · 173 · 105` | 722 px — **"Semana" en 47 px, el título se parte en "Se / ma / na"** |
+| Con `MW-auto` + `10/15/25/25/25` | `74 · 110 · 184 · 184 · 184` | 722 px — cabe y no apachurra |
+
+Por eso hay un campo **Ancho de columnas**: se escribe el reparto en % separado
+por `/` o espacios, tal como está en el montaje. **Vacío reparte iguales**
+(`100 / nº de columnas`), que no es el diseño fino de la página de referencia
+pero nunca deja una columna sin ancho. Si lo escrito no cuadra con el número de
+columnas se ignora y se reparte igual: mejor iguales que un reparto a medias. Y
+si alguna celda del encabezado lleva `colspan`, no se aplica ningún ancho —ahí
+el ancho i-ésimo ya no corresponde a la columna i-ésima—.
+
+### El título de la tarjeta va centrado (y es regla del tema)
+
+En celular la hoja imprime el `data-label` con un `::before`, que hereda el
+`text-align: left` de la celda. **Un pseudo-elemento no se puede tocar desde el
+HTML**, así que centrarlo es forzosamente CSS. La línea va en el tema de Moodle:
+
+```css
+.tabla-responsive-cards td[data-label]::before { text-align: center; }
+```
+
+`CSS_EXTRA_PREVIA` lleva la misma línea, como espejo. Si en el tema no está, la
+previa se ve centrada y el aula no.
+
+**"Colorear 1ra columna" tiene tres formas, no una.** El equipo pide las tres en
+tablas reales, así que el interruptor lleva debajo un selector:
+
+| Forma | Qué pinta |
+|---|---|
+| **Alternada (rosa / verde)** | `bg-primary-10` / `bg-secondary-10` fila por fila. Es la de siempre y sigue siendo el valor de fábrica. |
+| **Toda rosa** | `bg-primary-10` en todas. |
+| **Toda verde** | `bg-secondary-10` en todas. Es lo que trae la Tabla 1 de las presentaciones de semana. |
+
+Siempre por CLASE, nunca un hex: el tono lo resuelve el aula del wrapper. El
+selector se esconde con el interruptor apagado —una perilla que no pinta nada no
+tiene por qué estar a la vista—. Es la misma escala de tres que Guion
+Instruccional ofrece en su bloque Tabla («Alternado» / «Un solo tono»).
+
 **Dos trampas del formato de Word con fila de título y celdas combinadas** (el
 típico "Contenido de Aprendizaje 1" con `colspan` arriba de los encabezados, y
 columnas verticalmente combinadas):

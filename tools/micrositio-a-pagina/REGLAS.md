@@ -495,6 +495,95 @@ un `<p>` hermano adyacente.
 > `:has()` ya se usa en `conjunto.scss` (p. ej. `li.activity.label:has(...)`),
 > así que no introduce una dependencia nueva.
 
+## 6-quinquies. Soltar los colores de tema congelados (`descongelarTema()`)
+
+**Solo en «Corregir HTML».** Deshace en las páginas ya montadas lo que §6-bis y
+`blindarLigero()` prohíben hacia adelante: un color de tema escrito inline.
+
+### El daño
+
+El blindaje completo (§4) congela `bg-primary-20`, `bg-resalte-10`,
+`text-primary`… con el color medido contra la hoja del micrositio. Para los
+defaults de componente eso es justo lo que hace falta; para las **utilidades de
+tema, no**: en la hoja de Moodle ya son `!important` —ningún default de Bootstrap
+les gana— así que el inline **no cambia un pixel** y sí deja clavado el color de
+ESE módulo. Es el argumento que ya está escrito en `blindarLigero()`, aplicado al
+otro lado del problema.
+
+Caso real: micrositio **MM** convertido y publicado como **M01**. La página se
+quedó con el rosa `#d8a7b6` en la tabla y el amarillo pálido `#fff6e1` en la caja
+de instrucción, y cambiar el `MM` del wrapper por `M01` ya no repintaba nada. Es
+el hex de §6-bis otra vez, entrando por la puerta del blindaje.
+
+### Qué quita, y qué no
+
+Solo la declaración de color, y **solo si el elemento lleva la clase de aula que
+ya resuelve ese color**:
+
+| Clase en el elemento | Se quita del `style=` |
+|---|---|
+| `bg-(primary\|secondary\|resalte)*` | `background-color`, `background` |
+| `text-(primary\|secondary\|resalte)*` | `color` |
+| `border-(primary\|secondary\|resalte)*` | `border-color` |
+
+Todo lo demás del `style=` **se queda**: `flex-shrink`, `cursor`, `max-width`,
+`margin`, `display`… Y no se toca nada que **no dependa del aula**:
+
+- **`bg-neutral-*`, `border-neutral*`.** Sus tonos viven en `:root` y valen igual
+  en las cinco aulas: ese inline no miente, y quitarlo solo movería HTML.
+- **El blanco y el borde de las `.card`.** Son defaults de **Bootstrap** que
+  Moodle quita, no paleta. Es justo lo que `blindarLigero()` repone a propósito.
+
+Se edita con el CSSOM (`style.removeProperty`), no cortando la cadena por `;`:
+un `url(data:…;base64,…)` en la declaración de al lado se partiría a la mitad.
+
+### La excepción del `<thead>`: se hereda la CLASE, no el hex
+
+Una celda de encabezado sin clase propia se ve del color de su `<thead>`, y el
+Bootstrap de Moodle lo tapa pintando el fondo de **cada celda** encima (§9).
+Quitarle el inline a secas la dejaría **gris**. Por eso, antes del barrido, a esa
+celda se le copia **la clase del `<thead>`**:
+
+```html
+<!-- antes -->
+<thead class="thead bg-primary-20" style="background-color: rgb(216,167,182) !important;">
+  <th class="text-center" style="background-color: rgb(216,167,182) !important;">
+<!-- después -->
+<thead class="thead bg-primary-20">
+  <th class="text-center bg-primary-20">
+```
+
+Pinta igual, es `!important` en la hoja y **sigue repintando si cambia el aula**.
+Clases, nunca un color literal: la regla de §6-bis.
+
+Si el `<thead>` no trae clase de dónde copiarla, la celda **se deja como está**
+—quitarle el color la dejaría sin nada— y se cuenta aparte en el reporte.
+
+### Dos guardas en `blindarLigero()` para no volver a congelar
+
+1. **La celda que ya trae su `bg-*`** no recibe el inline: esa clase es
+   `!important` y le gana al fondo que Moodle pinta en cada celda. Sin la guarda,
+   el blindaje volvía a clavar el hex que `descongelarTema()` acababa de soltar.
+2. **El `<thead>` con su `bg-*` tampoco.** Moodle no pinta el `<thead>`, pinta
+   las celdas (`.table > :not(caption) > * > *`): estampar ahí no cambiaba un
+   pixel y solo dejaba el módulo clavado.
+
+### Verificado
+
+Página M02 con el rosa y el pálido de MM congelados: tras corregirla no queda ni
+un hex que dependa del aula, y cambiando la clase del wrapper repinta entera.
+
+| Aula | Caja de instrucción | Encabezado de tabla |
+|---|---|---|
+| M01 | `#fff4d6` | `#f2eff8` lila |
+| M02 | `#fff4d6` | `#e1ecf8` azul |
+| M03 | `#fff4d6` | `#fae6e6` rojo |
+| MM | `#fff6e1` | `#d8a7b6` rosa |
+| reg | `#fff6e1` | `#a6beb9` verde |
+
+Que es exactamente lo que dice la hoja: amarillo vivo en M01/M02/M03 y pálido en
+`.MM, .reg`. **No toca rutas ni imágenes**: los `src` salen tal como entraron.
+
 ## 7. Ciclo de trabajo del equipo
 
 1. Abrir la herramienta → cargar micrositio (la hoja ya está precargada).
