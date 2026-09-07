@@ -78,8 +78,12 @@
     async function cargarGuion(file) {
         avisar('Leyendo el guion…');
         try {
-            const bloques = await leerBloquesDeDocx(file, { saltos: true, cursivas: true });
-            datos.actividad = construirActividad(bloques);
+            /* En 3.11 Moodle recibe las fórmulas como $$…$$. El lector las
+               obtiene del comentario de producción o, si no existe, convierte
+               el objeto de ecuación de Word. La opción sigue apagada para los
+               demás consumidores de docx.js. */
+            const bloques = await leerBloquesDeDocx(file, { saltos: true, cursivas: true, latex: true });
+            datos.actividad = construirActividad(bloques, { latex: true });
             archivos.guion = file.name;
             $('#zona-guion').classList.add('dropzone--cargada');
             avisar('');
@@ -247,6 +251,7 @@
                     <div class="resumen-dato"><span>Título</span><span>${escapar(a.titulo || '(no se encontró ningún encabezado)')}</span></div>
                     <div class="resumen-dato"><span>Empieza en</span><span>${escapar(entradaLegible(a.entrada))}</span></div>
                     <div class="resumen-dato"><span>Textos por cotejar</span><span>${a.textos.length}</span></div>
+                    <div class="resumen-dato"><span>Fórmulas</span><span>${a.textos.reduce((n, t) => n + (t.formulas || []).length, 0)}</span></div>
                     <div class="resumen-dato"><span>Tablas</span><span>${a.tablas.length}</span></div>
                     <div class="resumen-dato"><span>Enlace de la rúbrica</span><span>${a.enlaceRubrica ? (a.enlaceRubrica.archivo || 'sí, sin archivo definido') : 'no se menciona'}</span></div>
                 </div>`);
@@ -280,7 +285,8 @@
                 <h3><i class="ph ph-article"></i> Textos de la actividad (${a.textos.length})</h3>
                 <div class="qa-lista-textos">${a.textos.map(t => `
                     <div class="qa-linea"><span class="qa-etiqueta">${escapar(t.etiqueta)}</span>
-                    <span class="qa-texto">${escapar(t.texto.slice(0, 150))}${t.texto.length > 150 ? '…' : ''}
+                    <span class="qa-texto">${t.texto ? `${escapar(t.texto.slice(0, 150))}${t.texto.length > 150 ? '…' : ''}` : '<em>Solo fórmula</em>'}
+                    ${t.formulas && t.formulas.length ? ` <code>· ${escapar(t.formulas.map(f => `$$${f}$$`).join(' · '))}</code>` : ''}
                     ${t.negritas.length ? ` <strong>· negritas: ${escapar(t.negritas.join(' / '))}</strong>` : ''}
                     ${t.cursivas.length ? ` <em>· cursivas: ${escapar(t.cursivas.join(' / '))}</em>` : ''}</span></div>`).join('')}
                 </div></div>`);

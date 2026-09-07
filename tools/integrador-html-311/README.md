@@ -81,9 +81,11 @@ Ahora salen como `$$…$$`, que es la notación que el filtro TeX de Moodle 3.11
 convierte en fórmula. De dónde sale el código, en este orden:
 
 1. **Del comentario del Word.** Producción escribe el código autorizado en una
-   nota de revisión anclada a la ecuación: *"Código para producción:
-   `C(m)=\frac{1\,000m}{m^{2}+m}`"*. Ese es el que manda. La nota se reconoce por
-   esa frase, y esas notas ya **no** aparecen entre las indicaciones de montaje
+   nota de revisión anclada a la ecuación: puede venir como *"Código para
+   producción: `C(m)=\frac{1\,000m}{m^{2}+m}`"* o solo como
+   *`f(t)=t^{2}-4t+9`*. Ese es el que manda. La variante sin rótulo solo se toma
+   como LaTeX cuando el comentario abraza una ecuación y contiene sintaxis
+   matemática; esas notas ya **no** aparecen entre las indicaciones de montaje
    al generar: son contenido, no un recado pendiente.
 2. **De convertir el objeto de ecuación** (`omathALatex` en `assets/docx.js`):
    fracciones, potencias, subíndices, raíces, paréntesis, sumatorias y límites,

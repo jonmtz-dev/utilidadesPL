@@ -430,13 +430,67 @@ function omathALatex(nodo) {
     return unir(hijos);
 }
 
-/* La marca con que producción escribe el código de una fórmula en un
-   comentario del Word. Se comparte para que el Integrador pueda apartar esos
-   comentarios de las indicaciones de montaje: ya son contenido, no un recado. */
+/* La marca con que producción PUEDE escribir el código de una fórmula en un
+   comentario del Word. No todos los guiones la traen: en los dos Word de M18
+   cotejados, uno deja solamente `f(t)=t^{2}-4t+9`. Más abajo se acepta esa
+   variante únicamente si el comentario está anclado sobre un objeto OMML. */
 const MARCA_LATEX_COMENTARIO = /^\s*c[oó]digo\s+para\s+producci[oó]n\s*:?\s*/i;
 
 /** ¿El comentario del Word es un código de fórmula y no una indicación? */
 function esComentarioDeLatex(texto) { return MARCA_LATEX_COMENTARIO.test(String(texto || '')); }
+
+/** Quita la etiqueta y una envoltura que ya viniera como `$$…$$` o código. */
+function limpiarLatexDeComentario(texto) {
+    let latex = String(texto || '').replace(MARCA_LATEX_COMENTARIO, '').trim();
+    const conDolares = latex.match(/^\$\$([\s\S]*?)\$\$$/);
+    if (conDolares) latex = conDolares[1].trim();
+    const conAcentos = latex.match(/^`([^`]*)`$/);
+    if (conAcentos) latex = conAcentos[1].trim();
+    return latex;
+}
+
+/* Un comentario anclado sobre una ecuación puede ser código desnudo o una nota
+   editorial. Se toma como LaTeX solo si tiene sintaxis matemática inequívoca;
+   así "Revisar esta fórmula" sigue apareciendo como indicación de montaje. */
+function pareceCodigoLatex(texto) {
+    const latex = limpiarLatexDeComentario(texto);
+    if (!latex || /^(montaje|nota|revisar|corregir|sustituir|vincular|insertar)\b/i.test(latex)) return false;
+    return /\\[a-zA-Z]+|[_^]\s*\{|[{}]|[=<>+\-*/]|[→←∞≤≥≠≈±∑∫]/.test(latex);
+}
+
+/**
+ * Ids de comentarios cuyo rango contiene una ecuación OMML.
+ *
+ * La relación se saca del document.xml, no del texto del ancla: una ecuación
+ * vive en `m:t` y el lector de comentarios solo recoge `w:t`, por lo que el
+ * ancla de estos comentarios normalmente está vacía.
+ */
+async function comentariosAncladosAFormulaDocx(file) {
+    const doc = await abrirDocumentoDocx(file);
+    const body = doc.getElementsByTagNameNS(W_NS, 'body')[0] || doc.documentElement;
+    const abiertos = new Set();
+    const ids = new Set();
+    const recorrer = nodo => {
+        for (const n of [...nodo.childNodes]) {
+            if (n.nodeType !== 1) continue;
+            if (n.namespaceURI === W_NS && n.localName === 'commentRangeStart') {
+                abiertos.add(n.getAttributeNS(W_NS, 'id'));
+                continue;
+            }
+            if (n.namespaceURI === W_NS && n.localName === 'commentRangeEnd') {
+                abiertos.delete(n.getAttributeNS(W_NS, 'id'));
+                continue;
+            }
+            if (n.namespaceURI === M_NS && n.localName === 'oMath') {
+                abiertos.forEach(id => ids.add(id));
+                continue;
+            }
+            recorrer(n);
+        }
+    };
+    recorrer(body);
+    return ids;
+}
 
 /**
  * Map<idDeComentario, latex> con los códigos de producción del Word.
@@ -446,9 +500,11 @@ function esComentarioDeLatex(texto) { return MARCA_LATEX_COMENTARIO.test(String(
  */
 async function leerLatexDeComentariosDocx(file) {
     const mapa = new Map();
+    const anclados = await comentariosAncladosAFormulaDocx(file);
     for (const c of await leerComentariosDeDocx(file)) {
-        if (!esComentarioDeLatex(c.texto)) continue;
-        const latex = c.texto.replace(MARCA_LATEX_COMENTARIO, '').trim();
+        const etiquetado = esComentarioDeLatex(c.texto);
+        if (!etiquetado && !(anclados.has(c.id) && pareceCodigoLatex(c.texto))) continue;
+        const latex = limpiarLatexDeComentario(c.texto);
         if (latex) mapa.set(c.id, latex);
     }
     return mapa;
@@ -478,7 +534,11 @@ function unidadesDeParrafo(p, conLatex, conComentarios) {
         for (const n of [...nodo.childNodes]) {
             if (n.nodeType !== 1) continue;
             if (n.namespaceURI === M_NS && n.localName === 'oMath') {
-                salida.push({ math: n, comentarios: [...abiertos] });
+                /* `colores` también necesita recorrer el párrafo en orden para
+                   asociar comentarios a cada run, pero NO autoriza fórmulas.
+                   Antes bastaba pedir colores (Guion a Página) para que se
+                   colaran `$$…$$` aunque `latex` siguiera apagado. */
+                if (conLatex) salida.push({ math: n, comentarios: [...abiertos] });
                 continue;
             }
             if (n.namespaceURI === W_NS) {

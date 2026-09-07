@@ -1,5 +1,5 @@
 /* ==========================================================================
-   QA de Actividad y Rúbrica (Moodle 5.1) — estilos propios.
+   QA de Actividad y Rúbrica (Moodle 3.11) — estilos propios.
    Los componentes compartidos (.glass-panel, .tabs, .divisor, .code-output…)
    viven en assets/shared.css; aquí solo lo que es de esta herramienta.
    La `.dropzone` NO es compartida: cada herramienta define la suya.

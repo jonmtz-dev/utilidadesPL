@@ -106,6 +106,8 @@ tools/
   qa-51/                    Revisa que lo montado en 5.1 sea el guion y la rúbrica
     README.md                Qué se coteja, qué se perdona y por qué
     index.html · script.js · verificador.js · styles.css
+  qa-311/                   Revisa actividad y rúbrica en Moodle 3.11
+    index.html · script.js · verificador.js · styles.css
   bibliografias-margarita/  Word de fuentes → página 5.1, y QA de lo ya montado
     index.html · script.js · qa.js · verificador.js · styles.css
 .claude/launch.json         Config del servidor local para previsualizar
@@ -861,6 +863,31 @@ es idéntico al que monta el equipo, así que las dos entienden el mismo documen
 > al montar…) que separan un aviso de un error, y las tres trampas de comparación
 > que costaron trabajo.
 
+### QA de Actividad y Rúbrica 3.11 (`tools/qa-311/`)
+
+Comparte con el QA 5.1 la lectura del guion y de la rúbrica, pero busca el
+contenido dentro de `.prepa-M{n}-body` y entiende el tratamiento de fórmulas de
+Moodle 3.11. Al cargar el Word pide `leerBloquesDeDocx(file, { latex: true })`;
+el resto de herramientas conserva esa opción apagada.
+
+Las fórmulas se obtienen de dos fuentes, en este orden:
+
+1. El comentario anclado a la ecuación. Se acepta tanto
+   `Código para producción: f(t)=…` como el código desnudo `f(t)=t^{2}-4t+9`.
+   La variante desnuda solo cuenta como LaTeX si el rango del comentario
+   contiene un objeto matemático de Word y el texto tiene sintaxis matemática;
+   una nota como “Revisar esta fórmula” sigue siendo una indicación editorial.
+2. La conversión del objeto OMML cuando no hay código de producción.
+
+El modelo esperado guarda los códigos en el campo adicional `formulas` de cada
+texto. El verificador no coteja el `textContent` que inyecta MathJax —ahí una
+ecuación aparece repetida como dibujo, MathML accesible y TeX—: compara el texto
+humano alrededor de la fórmula por un lado y el contenido de
+`script[type="math/tex"]` por otro. También acepta el `$$…$$` crudo si el filtro
+todavía no terminó de renderizar. `{t}^{3}` y `t^{3}` se consideran la misma
+notación; cambiar un exponente, término o cantidad sí produce un error de
+**FÓRMULAS**.
+
 ---
 
 ## 4. Sistema de diseño
@@ -1015,7 +1042,7 @@ de forma distinta. Las dos formas de hacerlo, con los casos que las motivaron:
 | Guion a Página necesitaba las tablas anidadas de una celda, en orden | Cambiar `lineas`/`texto` para que dejaran de aplanar | **Campo nuevo** `contenido`, con los párrafos y las tablas en el orden real. `lineas` y `texto` intactos |
 | Necesitaba los saltos de línea manuales (`w:br`) como `\n` | Devolverlos siempre | **Opción** `textoDeParrafoConNegritas(p, { saltos: true })`, apagada por omisión |
 | El QA de bibliografías necesitaba saber si el párrafo trae **sangría francesa** | Reinterpretar `sangria`, que ya leen tres herramientas como "cuánto se corre el párrafo" | **Campos nuevos** `sangriaColgante` (twips) y `sangriaFrancesa` (booleano), de `w:hanging` o de un `w:firstLine` negativo. `sangria` intacto |
-| El Integrador HTML necesitaba las **fórmulas** del Word, que se estaban perdiendo enteras | Devolver siempre el `$$…$$` dentro del texto | **Opción** `leerBloquesDeDocx(file, { latex: true })`, apagada por omisión: en el editor de rúbricas de Moodle esos signos se publicarían literales |
+| El Integrador HTML y el QA 3.11 necesitaban las **fórmulas** del Word, que se estaban perdiendo enteras | Devolver siempre el `$$…$$` dentro del texto | **Opción** `leerBloquesDeDocx(file, { latex: true })`, apagada por omisión: en el editor de rúbricas de Moodle esos signos se publicarían literales. Pedir `colores` no la enciende implícitamente |
 | Guion a Página necesitaba las **viñetas escritas dentro de una celda**, que llegaban como párrafos sueltos | Reescribir la viñeta como texto en `texto`/`lineas`, como hace el Adaptador de Rúbricas | **Campos nuevos** en cada párrafo de `contenido`: `lista`, `tipoLista`, `nivelLista`, `idLista`. Salen del mismo `datosDeLista()` que ya usaba el bloque de párrafo, así que no hay dos lecturas de `numbering.xml` |
 | …y las **cursivas** dentro de esa misma celda | Encenderlas siempre en `contenido` | El `contenido` **hereda** el `cursivas` de quien llamó (antes iba fijo en `{ saltos: true }`). El `latex` NO se hereda: quien lee celdas hoy no espera un `$$…$$` en su texto |
 | Guion a Página necesitaba distinguir el **ícono anclado** en un párrafo de una figura de verdad | Filtrar por tamaño dentro de `imagenes`, que ya son ids pelados | **Campo nuevo** `imagenesInfo`: `[{ id, ancho, alto }]` en píxeles, del `wp:extent` del dibujo. `imagenes` sigue siendo la lista de rId de siempre |

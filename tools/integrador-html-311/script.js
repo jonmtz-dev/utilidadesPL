@@ -526,7 +526,8 @@
             // vincular un PDF o imagen): no son enlaces reales, se recuerdan al
             // generar. Los "Código para producción" ya viajan dentro del texto
             // como $$…$$: son contenido, no un recado pendiente.
-            comentariosMontaje = (await leerComentariosDeDocx(file)).filter(c => !esComentarioDeLatex(c.texto));
+            comentariosMontaje = (await leerComentariosDeDocx(file))
+                .filter(c => !esComentarioDeLatex(c.texto) && !codigosDeProduccion.has(c.id));
             // El inicio no es una "página" (Word no guarda páginas fiables): es la primera
             // tabla de una celda, que es exactamente la primera barra gris del formato de actividades.
             const inicio = fuente.findIndex(x => x.tipo === 'tabla' && x.celdas === 1 && x.texto);

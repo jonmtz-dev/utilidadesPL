@@ -87,6 +87,48 @@ window.VERIFICADOR_QA_311 = function (DATOS, evidencia) {
     var EN_LINEA = { A: 1, B: 1, STRONG: 1, I: 1, EM: 1, SPAN: 1, CODE: 1, SUP: 1,
                      SUB: 1, U: 1, SMALL: 1, MARK: 1, BR: 1, ABBR: 1, TIME: 1 };
 
+    /* MathJax 2 conserva el TeX original en `script[type="math/tex"]`; antes
+       de renderizar, Moodle puede conservar todavía el `$$…$$` como texto.
+       Se leen las dos formas para que el QA no dependa del instante exacto en
+       que se ejecute. */
+    function codigosLatexDe(nodo) {
+        var codigos = [].slice.call(nodo.querySelectorAll('script[type="math/tex"]'))
+            .map(function (s) { return limpiar(s.textContent); }).filter(Boolean);
+        var crudo = String(nodo.textContent || '');
+        var re = /\$\$([\s\S]*?)\$\$/g, m;
+        while ((m = re.exec(crudo))) if (limpiar(m[1])) codigos.push(limpiar(m[1]));
+        return codigos.filter(function (codigo, i) { return codigos.indexOf(codigo) === i; });
+    }
+
+    /* Diferencias de escritura que no cambian la fórmula: Word produce
+       `{t}^{3}` y producción suele escribir `t^{3}`; MathJax acepta ambas.
+       Los espacios de TeX y `\left`/`\right` tampoco cambian el resultado. */
+    function normalizarLatex(s) {
+        return String(s || '')
+            .replace(/^\$\$|\$\$$/g, '')
+            .replace(/\\(?:left|right)\b/g, '')
+            .replace(/\\(?:[,;:!]|quad\b|qquad\b)/g, '')
+            .replace(/[−–—]/g, '-')
+            .replace(/\{([\p{L}\p{N}.]+)\}/gu, '$1')
+            .replace(/\s+/g, '');
+    }
+
+    function mismasFormulas(a, b) {
+        a = (a || []).map(normalizarLatex);
+        b = (b || []).map(normalizarLatex);
+        return a.length === b.length && a.every(function (x, i) { return x === b[i]; });
+    }
+
+    /* Quita únicamente la representación que MathJax inyecta. La prosa que
+       rodea a una ecuación queda intacta y se coteja con las reglas normales. */
+    function textoSinFormulas(nodo) {
+        var copia = nodo.cloneNode(true);
+        [].slice.call(copia.querySelectorAll(
+            'script[type="math/tex"],.MathJax_Preview,.MathJax,.MJX_Assistive_MathML,mjx-container,math'))
+            .forEach(function (n) { n.remove(); });
+        return String(copia.textContent || '').replace(/\$\$[\s\S]*?\$\$/g, ' ');
+    }
+
     /* El texto propio de un nodo, sin lo que aporten los bloques anidados.
 
        Hace falta porque en el montaje real un <li> se lleva dentro la tabla
@@ -114,13 +156,13 @@ window.VERIFICADOR_QA_311 = function (DATOS, evidencia) {
             if (h.tagName === 'BR') { actual.push(' '); return; }
             // Lo que va en linea se pega TAL CUAL: agregarle un espacio separaba
             // la coma de su palabra ("<strong>rubrica</strong>," -> "rubrica ,").
-            if (EN_LINEA[h.tagName]) { actual.push(h.textContent); return; }
+            if (EN_LINEA[h.tagName]) { actual.push(textoSinFormulas(h)); return; }
             cerrar();   // un bloque anidado corta el trozo
         });
         cerrar();
         // Sin trozos propios el contenido ES el de los hijos: <li><p>texto</p></li>.
         if (!trozos.length) {
-            var todo = limpiar(nodo.textContent);
+            var todo = limpiar(textoSinFormulas(nodo));
             if (todo) trozos.push(todo);
         }
         return trozos;
@@ -295,14 +337,24 @@ window.VERIFICADOR_QA_311 = function (DATOS, evidencia) {
         /* En 3.11 la barra de sección no es un <h2>: es un <div
            class="prepa-M{n}-tituloTema">. Cotejando solo encabezados, los
            títulos de sección salían todos como faltantes. */
-        var nodos = [].slice.call(raiz.querySelectorAll(
-            '[class*="-tituloTema"],[class*="-subTema"],h1,h2,h3,h4,p,li,td,th'))
+        var bases = [].slice.call(raiz.querySelectorAll(
+            '[class*="-tituloTema"],[class*="-subTema"],h1,h2,h3,h4,p,li,td,th'));
+        var nodos = bases
             .map(function (n) {
                 return trozosPropios(n).map(function (t) {
                     return { n: n, t: t, f: firma(t), usado: false };
                 });
             })
             .reduce(function (todos, unos) { return todos.concat(unos); }, []);
+        var nodosFormula = bases.map(function (n) {
+            var codigos = codigosLatexDe(n);
+            return {
+                n: n,
+                t: limpiar(trozosPropios(n).join(' ')),
+                codigos: codigos,
+                usado: false
+            };
+        }).filter(function (x) { return x.codigos.length; });
 
         /* Un nodo se descarta si su texto está contenido en el de un hijo suyo:
            TinyMCE deja <li><p>mismo texto</p></li> y contarlos como dos hace que
@@ -368,6 +420,7 @@ window.VERIFICADOR_QA_311 = function (DATOS, evidencia) {
         }
 
         var correctos = 0;
+        var formulasCorrectas = 0;
         /* El parecido es SEGUNDA pasada, nunca primera: si compite con las
            coincidencias exactas se queda con el nodo de otro. En la AA1 el
            "Título de tabla" se llevaba el punto 9 ("La tabla de afirmaciones…"),
@@ -375,7 +428,63 @@ window.VERIFICADOR_QA_311 = function (DATOS, evidencia) {
            título numerado como sobrante. Dos errores inventados por adelantarse. */
         var pendientes = [];
 
-        esperado.textos.forEach(function (item) {
+        /* Las fórmulas no se cotejan con textContent: MathJax mete ahí varias
+           representaciones de la misma ecuación y el resultado parece texto
+           repetido o sobrante. Se compara el TeX conservado por Moodle y, por
+           separado, la prosa visible que lo rodea. */
+        esperado.textos.filter(function (item) { return (item.formulas || []).length; })
+            .forEach(function (item) {
+                var textoEsperado = limpiar(sinPrefijoDeLista(item.texto));
+                var coincideTexto = function (x) {
+                    var actual = limpiar(sinPrefijoDeLista(x.t));
+                    return !textoEsperado || actual === textoEsperado || firma(actual) === firma(textoEsperado);
+                };
+                var exacto = nodosFormula.find(function (x) {
+                    return !x.usado && coincideTexto(x) && mismasFormulas(item.formulas, x.codigos);
+                });
+                var porTexto = exacto || nodosFormula.find(function (x) { return !x.usado && coincideTexto(x); });
+                var porFormula = porTexto || nodosFormula.find(function (x) {
+                    return !x.usado && mismasFormulas(item.formulas, x.codigos);
+                });
+                var elegido = exacto || porTexto || porFormula;
+                if (!elegido) {
+                    anotar('error', 'Fórmulas', item.etiqueta,
+                        item.formulas.map(function (x) { return '$$' + x + '$$'; }).join(' · '), '', null);
+                    return;
+                }
+
+                elegido.usado = true;
+                nodos.forEach(function (x) { if (x.n === elegido.n) x.usado = true; });
+                var formulasIguales = mismasFormulas(item.formulas, elegido.codigos);
+                var textoActual = limpiar(sinPrefijoDeLista(elegido.t));
+                var textoIgual = !textoEsperado || textoActual === textoEsperado;
+
+                if (!formulasIguales) {
+                    anotar('error', 'Fórmulas', item.etiqueta + ' — la fórmula no coincide',
+                        item.formulas.map(function (x) { return '$$' + x + '$$'; }).join(' · '),
+                        elegido.codigos.length
+                            ? elegido.codigos.map(function (x) { return '$$' + x + '$$'; }).join(' · ')
+                            : '(no aparece la fórmula)', elegido.n);
+                }
+                if (textoEsperado && !textoIgual) {
+                    if (firma(textoActual) === firma(textoEsperado)) {
+                        anotar('aviso', 'Textos', item.etiqueta + ' — cambia la puntuación o los espacios',
+                            textoEsperado, textoActual, elegido.n);
+                    } else {
+                        anotar('error', 'Textos', item.etiqueta + ' — cambió el texto alrededor de la fórmula',
+                            textoEsperado, textoActual, elegido.n);
+                    }
+                }
+                if (formulasIguales) formulasCorrectas += item.formulas.length;
+                if (formulasIguales && textoIgual) correctos++;
+
+                var nodoTexto = { n: elegido.n, t: elegido.t };
+                revisarFormato(item, nodoTexto);
+                revisarMarcador(item, nodoTexto);
+            });
+
+        esperado.textos.filter(function (item) { return !(item.formulas || []).length; })
+            .forEach(function (item) {
             var r = buscar(item.texto);
             /* El equipo numera las tablas de la página al montarlas, con o sin
                la palabra "Tabla" en el guion: "Análisis de fertilizantes…" se
@@ -404,7 +513,7 @@ window.VERIFICADOR_QA_311 = function (DATOS, evidencia) {
             }
             revisarFormato(item, r.nodo);
             revisarMarcador(item, r.nodo);
-        });
+            });
 
         /* Segunda pasada: lo que no apareció, ¿está con una palabra cambiada?
            Al montar se corrige alguna ("…información personal inglés" ->
@@ -548,7 +657,12 @@ window.VERIFICADOR_QA_311 = function (DATOS, evidencia) {
             }
         });
 
-        return { revisados: esperado.textos.length, correctos: correctos };
+        return {
+            revisados: esperado.textos.length,
+            correctos: correctos,
+            formulas: esperado.textos.reduce(function (n, item) { return n + (item.formulas || []).length; }, 0),
+            formulasCorrectas: formulasCorrectas
+        };
     }
 
     /* ============================================================== RÚBRICA */
@@ -684,6 +798,10 @@ window.VERIFICADOR_QA_311 = function (DATOS, evidencia) {
             ficha.push(['Niveles', (DATOS.rubrica.niveles || []).join(' · ')]);
         } else if (DATOS.actividad) {
             ficha.push(['Textos del guion', String(DATOS.actividad.textos.length) + ' cotejados']);
+            var totalFormulas = DATOS.actividad.textos.reduce(function (n, item) {
+                return n + (item.formulas || []).length;
+            }, 0);
+            if (totalFormulas) ficha.push(['Fórmulas', String(totalFormulas) + ' cotejadas']);
             if (DATOS.actividad.codigoTexto) ficha.push(['Código del guion', DATOS.actividad.codigoTexto]);
         }
         evidencia({
@@ -703,7 +821,7 @@ window.VERIFICADOR_QA_311 = function (DATOS, evidencia) {
             textoTodoBien: esDeRubrica
                 ? 'Los criterios, los niveles y los puntajes coinciden con el Word.'
                 : 'Todo lo del Word aparece en Moodle, con el mismo texto y el mismo formato.',
-            notaAlcance: 'Cubre lo que la página muestra: textos, formato, tablas y enlaces. '
+            notaAlcance: 'Cubre lo que la página muestra: textos, fórmulas, formato, tablas y enlaces. '
                 + 'Las imágenes se revisan a ojo.',
             hallazgos: hallazgos.map(function (x) {
                 var d = diferencia(x.esperado, x.actual);
@@ -814,5 +932,6 @@ window.VERIFICADOR_QA_311 = function (DATOS, evidencia) {
         return;
     }
     var a = revisarActividad(DATOS.actividad);
-    return pintar('de actividad', a.revisados + ' textos del guion cotejados · ' + a.correctos + ' idénticos');
+    return pintar('de actividad', a.revisados + ' textos del guion cotejados · ' + a.correctos + ' idénticos'
+        + (a.formulas ? ' · ' + a.formulasCorrectas + ' de ' + a.formulas + ' fórmulas correctas' : ''));
 };

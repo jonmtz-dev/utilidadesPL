@@ -43,11 +43,24 @@ function desmarcar(marcado) {
     return { texto: texto.replace(/\*/g, '').trim(), negritas, cursivas };
 }
 
-function agregarTexto(lista, etiqueta, marcado, marcador) {
-    const d = desmarcar(marcado);
-    if (!d.texto) return;
+function agregarTexto(lista, etiqueta, marcado, marcador, conLatex) {
+    const codigos = [];
+    const sinFormulas = conLatex
+        ? String(marcado || '').replace(/\$\$([\s\S]*?)\$\$/g, (_, latex) => {
+            const codigo = String(latex || '').trim();
+            if (codigo) codigos.push(codigo);
+            // Un espacio conserva la separación entre los trozos de prosa que
+            // estaban a ambos lados de una fórmula en línea.
+            return ' ';
+        })
+        : marcado;
+    const d = desmarcar(sinFormulas);
+    if (!d.texto && !codigos.length) return;
     lista.push({
         etiqueta, texto: d.texto, negritas: d.negritas, cursivas: d.cursivas,
+        // Campo adicional: los QA que no piden LaTeX siguen recibiendo [].
+        // El de 3.11 lo coteja contra el TeX que MathJax conserva en Moodle.
+        formulas: codigos,
         // Qué marcador le toca según el Word: `{ tipo, nivel, numero }`.
         // Solo lo llevan los puntos de lista.
         marcador: marcador || null
@@ -180,7 +193,7 @@ function dondeEmpieza(bloques) {
 /**
  * Guion → { titulo, textos, tablas, enlaceRubrica }.
  */
-function construirActividad(bloques) {
+function construirActividad(bloques, opciones) {
     const arranque = dondeEmpieza(bloques);
     const cuerpo = bloques.slice(arranque.inicio);
 
@@ -195,6 +208,8 @@ function construirActividad(bloques) {
     let tituloTablaPendiente = '';
     let enlaceRubrica = null;
     const contarLista = cuentaDeListas();
+    const agregar = (etiqueta, marcado, marcador) =>
+        agregarTexto(textos, etiqueta, marcado, marcador, Boolean(opciones && opciones.latex));
 
     cuerpo.forEach(bloque => {
         if (bloque.tipo === 'tabla') {
@@ -213,7 +228,7 @@ function construirActividad(bloques) {
                 // <h1> o como <h2>: hay guiones que solo traen <h2>.
                 const esPrimero = !titulo;
                 if (esPrimero) titulo = t;
-                agregarTexto(textos, esPrimero ? 'Título' : 'Subtítulo', t);
+                agregar(esPrimero ? 'Título' : 'Subtítulo', t);
                 esperando = '';
                 return;
             }
@@ -234,7 +249,7 @@ function construirActividad(bloques) {
             });
             // Cada celda con contenido es un texto que tiene que aparecer.
             filas.forEach((fila, i) => fila.forEach(celda => {
-                if (celda) agregarTexto(textos, i === 0 ? 'Encabezado de tabla' : 'Celda', celda);
+                if (celda) agregar(i === 0 ? 'Encabezado de tabla' : 'Celda', celda);
             }));
             tituloTablaPendiente = '';
             esperando = '';
@@ -282,11 +297,11 @@ function construirActividad(bloques) {
         // El título de una tabla va en el párrafo de antes, en negritas.
         if (esperando === 'tabla' && !tituloTablaPendiente) {
             tituloTablaPendiente = desmarcar(crudo).texto;
-            agregarTexto(textos, 'Título de tabla', crudo);
+            agregar('Título de tabla', crudo);
             return;
         }
 
-        if (enCentrado) { agregarTexto(textos, 'Texto centrado', crudo); return; }
+        if (enCentrado) { agregar('Texto centrado', crudo); return; }
         if (enLista || bloque.lista) {
             punto++;
             const marcador = contarLista(bloque);
@@ -296,9 +311,9 @@ function construirActividad(bloques) {
                 ? (marcador.tipo === 'vinetas' ? 'Viñeta'
                     : (marcador.tipo === 'ordenada' ? 'Punto ' : 'Inciso ') + marcadorLegible(marcador))
                 : 'Punto ' + punto;
-            agregarTexto(textos, etiqueta, crudo, marcador);
+            agregar(etiqueta, crudo, marcador);
         } else {
-            agregarTexto(textos, 'Párrafo', crudo);
+            agregar('Párrafo', crudo);
         }
 
         /* "…con base en la siguiente rúbrica, que incluye…": esa palabra
