@@ -266,6 +266,10 @@ const REJILLA_DESPLEGABLE = {
     '2': 'col-12 col-md-6',
     '3': 'col-12 col-md-4',
     '4': 'col-12 col-md-3',
+    /* Bootstrap no trae col-lg-2.4. Para cinco, la rejilla se expresa en la
+       fila con row-cols-lg-5 y cada elemento conserva una columna completa en
+       celular. Es la utilidad nativa de Bootstrap 5, no una medida propia. */
+    '5': 'col-12 mb-2',
     '6': 'col-12 col-md-2'
 };
 
@@ -1106,8 +1110,8 @@ const COMPONENTES = {
     /* ---- Botón desplegable ----
        El primo del acordeón, y no el mismo componente: aquí cada disparador
        lleva SU panel y no hay `data-bs-parent`, así que pueden quedar varios
-       abiertos a la vez. Van en fila —2, 3, 4 o 6 columnas— y en las páginas
-       publicadas aparece con tres caras distintas, que es lo que decide el
+       abiertos a la vez. Van en fila —2, 3, 4, 5 o 6 columnas— y en las páginas
+       publicadas aparece con cuatro caras distintas, que es lo que decide el
        campo «Se ve como»:
 
        · `imagen`  — un título arriba (`p.texto-titulo`) y la imagen como liga
@@ -1116,6 +1120,8 @@ const COMPONENTES = {
                      `<strong class="interactivo">`). La de los minerales.
        · `boton`   — el botón del aula con `flecha_btn`. La de las expresiones
                      en inglés.
+       · `imagen-boton` — la composición imagen arriba y botón debajo, pero el
+                         botón abre su panel en vez de una ventana emergente.
 
        El markup viene de esas tres páginas ya montadas, con cuatro cosas que NO
        se copiaron y conviene tener escritas:
@@ -1150,17 +1156,18 @@ const COMPONENTES = {
             estilo: 'boton', cuantas: '4', ancho: '100', panel: 'blanco',
             tamano: 'normal', flecha: true,
             items: [
-                { titulo: '', img: '', alt: '', etiqueta: 'Primer botón', color: 'primary', hijos: [] },
-                { titulo: '', img: '', alt: '', etiqueta: 'Segundo botón', color: 'primary', hijos: [] }
+                { titulo: '', img: '', alt: '', anchoImg: 0, altoImg: 0, etiqueta: 'Primer botón', color: 'primary', hijos: [] },
+                { titulo: '', img: '', alt: '', anchoImg: 0, altoImg: 0, etiqueta: 'Segundo botón', color: 'primary', hijos: [] }
             ]
         }),
         resumen: b => `${(b.items || []).length} desplegables`,
         campos: [
             {
                 k: 'estilo', tipo: 'opciones', etiqueta: 'Se ve como',
-                ayuda: 'Las tres caras salen de páginas ya publicadas. «Imagen» lleva su título arriba y despliega al hacer clic en la imagen; «Texto resaltado» es la palabra sombreada con la flechita; «Botón» es el botón del aula.',
+                ayuda: 'Las cuatro caras usan montajes ya establecidos. «Imagen + botón» deja la imagen arriba y abre el texto desde el botón; «Imagen» abre al hacer clic en la propia imagen.',
                 ops: [
                     { v: 'boton', etiqueta: 'Botón', icono: 'rectangle' },
+                    { v: 'imagen-boton', etiqueta: 'Imagen + botón', icono: 'image-square' },
                     { v: 'imagen', etiqueta: 'Imagen', icono: 'image' },
                     { v: 'resalte', etiqueta: 'Texto resaltado', icono: 'highlighter' }
                 ]
@@ -1168,7 +1175,8 @@ const COMPONENTES = {
             {
                 k: 'cuantas', tipo: 'opciones', etiqueta: 'Columnas en escritorio',
                 ops: [{ v: '2', etiqueta: '2' }, { v: '3', etiqueta: '3' },
-                      { v: '4', etiqueta: '4' }, { v: '6', etiqueta: '6' }],
+                      { v: '4', etiqueta: '4' }, { v: '5', etiqueta: '5' },
+                      { v: '6', etiqueta: '6' }],
                 ayuda: 'En celular siempre se apilan. El número es lo que se ve en pantalla ancha.'
             },
             {
@@ -1184,26 +1192,26 @@ const COMPONENTES = {
                     { v: 'resalte', etiqueta: 'Resalte, sin borde', icono: 'highlighter' }
                 ]
             },
-            Object.assign({}, CAMPO_TAMANO_BOTON, { siOculta: b => b.estilo !== 'boton' }),
+            Object.assign({}, CAMPO_TAMANO_BOTON, { siOculta: b => !['boton', 'imagen-boton'].includes(b.estilo) }),
             {
                 k: 'flecha', tipo: 'check', etiqueta: 'Flechita en el botón',
-                siOculta: b => b.estilo !== 'boton',
+                siOculta: b => !['boton', 'imagen-boton'].includes(b.estilo),
                 ayuda: 'La clase flecha_btn, que solo pinta dentro de .ms-convertido —y la salida de esta herramienta lo lleva—. Aquí sí va: es lo que anuncia que el botón despliega algo.'
             },
             {
                 k: 'items', tipo: 'repetible', etiqueta: 'Desplegables', nombreItem: 'Desplegable',
-                nuevo: () => ({ titulo: '', img: '', alt: '', etiqueta: 'Nuevo desplegable', color: 'primary', hijos: [] }),
+                nuevo: () => ({ titulo: '', img: '', alt: '', anchoImg: 0, altoImg: 0, etiqueta: 'Nuevo desplegable', color: 'primary', hijos: [] }),
                 campos: [
                     { k: 'titulo', tipo: 'texto', etiqueta: 'Título, ARRIBA de la imagen',
                       siOculta: (item, b) => b.estilo !== 'imagen' },
                     { k: 'img', tipo: 'url', imagen: true, etiqueta: 'Imagen',
                       marcador: '@@PLUGINFILE@@/imagen.png',
-                      siOculta: (item, b) => b.estilo !== 'imagen' },
+                      siOculta: (item, b) => !['imagen', 'imagen-boton'].includes(b.estilo) },
                     { k: 'alt', tipo: 'texto', etiqueta: 'Texto alternativo',
-                      siOculta: (item, b) => b.estilo !== 'imagen' },
+                      siOculta: (item, b) => !['imagen', 'imagen-boton'].includes(b.estilo) },
                     { k: 'etiqueta', tipo: 'texto', etiqueta: 'Texto del disparador',
                       siOculta: (item, b) => b.estilo === 'imagen' },
-                    Object.assign({}, CAMPO_COLOR_BOTON, { siOculta: (item, b) => b.estilo !== 'boton' })
+                    Object.assign({}, CAMPO_COLOR_BOTON, { siOculta: (item, b) => !['boton', 'imagen-boton'].includes(b.estilo) })
                 ],
                 hijos: true
             }
@@ -1211,15 +1219,17 @@ const COMPONENTES = {
         html: (b, n) => {
             const items = b.items || [];
             if (!items.length) return '';
-            const estilo = ['imagen', 'resalte', 'boton'].indexOf(b.estilo) >= 0 ? b.estilo : 'boton';
+            const estilo = ['imagen', 'imagen-boton', 'resalte', 'boton'].indexOf(b.estilo) >= 0 ? b.estilo : 'boton';
+            const conBoton = estilo === 'boton' || estilo === 'imagen-boton';
             /* El rótulo de un disparador es UNA línea, así que el salto va como
                <br> y no como párrafo. En los botones publicados el texto se
                parte a mano ("Para mostrar <br>agradecimiento:") para que las
                cuatro columnas queden parejas; sin esto, al importar uno de esos
                el salto se publicaba crudo, que en HTML es un espacio. */
             const rotulo = t => marcas(t || '').replace(/\n/g, '<br>');
+            const cinco = b.cuantas === '5';
             const col = REJILLA_DESPLEGABLE[b.cuantas] || REJILLA_DESPLEGABLE['3'];
-            const ancho = ANCHOS_DESPLEGABLE[b.ancho] || (estilo === 'boton' ? 'w-100' : 'w-75');
+            const ancho = ANCHOS_DESPLEGABLE[b.ancho] || (conBoton ? 'w-100' : 'w-75');
             /* El panel: `.card.card-body` y nada más. El fondo blanco y el borde
                ya los da `.card`; el resalte suave es una clase de la paleta del
                aula, nunca un hex. */
@@ -1227,7 +1237,8 @@ const COMPONENTES = {
             /* La fila es distinta en cada montaje y no es capricho: `bloque` le
                pone a la del resaltado los 8px de aire que la hoja le da bajo
                `.ms-convertido`, y la de botones trae su `mb-3`. */
-            const fila = estilo === 'imagen' ? 'row' : (estilo === 'resalte' ? 'row bloque' : 'row mb-3');
+            const filaBase = estilo === 'imagen' ? 'row' : (estilo === 'resalte' ? 'row bloque' : 'row mb-3');
+            const fila = filaBase + (cinco ? ' row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-5' : '');
             const partes = [`${ind(n)}<div class="${fila}">`];
 
             items.forEach(item => {
@@ -1252,6 +1263,24 @@ const COMPONENTES = {
                     partes.push(`${ind(n + 2)}<a class="${ancho} collapsed" href="#${id}" data-bs-toggle="collapse" aria-expanded="false" aria-controls="${id}">` +
                         `<mark class="${RESALTE_VENTANA} border-0"><strong class="interactivo">${rotulo(item.etiqueta)}</strong></mark></a>`);
                 } else {
+                    if (estilo === 'imagen-boton') {
+                        const fuente = (item.img || '').trim();
+                        const anchoImg = Number(item.anchoImg) > 0 ? Math.round(Number(item.anchoImg)) : 0;
+                        const altoImg = Number(item.altoImg) > 0 ? Math.round(Number(item.altoImg)) : 0;
+                        const medida = anchoImg && altoImg ? ` width="${anchoImg}" height="${altoImg}"` : '';
+                        /* La zona 16:9 reserva la misma altura para todas las
+                           imágenes aunque sus proporciones sean distintas. El
+                           div intermedio evita que .ratio estire el <img> y lo
+                           alinea abajo, de modo que los botones quedan parejos
+                           sin deformar las prendas ni escribir style=. */
+                        if (fuente) partes.push(
+                            `${ind(n + 2)}<div class="ratio ratio-16x9">`,
+                            `${ind(n + 3)}<div class="d-flex align-items-end justify-content-center">`,
+                            `${ind(n + 4)}<img class="img-fluid" src="${ligaSegura(fuente)}" alt="${escapar(item.alt || '')}"${medida}>`,
+                            `${ind(n + 3)}</div>`,
+                            `${ind(n + 2)}</div>`
+                        );
+                    }
                     const clases = [clasesBoton(item.color, b.tamano || 'normal'), ancho,
                         b.flecha === false ? '' : 'flecha_btn', 'collapsed'].filter(Boolean).join(' ');
                     partes.push(`${ind(n + 2)}<button class="${clases}" type="button" data-bs-toggle="collapse" data-bs-target="#${id}" aria-expanded="false" aria-controls="${id}">${rotulo(item.etiqueta)}</button>`);

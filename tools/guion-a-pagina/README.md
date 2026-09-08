@@ -525,17 +525,18 @@ para los campos sueltos, extendido a los de una lista repetible —ahí recibe
 
 El acordeón es una **pila**: los apartados van uno debajo de otro, comparten
 `data-bs-parent` y abrir uno cierra el anterior. El **Botón desplegable** es una
-**fila**: 2, 3, 4 o 6 columnas, cada disparador con su propio panel y **sin**
+**fila**: 2, 3, 4, 5 o 6 columnas, cada disparador con su propio panel y **sin**
 `data-bs-parent`, así que pueden quedar varios abiertos a la vez. Son dos
 montajes distintos del aula y por eso son dos bloques distintos, no un campo del
 mismo.
 
-Aparece con tres caras, que es lo que decide **Se ve como**. Las tres salen de
+Aparece con cuatro caras, que es lo que decide **Se ve como**. Todas salen de
 páginas ya publicadas, no del CSS:
 
 | Cara | Disparador | De dónde salió |
 |---|---|---|
 | **Botón** | `<button class="btn btn-… w-100 rounded-4 border border-4 border-primary-10 flecha_btn collapsed">` | las expresiones en inglés |
+| **Imagen + botón** | `img.img-fluid` arriba y el mismo `<button>` debajo | la tabla de vocabulario de vestimenta |
 | **Imagen** | `p.texto-titulo` arriba y `<a class="w-75" href="#id">` con la imagen dentro | las licencias Creative Commons |
 | **Texto resaltado** | `<a>` con `<mark class="bg-resalte-…"><strong class="interactivo">` | los minerales |
 
@@ -581,10 +582,23 @@ comentario: para que el siguiente no "unifique" las dos.
    describía un panel que venía abierto. Eso no es estilo: es un lector de
    pantalla mintiendo.
 
-Lo que **sí** se copia es el `<a href="#id">` de las dos primeras caras
+Lo que **sí** se copia es el `<a href="#id">` de **Imagen** y **Texto resaltado**
 (Bootstrap toma el destino del `href`). Cuesta que la hoja del aula lo pinte
 azul y subrayado bajo `.ms-convertido` —lo mismo que ya pasa con los demás
 enlaces, ver la sección de `ms-convertido`—; se acepta a sabiendas.
+
+### Tabla del Word con imágenes y cinco columnas
+
+Cuando cada celda contiene una imagen, un rótulo, las marcas `<Fin botón>` y
+`<Contenido botón>`, y el texto que se debe desplegar, el asistente propone
+**Tabla con botones desplegables**. No toma la primera fila como encabezado: recorre todas
+las celdas, omite las vacías y crea un solo Botón desplegable con cara
+**Imagen + botón**. La salida usa `row-cols-1 row-cols-sm-2 row-cols-md-3
+row-cols-lg-5`, por lo que conserva cinco columnas en escritorio y se adapta en
+pantallas menores sin medidas inventadas. Cada ilustración vive en una zona
+Bootstrap `ratio ratio-16x9`: un contenedor flex intermedio respeta su tamaño y la
+alinea abajo, de manera que imágenes de proporciones distintas no desnivelan los
+botones ni se deforman.
 
 ### Dos clases del aula que la copia de la hoja no trae
 

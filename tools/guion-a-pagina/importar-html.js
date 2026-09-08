@@ -309,25 +309,30 @@
             // Un data-bs-parent es un acordeón disfrazado: no es esto.
             if (cuerpo.hasAttribute('data-bs-parent')) return null;
 
-            const img = disp.querySelector('img');
+            const imgDisparador = disp.querySelector('img');
+            const marcoImagen = caja.querySelector(':scope > .ratio');
+            const imgExterior = marcoImagen ? marcoImagen.querySelector('img') : caja.querySelector(':scope > img');
+            const img = imgDisparador || imgExterior;
             const marca = disp.querySelector('mark');
-            const cara = disp.tagName.toLowerCase() === 'button' ? 'boton'
-                : (img ? 'imagen' : (marca ? 'resalte' : null));
+            const cara = disp.tagName.toLowerCase() === 'button'
+                ? (imgExterior ? 'imagen-boton' : 'boton')
+                : (imgDisparador ? 'imagen' : (marca ? 'resalte' : null));
             if (!cara) return null;
             // Una fila con dos caras mezcladas no es un bloque de estos.
             if (estilo && estilo !== cara) return null;
             estilo = cara;
 
             const md = /(^|\s)col-md-(\d+)/.exec(col.className);
-            const n = md && REJILLA_INVERSA[Number(md[2])];
+            const n = el.classList.contains('row-cols-lg-5') ? '5'
+                : (md && REJILLA_INVERSA[Number(md[2])]);
             if (!n || (cuantas && cuantas !== n)) return null;
             cuantas = n;
 
             const w = /(^|\s)w-(50|75|100)(\s|$)/.exec(disp.className);
-            ancho = w ? w[2] : (cara === 'boton' ? '100' : '75');
+            ancho = w ? w[2] : (['boton', 'imagen-boton'].includes(cara) ? '100' : '75');
 
             if (tarjeta.classList.contains('bg-resalte-10')) panel = 'resalte';
-            if (cara === 'boton') {
+            if (cara === 'boton' || cara === 'imagen-boton') {
                 flecha = disp.classList.contains('flecha_btn');
                 tamano = disp.classList.contains('btn-sm') ? 'chico'
                     : (disp.classList.contains('btn-lg') ? 'grande' : 'normal');
@@ -338,9 +343,11 @@
                 titulo: rotulo ? aMarcas(rotulo) : '',
                 img: img ? (img.getAttribute('src') || '') : '',
                 alt: img ? (img.getAttribute('alt') || '') : '',
+                anchoImg: img ? (Number(img.getAttribute('width')) || 0) : 0,
+                altoImg: img ? (Number(img.getAttribute('height')) || 0) : 0,
                 etiqueta: cara === 'resalte'
                     ? aMarcas(disp.querySelector('strong') || marca)
-                    : (cara === 'boton' ? aMarcas(disp) : ''),
+                    : (['boton', 'imagen-boton'].includes(cara) ? aMarcas(disp) : ''),
                 color: disp.classList.contains('btn-secondary') ? 'secondary' : 'primary',
                 hijos: contenidoDePanel(tarjeta, leerHijos)
             });

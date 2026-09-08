@@ -616,8 +616,8 @@ document.addEventListener('click', function (e) {
                    que el alt: sin él, un lector de pantalla anuncia un enlace
                    sin nombre y no hay forma de saber qué despliega. Por eso aquí
                    es error y en un Imagen suelto es aviso. */
-                if (b.estilo === 'imagen' && (b.items || []).some(i => !(i.img || '').trim())) {
-                    avisos.push({ tono: 'error', texto: 'Un botón desplegable está en «Imagen» y no tiene imagen: la imagen ES lo que se hace clic, así que en Moodle no habrá nada que abrir.' });
+                if (['imagen', 'imagen-boton'].includes(b.estilo) && (b.items || []).some(i => !(i.img || '').trim())) {
+                    avisos.push({ tono: 'error', texto: 'Un botón desplegable con imagen no tiene imagen: en Moodle quedará incompleto.' });
                 }
                 if (b.estilo === 'imagen' && (b.items || []).some(i => (i.img || '').trim() && !(i.alt || '').trim())) {
                     avisos.push({ tono: 'error', texto: 'Un botón desplegable con imagen no tiene texto alternativo. Como la imagen es la liga que abre el panel, sin alt el enlace se anuncia vacío.' });
@@ -2997,6 +2997,7 @@ document.addEventListener('click', function (e) {
 
     const DECISIONES = [
         { v: 'tabla', nombre: 'Tabla', mini: MINI.tabla, ayuda: 'Se queda como tabla, ya responsiva' },
+        { v: 'botonera-imagenes', nombre: 'Tabla con botones desplegables', mini: MINI.desplegable, ayuda: 'Cada celda se vuelve una imagen con botón y texto desplegable' },
         { v: 'acordeon', nombre: 'Acordeón', mini: MINI.acordeon, ayuda: 'Cada fila es un apartado plegable' },
         { v: 'desplegable', nombre: 'Botón desplegable', mini: MINI.desplegable, ayuda: 'Cada fila es un botón en fila que despliega su texto debajo' },
         { v: 'tarjetas', nombre: 'Tarjetas', mini: MINI.tarjetas, ayuda: 'Cada fila es una tarjeta con ventana' },
@@ -3050,6 +3051,17 @@ document.addEventListener('click', function (e) {
         const filas = t.filas || [];
         const cols = (filas[0] || []).length;
         const enc = (filas[0] || []).map(c => (c.texto || '').toLowerCase()).join(' | ');
+
+        /* La tabla de vocabulario no tiene encabezados: cada celda es una
+           ficha completa (imagen, rótulo, Fin botón, Contenido botón y texto).
+           Se exige la estructura completa en todas las celdas no vacías para
+           no convertir una tabla común por una coincidencia de palabras. */
+        const celdasConContenido = filas.flat().filter(c => (c.texto || '').trim() ||
+            (c.contenido || []).some(p => (p.imagenes || []).length));
+        const fichasImagen = celdasConContenido.filter(c => datosBotonImagenDeCelda(c));
+        if (celdasConContenido.length >= 2 && fichasImagen.length === celdasConContenido.length) {
+            return 'botonera-imagenes';
+        }
 
         /* Una tabla de UNA celda SIN sombreado no es una tabla: es el CUADRO
            del guion —la cita de la RAE, la definición encajonada—, que en el
@@ -3438,6 +3450,25 @@ document.addEventListener('click', function (e) {
             .replace(/\*\*\s*\*\*/g, ' ')
             .replace(/^Pesta[ñn]a\s*\d+\s*/i, '')
             .replace(/\s+/g, ' ').trim();
+    }
+
+    /** Lee una celda con el contrato editorial de imagen + botón + contenido. */
+    function datosBotonImagenDeCelda(celda) {
+        const lineas = (celda.lineas || []).map(l => String(l || '').replace(/\*\*/g, '').trim());
+        const fin = lineas.findIndex(l => /fin\s+bot[oó]n/i.test(l));
+        const contenido = lineas.findIndex((l, i) => i > fin && /contenido\s+bot[oó]n/i.test(l));
+        const parrafoImagen = (celda.contenido || []).find(p => (p.imagenes || []).length);
+        if (fin < 1 || contenido < 0 || !parrafoImagen) return null;
+        const etiqueta = lineas.slice(0, fin).map(sinMarcas).filter(Boolean).join(' ');
+        const texto = lineas.slice(contenido + 1).map(sinMarcas).filter(Boolean).join('\n\n');
+        const rId = (parrafoImagen.imagenes || [])[0];
+        const medida = (parrafoImagen.imagenesInfo || []).find(i => i.id === rId) || {};
+        const img = srcDeMontaje(rId, parrafoImagen.comentarios);
+        return etiqueta && texto && img ? {
+            etiqueta, texto, img,
+            anchoImg: Number(medida.ancho) || 0,
+            altoImg: Number(medida.alto) || 0
+        } : null;
     }
 
     /**
@@ -3833,6 +3864,26 @@ document.addEventListener('click', function (e) {
         // elegir entre formas de tabla, y esto no es ninguna.
         const ventanas = decision !== 'omitir' ? tablaDeVentanas(filas) : null;
         if (ventanas) return ventanas;
+
+        if (decision === 'botonera-imagenes') {
+            const items = filas.flat().map(datosBotonImagenDeCelda).filter(Boolean).map(dato => {
+                const texto = Object.assign(crearBloque('texto', false), {
+                    texto: dato.texto,
+                    destacado: false,
+                    alineacion: 'izquierda'
+                });
+                return {
+                    titulo: '', img: dato.img, alt: '', anchoImg: dato.anchoImg,
+                    altoImg: dato.altoImg, etiqueta: dato.etiqueta,
+                    color: 'primary', hijos: [texto]
+                };
+            });
+            if (!items.length) return [];
+            return Object.assign(crearBloque('desplegable', false), {
+                estilo: 'imagen-boton', cuantas: '5', ancho: '100', panel: 'blanco',
+                tamano: 'chico', flecha: true, items
+            });
+        }
         const encabezados = (filas[0] || []).map(c => sinMarcas(c.texto));
         const cuerpo = filas.slice(1);
 
