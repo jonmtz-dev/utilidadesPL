@@ -58,3 +58,18 @@ como micrositios con identidad propia.
 - Sin alterar estilos ya compartidos para resolver una sola herramienta.
 - Todo cambio visual se verifica en escritorio, móvil, tema claro y tema oscuro;
   la vista previa debe conservar el aspecto claro de Moodle.
+
+## Actividades de aprendizaje
+
+La herramienta sigue la disposición del Integrador HTML: formularios visibles a
+la izquierda, vista previa y código a la derecha. El catálogo se limita a sección,
+texto, pasos, lista, tabla, imagen y enlace. Su código es independiente de Guion
+a Página. La vista previa usa el tema real del aula Moodle 5.1.
+
+| Capacidad | Fuente canónica | Variante de actividad | Verificación |
+| --- | --- | --- | --- |
+| Campos | Editor propio `actividad-a-html/script.js` | Bloques y pasos editables en línea | Edición y etiquetas asociadas |
+| Opciones | Select nativo y `assets/paletas.js` | Cinco paletas; espacio inferior | Paletas y HTML generado |
+| Scroll | `assets/shared.css`, `reparto.js` | Panel completo desplazable | Escritorio y móvil |
+| Estado y avisos | `import-info`, `revision` | Enlace pendiente y Word incorrecto | Error recuperable y Deshacer |
+| Importación | `assets/docx.js` y modelo propio | Marcas, incisos manuales y notas | Cuatro Word y cuatro HTML |

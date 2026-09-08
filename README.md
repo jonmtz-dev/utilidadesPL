@@ -10,7 +10,7 @@ lo indica con una insignia, en su tarjeta del panel y en su propio encabezado:
 | Herramienta | Moodle |
 |---|---|
 | Adaptador de Rúbricas · Generador de Bibliografías · Integrador HTML | **3.11** |
-| Convertidor de Tablas · Micrositio a Página · Bibliografías Margarita Maza · Guion Instruccional a Página | **5.1** |
+| Convertidor de Tablas · Micrositio a Página · Bibliografías Margarita Maza · Guion Instruccional a Página · Actividad de aprendizaje a HTML | **5.1** |
 
 El editor de rúbricas y el de libros cambiaron entre una versión y otra, así que
 usar la herramienta equivocada genera HTML que se ve bien en la vista previa y
@@ -582,6 +582,20 @@ página.
 > montada (las ventanas emergentes son modales de Bootstrap, y los botones del
 > acordeón llevan `bg-neutral-claro-50 text-primary`), y ahí está el catálogo
 > de marcas del guion.
+
+### Actividad de aprendizaje a HTML (`tools/actividad-a-html/`)
+
+Convierte el Word de una AA en la descripción de la actividad: conserva sus
+secciones, arma la ruta numerada con tablas e incisos dentro del paso y deja
+editarlo con formularios de bloques similares al Integrador HTML. Incluye los
+cinco colores de aula, una estructura inicial y el enlace de evaluación; no convierte
+rúbricas. Permite abrir un HTML montado y conservar sus bloques sin cambios,
+o editarlos y regenerarlos con los componentes del aula.
+
+El editor, el modelo y la importación son propios de esta herramienta; no carga
+ni modifica el código de Guion a Página. Las referencias de AA no llevan
+`ms-convertido`, y algunas llevan `pb-0`: son opciones propias de este montaje.
+Detalles y pruebas en [`tools/actividad-a-html/README.md`](tools/actividad-a-html/README.md).
 
 ### Micrositio a Página (`tools/micrositio-a-pagina/`)
 

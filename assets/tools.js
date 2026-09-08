@@ -83,6 +83,18 @@ const TOOLS = [
         status: 'ready'
     },
     {
+        slug: 'actividad-a-html',
+        grupo: 'rm',
+        moodle: '5.1',
+        title: 'Actividad de aprendizaje a HTML',
+        description: 'Sube el Word de tu actividad, edita sus pasos, incisos y tablas, y genera el HTML con la paleta del aula.',
+        icon: 'notebook',
+        accent: ['#9d2248', '#d1607f'],
+        tags: ['Actividades', 'Word', 'HTML', 'AA'],
+        url: 'tools/actividad-a-html/index.html',
+        status: 'ready'
+    },
+    {
         slug: 'convertidor-tablas',
         grupo: 'rm',
         moodle: '5.1',
