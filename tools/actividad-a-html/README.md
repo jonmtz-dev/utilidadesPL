@@ -55,3 +55,9 @@ Sin encabezado, sus textos pasan a la primera fila y se desactivan las tarjetas.
 El alternado usa `bg-primary-10` / `bg-secondary-10`, que siguen la paleta del
 contenedor; no se aplica opacidad a la celda porque también afectaría al texto.
 El HTML importado sin editar sigue conservándose íntegramente.
+
+La vista previa permite seleccionar bloques con un clic: desplaza el editor y
+coloca el foco en el título, paso o celda correspondiente. Los enlaces de esta
+vista seleccionan su bloque. Las marcas de selección se añaden solo al iframe,
+no al HTML exportado para Moodle. El movimiento respeta la preferencia de
+animación reducida.

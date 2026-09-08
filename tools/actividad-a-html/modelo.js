@@ -14,7 +14,7 @@
     }
     const nombres = { titulo: 'Sección', texto: 'Texto', pasos: 'Pasos', lista: 'Lista', tabla: 'Tabla', imagen: 'Imagen', evaluacionAA: 'Enlace', crudo: 'HTML conservado' };
     const bloque = (tipo, datos = {}) => Object.assign({ tipo }, {
-        titulo: { texto: '', nivel: 'h2' }, texto: { texto: '', alineacion: 'izquierda', aaMulticol: false },
+        titulo: { texto: '', nivel: 'h2' }, texto: { texto: '', alineacion: 'izquierda', aaMulticol: false, cita: false },
         pasos: { caja: true, items: [{ texto: '', hijos: [] }] }, lista: { estilo: 'vinetas', items: ['', ''] },
         tabla: { titulo: '', encabezados: ['Columna 1', 'Columna 2'], filas: [['', ''], ['', '']], colorear: 'alternado', encabezadoColor: false, bordes: true, tarjetas: true, conEncabezado: true, banda: '', anchos: 'montaje', anchoCols: '' },
         imagen: { src: '', alt: '', pie: '' },
@@ -28,10 +28,10 @@
         if (b.aaOriginal && b.aaFirma === firma(b)) return b.aaOriginal;
         switch (b.tipo) {
             case 'titulo': return b.nivel === 'h1' ? fila(`<div class="tituloUnidad"><h1 class="text-primary">${marcas(b.texto)}</h1></div>`) : `<div class="row bloque"><div class="tituloUnidad mt-4"><h2 class="text-primary">${marcas(b.texto)}</h2></div></div>`;
-            case 'texto': return b.aaMulticol && !desnudo ? `<div class="row bloque"><div class="col-12 text-multicol">${marcas(b.texto)}</div></div>` : desnudo ? parrafos(b) : fila(parrafos(b));
+            case 'texto': if (b.cita) return fila(`<blockquote class="ms-4">${parrafos(b)}</blockquote>`); return b.aaMulticol && !desnudo ? `<div class="row bloque"><div class="col-12 text-multicol">${marcas(b.texto)}</div></div>` : desnudo ? parrafos(b) : fila(parrafos(b));
             case 'lista': {
                 const tag = b.estilo === 'vinetas' ? 'ul' : 'ol';
-                const contenido = `<${tag}${b.estilo === 'letras' ? ' type="a"' : b.estilo === 'romana' ? ' type="i"' : ''}>${b.items.map(t => `<li>${marcas(t)}</li>`).join('\n')}</${tag}>`;
+                const contenido = `<${tag}${b.estilo === 'vinetas' ? ' style="list-style-type: disc;"' : ''}${b.estilo === 'letras' ? ' type="a"' : b.estilo === 'romana' ? ' type="i"' : ''}>${b.items.map(t => `<li${b.estilo === 'vinetas' ? ' style="color: #000000;"' : ''}>${marcas(t)}</li>`).join('\n')}</${tag}>`;
                 return desnudo ? contenido : fila(contenido);
             }
             case 'pasos': {
@@ -101,14 +101,14 @@
         if (inicio < 0) throw new Error('No se encontró el título de la actividad en una tabla de una celda. Puedes empezar con los bloques y pegar el contenido.');
         const datos = prepararWord(entrada.slice(inicio));
         const pagina = { titulo: '', bloques: [], avisos: [] };
-        let ruta = null, paso = null, numero = null, sublista = null, centrado = false, esperaTabla = false, tituloTabla = '';
+        let ruta = null, paso = null, numero = null, sublista = null, centrado = false, esperaTabla = false, tituloTabla = '', manual = false, cita = false;
         const destino = () => paso ? paso.hijos : pagina.bloques;
         const texto = (t, alineacion = 'izquierda') => {
             const lista = destino(), ultimo = lista.at(-1);
-            if (ultimo?.tipo === 'texto' && ultimo.alineacion === alineacion) ultimo.texto += '\n\n' + t;
-            else lista.push(bloque('texto', { texto: t, alineacion }));
+            if (ultimo?.tipo === 'texto' && ultimo.alineacion === alineacion && !!ultimo.cita === cita) ultimo.texto += '\n\n' + t;
+            else lista.push(bloque('texto', { texto: t, alineacion, cita }));
         };
-        const cerrar = () => { ruta = null; paso = null; numero = null; sublista = null; };
+        const cerrar = () => { if (ruta && !ruta.items.length) pagina.bloques.splice(pagina.bloques.indexOf(ruta),1); manual = false; ruta = null; paso = null; numero = null; sublista = null; };
         for (const dato of datos) {
             if (dato.dentroDeTabla) continue;
             const t = limpio(dato.texto), rico = dato.texto || '';
@@ -128,7 +128,8 @@
                 if (/lista numerada/i.test(t)) {
                     if (/^<Termina/i.test(t)) cerrar();
                     else { cerrar(); ruta = bloque('pasos', { items: [] }); pagina.bloques.push(ruta); }
-                } else if (/centrado/i.test(t)) centrado = !/^<Termina/i.test(t);
+                } else if (/cita en bloque/i.test(t)) cita = !/^<Termina/i.test(t);
+                else if (/centrado/i.test(t)) centrado = !/^<Termina/i.test(t);
                 else if (/^<Tabla/i.test(t)) esperaTabla = true;
                 else if (/^<Termina tabla/i.test(t)) esperaTabla = false;
                 else if (!/^<\/?h[1-4]>$/i.test(t)) pagina.avisos.push('Indicación de montaje: ' + t);
@@ -137,8 +138,8 @@
             if (esperaTabla && t && !dato.lista) { tituloTabla = t; continue; }
             if (dato.lista) {
                 const estilo = { letras: 'letras', vinetas: 'vinetas', romana: 'romana', ordenada: 'numerada' }[dato.tipoLista] || 'numerada';
-                if (ruta && (numero === null || (dato.idLista === numero && !dato.nivelLista))) {
-                    numero = dato.idLista; paso = { texto: rico, hijos: [] }; ruta.items.push(paso); sublista = null;
+                if (ruta && (dato.aaManual || (!manual && (numero === null || (dato.idLista === numero && !dato.nivelLista))))) {
+                    manual = manual || !!dato.aaManual; numero = dato.idLista; paso = { texto: rico, hijos: [] }; ruta.items.push(paso); sublista = null;
                 } else {
                     if (!sublista || sublista.estilo !== estilo || sublista.num !== dato.idLista) {
                         sublista = bloque('lista', { estilo, items: [], num: dato.idLista }); destino().push(sublista);
@@ -149,7 +150,7 @@
             }
             sublista = null;
             if (t) {
-                if (ruta && !centrado && !dato.sangria) cerrar();
+                if (ruta && !manual && !centrado && !dato.sangria) cerrar();
                 texto(rico, centrado || dato.alineacion === 'centro' ? 'centro' : 'izquierda');
             }
             (dato.imagenes || []).forEach(id => {
@@ -157,23 +158,35 @@
                 if (img) destino().push(bloque('imagen', { src: '@@PLUGINFILE@@/' + img.nombre }));
             });
         }
+        cerrar();
         despuesWord(pagina.bloques);
         return pagina;
     }
     // Funciones de lectura de las AA cotejadas se incorporan a continuación.
     function prepararWord(entrada) {
         const datos = entrada.filter(b => !b.dentroDeTabla || b.tipo === 'tabla');
-        let enRuta = false, letraEsperada = 0;
+        let enRuta = false, letraEsperada = 0, numeroEsperado = 1;
         return datos.filter((b, i) => !(/^<h[1-4]>$/i.test(limpio(b.texto)) && datos[i + 1]?.tipo === 'tabla' && datos[i + 1].celdas === 1))
             .map((b, i, todos) => {
                 let t = limpio(b.texto);
                 if (b.tipo === 'tabla' && b.celdas === 1 && (seccion.test(t) || /^Actividad de aprendizaje/i.test(t))) b.sombreado = true;
-                if (/^<(?:Termina )?lista numerada/i.test(t)) enRuta = !/^<Termina/i.test(t);
+                if (b.tipo === 'tabla' && b.celdas === 1) { enRuta = false; numeroEsperado = 1; }
+                if (/^<(?:Termina )?lista numerada/i.test(t)) { enRuta = !/^<Termina/i.test(t); numeroEsperado = 1; }
                 if (/^<(?:Termina )?texto.*centrado/i.test(t)) {
                     b.texto = /^<Termina/i.test(t) ? '<Termina texto regular centrado>' : '<Texto regular centrado>';
                     b.tramos = [];
                 }
                 if (enRuta && !b.lista) {
+                    // Numeración escrita a mano: aceptar solo una secuencia dentro de la ruta.
+                    const numerado = t.match(/^(\d+)[.)]\s+(.+)/);
+                    const resto = todos.slice(i + 1);
+                    const limite = resto.findIndex(x => x.tipo === 'tabla' && x.celdas === 1);
+                    const tramo = limite < 0 ? resto : resto.slice(0, limite);
+                    if (numerado && Number(numerado[1]) === numeroEsperado && (numeroEsperado > 1 || tramo.some(x => /^2[.)]\s/.test(limpio(x.texto))))) {
+                        numeroEsperado++;
+                        b.texto = b.texto.replace(/^(\s*(?:\*\*)?)\d+[.)]\s*/, '$1');
+                        Object.assign(b, { lista: true, tipoLista: 'ordenada', idLista: 'aa-manual', nivelLista: 0, aaManual: true });
+                    }
                     // Solo secuencias a., b., c. dentro de la ruta: no se adivina
                     // una lista a partir de cualquier párrafo que empieza por letra.
                     const m = t.match(/^([a-z])[.)]\s+(.+)/i);
@@ -203,9 +216,9 @@
             if (b.tipo === 'titulo') evaluacion = /^Evaluación/i.test(limpio(b.texto));
             else if (evaluacion && b.tipo === 'texto') {
                 const t = b.texto || '';
-                const m = t.match(/(?:\*\*)?rúbrica(?:\*\*)?/i);
+                const m = t.match(/(?:\*\*)?(?:rúbrica|lista de cotejo)(?:\*\*)?/i);
                 if (m && !/\[[^\]]*rúbrica/i.test(t)) nuevos[i] = Object.assign(bloque('evaluacionAA'), {
-                    id: b.id, antes: t.slice(0, m.index), enlace: 'rúbrica',
+                    id: b.id, antes: t.slice(0, m.index), enlace: m[0].replace(/\*/g, ''),
                     despues: t.slice(m.index + m[0].length), negrita: m[0].includes('**')
                 });
             }

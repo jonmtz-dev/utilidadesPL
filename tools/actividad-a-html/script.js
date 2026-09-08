@@ -48,6 +48,7 @@
             if (b.tipo === 'texto') {
                 campo(caja,b,'texto','Texto · **negritas**, *cursivas* y [enlace](URL)');
                 campo(caja,b,'alineacion','Alineación','select',[['izquierda','Izquierda'],['centro','Centrada'],['derecha','Derecha'],['justificado','Justificada']]);
+                campo(caja,b,'cita','Cita en bloque con sangría','checkbox');
                 campo(caja,b,'aaMulticol','Texto en columnas del aula','checkbox');
             }
             if (b.tipo === 'lista') {
@@ -59,7 +60,7 @@
             if (b.tipo === 'pasos') {
                 campo(caja,b,'caja','Ruta dentro de la caja de color','checkbox');
                 b.items.forEach((it,j) => {
-                    const paso = document.createElement('div'); paso.className = 'aa-paso';
+                    const paso = document.createElement('div'); paso.className = 'aa-paso'; paso.dataset.paso = j;
                     const cab = document.createElement('div'); cab.className = 'aa-cabecera'; const n = document.createElement('strong'); n.textContent='Paso '+(j+1); cab.append(n);
                     boton('↑',()=>cambiar(()=>b.items.splice(j-1,0,b.items.splice(j,1)[0])),cab,'Subir paso').disabled=j===0;
                     boton('↓',()=>cambiar(()=>b.items.splice(j+1,0,b.items.splice(j,1)[0])),cab,'Bajar paso').disabled=j===b.items.length-1;
@@ -123,12 +124,69 @@
         const html=AA.generar(pagina);$('#code').value=html;
         $('#muestra-paleta').style.backgroundColor=PALETAS.find(p=>p.clase===pagina.paleta).color;
         $('#preview-empty').classList.toggle('hidden',!!html);$('#preview-caja').classList.toggle('hidden',!html);
-        let previa=AA.sanear(html);recursos.forEach((r,ruta)=>{previa=previa.split(ruta).join(r.url);});
+        let previa=marcarPrevia(html);recursos.forEach((r,ruta)=>{previa=previa.split(ruta).join(r.url);});
         const frame=$('#preview-frame');const anterior=frame.contentDocument?.scrollingElement?.scrollTop || 0;
         frame.srcdoc='<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><style>'+CSS_PREVIA_AA+'</style><style>'+HOJA_MOODLE_DEFAULT+'</style><style>@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;700&display=swap");</style></head><body>'+previa+'</body></html>';
-        frame.onload=()=>{if(frame.contentDocument?.scrollingElement)frame.contentDocument.scrollingElement.scrollTop=anterior;};
+        frame.onload=()=>{
+            const doc=frame.contentDocument;
+            if(doc?.scrollingElement)doc.scrollingElement.scrollTop=anterior;
+            doc?.addEventListener('click',e=>{
+                // Los enlaces de la previa seleccionan su bloque sin navegar fuera.
+                e.preventDefault();
+                const nodo=e.target.closest('[data-aa-editor]');
+                if(!nodo)return;
+                const id=nodo.dataset.aaEditor;
+                const caja=id==='titulo'?$('#titulo'):document.querySelector('.aa-bloque[data-id="'+id+'"]');
+                if(!caja)return;
+                seleccionado=id==='titulo'?null:Number(id);
+                document.querySelectorAll('.aa-bloque').forEach(n=>n.classList.toggle('seleccionado',n===caja));
+                const paso=e.target.closest('[data-aa-paso]');
+                const destino=paso&&paso.dataset.aaEditor===id?caja.querySelector('.aa-paso[data-paso="'+paso.dataset.aaPaso+'"]'):caja;
+                let campo=destino.matches('input')?destino:destino.querySelector('textarea,input:not([type="checkbox"]),select');
+                const celda=e.target.closest('td,th');
+                if(celda&&buscar(Number(id))?.lista[buscar(Number(id)).i]?.tipo==='tabla'){
+                    const tabla=celda.closest('table'),fila=celda.parentElement;
+                    const columnas=tabla.rows[tabla.tHead?tabla.tHead.rows.length-1:0].cells.length;
+                    const filas=caja.querySelectorAll('.aa-tabla-celda');
+                    if(fila.parentElement.tagName==='THEAD')campo=celda.colSpan>1?caja.querySelectorAll('.aa-campo input')[1]:filas[celda.cellIndex]?.querySelector('input');
+                    else if(!tabla.tHead&&fila.sectionRowIndex===0)campo=filas[celda.cellIndex]?.querySelector('input');
+                    else campo=filas[columnas+fila.sectionRowIndex-(tabla.tHead?0:1)]?.querySelectorAll('textarea')[celda.cellIndex];
+                }
+                campo?.focus({preventScroll:true});
+                (campo||destino).scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+            });
+        };
         const avisos=[];const recorrer=lista=>lista.forEach(b=>{if(b.tipo==='tabla'&&b.anchos==='medida'){const v=String(b.anchoCols||'').split(/[\s/;,]+/).filter(Boolean).map(Number);if(v.length!==b.encabezados.length||v.some(n=>!Number.isFinite(n)||n<=0)||Math.abs(v.reduce((a,n)=>a+n,0)-100)>=.1)avisos.push('Revisa los anchos: un porcentaje por columna y un total de 100. Mientras tanto se usa ancho automático.');}if(b.tipo==='evaluacionAA'&&(!b.url||AA.segura(b.url)==='#'))avisos.push('Completa el enlace de evaluación.');if(b.tipo==='imagen'&&!b.src)avisos.push('Falta la ruta de una imagen.');(b.items||[]).forEach(it=>{if(it.hijos)recorrer(it.hijos);});});recorrer(pagina.bloques);
         $('#revision').textContent=[...new Set(avisos)].join(' ') || 'El HTML se pega en la Descripción de la actividad. Revisa los archivos enlazados antes de guardar en Moodle.';
+    }
+    // Estas marcas existen solo en el iframe: nunca se exportan al HTML Moodle.
+    function marcarPrevia(html) {
+        const doc=new DOMParser().parseFromString(AA.sanear(html),'text/html');
+        const asignados=new Set();
+        function marcar(lista,ambito,desnudo=false) {
+            lista.forEach(b=>{
+                const fragmento=new DOMParser().parseFromString(AA.sanear(AA.htmlBloque(b,desnudo)),'text/html');
+                const encontrados=[];
+                [...fragmento.body.children].forEach(ref=>{
+                    const nodo=[...ambito.querySelectorAll(ref.tagName)].find(n=>!asignados.has(n)&&n.outerHTML===ref.outerHTML);
+                    if(nodo){asignados.add(nodo);encontrados.push(nodo);}
+                });
+                // Buscar antes de insertar atributos permite cotejar el HTML intacto.
+                encontrados.forEach(n=>{
+                    if(b.tipo==='pasos'){
+                        const ol=n.querySelector('ol.estiloLista');
+                        [...(ol?.children||[])].forEach((li,j)=>{
+                            marcar(b.items[j]?.hijos||[],li,true);
+                            li.dataset.aaEditor=b.id;li.dataset.aaPaso=j;
+                        });
+                    }
+                    n.dataset.aaEditor=b.id;
+                });
+            });
+        }
+        marcar(pagina.bloques,doc.body);
+        const titulo=doc.querySelector('h1');if(titulo)titulo.dataset.aaEditor='titulo';
+        return doc.body.innerHTML;
     }
     function pestana(nombre) {
         document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.target===nombre));
