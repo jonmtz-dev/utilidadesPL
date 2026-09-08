@@ -13,7 +13,11 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.89.1';
+const VERSION = '1.90.1';
+// Actualizar este resumen junto con VERSION en cada entrega, en lenguaje de usuario.
+const NOVEDADES = [
+    'Nuevo cajón integrado: AA a HTML. Debido a que las AA manejan diferentes estilos, se agregó la herramienta aparte para que cargues tus AA.'
+];
 const CACHE = `panel-herramientas-v${VERSION}`;
 
 // Rutas relativas a propósito: en GitHub Pages la app vive en un subdirectorio
@@ -127,6 +131,9 @@ self.addEventListener('activate', (event) => {
 
 // La página pide activar el SW en espera cuando el usuario acepta actualizar.
 self.addEventListener('message', (event) => {
+    if (event.data === 'CONSULTAR_NOVEDADES') {
+        event.ports[0]?.postMessage({ version: VERSION, novedades: NOVEDADES });
+    }
     if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
 

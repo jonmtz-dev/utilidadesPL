@@ -1205,6 +1205,15 @@ la app muestra el aviso *"Hay una nueva versión disponible"* con un botón
 **Actualizar**, y al pulsarlo se activa, borra la caché vieja y recarga. Se
 revisa al volver a la pestaña y cada 30 minutos.
 
+El aviso incluye el resumen `NOVEDADES` definido junto a `VERSION` en `sw.js`.
+**En cada entrega, actualizar ambos:** escribir 1–3 frases breves en español
+que nombren la herramienta y el beneficio o corrección. La página consulta las
+notas al SW en espera, así que corresponden a la versión que se va a activar.
+El botón **Actualizar** mantiene el flujo de activación y recarga; cerrar el
+aviso permite seguir trabajando. Si un SW antiguo no tiene notas, se conserva
+el aviso básico. Una pestaña que ya tenía cargado el código anterior del aviso
+mostrará el aviso básico hasta recargarse.
+
 > ⚠️ **Al publicar cambios, sube `VERSION` en `sw.js`.** Es lo que hace que el
 > navegador note el cambio y salga el aviso. Si no la subes, el aviso no
 > aparece (el contenido igual se refresca por la estrategia de red primero,

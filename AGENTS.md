@@ -69,6 +69,12 @@ Idioma: **todo en español** (UI, comentarios, commits).
 
 ## PWA (importante)
 
+- **Cada entrega debe incluir un resumen visible de sus cambios.** Al subir
+  `VERSION` en `sw.js`, actualiza también `NOVEDADES` con 1–3 frases breves en
+  español: herramienta afectada y qué se agregó, mejoró o corrigió. No uses
+  detalles internos ni notas de versiones anteriores. El aviso muestra ese
+  resumen y el botón **Actualizar**; no actives el SW automáticamente.
+
 Es una PWA instalable publicada en GitHub Pages, en un **subdirectorio**.
 Liga oficial: <https://jonmtz-dev.github.io/utilidadesPL/> (repo del trabajo
 `jonmtz-dev/utilidadesPL`). Hay una copia de respaldo en la cuenta personal.

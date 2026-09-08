@@ -15,16 +15,27 @@
 
     /* ---------------------------------------------------------------- Aviso */
 
-    function mostrarAviso({ texto, accion, alAceptar }) {
+    function mostrarAviso({ texto, accion, alAceptar, novedades = [] }) {
         document.querySelector('.toast')?.remove();
 
         const toast = document.createElement('div');
         toast.className = 'toast glass-panel';
         toast.setAttribute('role', 'status');
 
-        const msg = document.createElement('span');
+        const msg = document.createElement(novedades.length ? 'div' : 'span');
         msg.className = 'toast-texto';
         msg.textContent = texto;
+        if (novedades.length) {
+            toast.classList.add('toast-novedades');
+            const lista = document.createElement('ul');
+            lista.className = 'toast-resumen';
+            novedades.forEach(texto => {
+                const item = document.createElement('li');
+                item.textContent = texto;
+                lista.appendChild(item);
+            });
+            msg.appendChild(lista);
+        }
 
         const btn = document.createElement('button');
         btn.className = 'toast-btn';
@@ -90,9 +101,25 @@
         });
     }
 
-    function avisarActualizacion(worker) {
+    async function avisarActualizacion(worker) {
+        // Consultar al SW en espera evita mostrar las notas de la versión activa.
+        // Un SW anterior puede no responder: conservar el aviso básico en ese caso.
+        const datos = await new Promise(resolve => {
+            const canal = new MessageChannel();
+            const terminar = datos => {
+                clearTimeout(limite);
+                canal.port1.close();
+                resolve(datos);
+            };
+            const limite = setTimeout(() => terminar(null), 1500);
+            canal.port1.onmessage = e => terminar(e.data);
+            try { worker.postMessage('CONSULTAR_NOVEDADES', [canal.port2]); }
+            catch { terminar(null); }
+        });
+        if (worker.state !== 'installed') return;
         mostrarAviso({
-            texto: '✨ Hay una nueva versión disponible',
+            texto: datos?.version ? 'Se actualizó la aplicación · ' + datos.version : 'Hay una nueva versión disponible',
+            novedades: Array.isArray(datos?.novedades) ? datos.novedades.filter(n => typeof n === 'string') : [],
             accion: 'Actualizar',
             alAceptar: () => worker.postMessage('SKIP_WAITING')
         });
