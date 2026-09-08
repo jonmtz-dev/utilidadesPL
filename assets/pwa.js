@@ -15,7 +15,8 @@
 
     /* ---------------------------------------------------------------- Aviso */
 
-    function mostrarAviso({ texto, accion, alAceptar, novedades = [] }) {
+    function mostrarAviso({ texto, accion, alAceptar, novedades = [], modal = false, version = '' }) {
+        if (modal) return mostrarActualizacion({ texto, accion, alAceptar, novedades, version });
         document.querySelector('.toast')?.remove();
 
         const toast = document.createElement('div');
@@ -58,6 +59,45 @@
         document.body.appendChild(toast);
     }
 
+    function mostrarActualizacion({ texto, accion, alAceptar, novedades, version }) {
+        if (document.querySelector('.pwa-actualizacion')) return;
+        const cuadro = document.createElement('dialog');
+        cuadro.className = 'pwa-actualizacion';
+        cuadro.setAttribute('aria-labelledby', 'pwa-titulo');
+        cuadro.setAttribute('aria-describedby', 'pwa-notas');
+        cuadro.innerHTML = '<div class="pwa-emblema" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="5" width="22" height="22" rx="5"/><path d="M5 12h22M13 12v15M17 19h6m-3-3v6"/></svg></div><p class="pwa-version"></p><h2 id="pwa-titulo"></h2><div id="pwa-notas"></div><div class="pwa-progreso" aria-hidden="true"><span></span></div><p class="pwa-estado" role="status"></p><button type="button" class="btn-primary pwa-aceptar"></button>';
+        cuadro.querySelector('.pwa-version').textContent = version ? 'Novedades · ' + version : 'Novedades';
+        cuadro.querySelector('h2').textContent = texto;
+        const notas = cuadro.querySelector('#pwa-notas');
+        novedades.forEach(texto => { const p = document.createElement('p'); p.textContent = texto; notas.appendChild(p); });
+        const boton = cuadro.querySelector('button');
+        const estado = cuadro.querySelector('.pwa-estado');
+        boton.textContent = accion;
+        cuadro.addEventListener('cancel', e => e.preventDefault());
+        cuadro.addEventListener('keydown', e => {
+            if (e.key === 'Tab') { e.preventDefault(); boton.focus(); }
+        });
+        boton.addEventListener('click', () => {
+            if (boton.disabled) return;
+            boton.disabled = true;
+            cuadro.classList.add('actualizando');
+            boton.textContent = 'Actualizando…';
+            estado.textContent = 'Aplicando la nueva versión. La página se recargará en un momento.';
+            const reintentar = () => {
+                cuadro.classList.remove('actualizando');
+                boton.disabled = false;
+                boton.textContent = 'Reintentar actualización';
+                estado.textContent = 'La actualización está tardando. Puedes volver a intentarlo.';
+            };
+            // No cerrar el cuadro antes de que el SW confirme la activación.
+            try { alAceptar(); setTimeout(reintentar, 15000); }
+            catch { reintentar(); }
+        });
+        document.body.appendChild(cuadro);
+        cuadro.showModal();
+        boton.focus({ preventScroll: true });
+    }
+
     /* ------------------------------------------------------ Service Worker */
 
     function registrarSW() {
@@ -97,7 +137,14 @@
         navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (recargando) return;
             recargando = true;
-            location.reload();
+            const cuadro = document.querySelector('.pwa-actualizacion');
+            if (cuadro) {
+                cuadro.classList.add('actualizando');
+                cuadro.querySelector('button').disabled = true;
+                cuadro.querySelector('.pwa-estado').textContent = 'Versión lista. Recargando la aplicación…';
+            }
+            // Dar un instante al navegador para pintar la transición de recarga.
+            setTimeout(() => location.reload(), cuadro ? 650 : 0);
         });
     }
 
@@ -118,7 +165,9 @@
         });
         if (worker.state !== 'installed') return;
         mostrarAviso({
-            texto: datos?.version ? 'Se actualizó la aplicación · ' + datos.version : 'Hay una nueva versión disponible',
+            texto: 'Se actualizó la aplicación',
+            modal: true,
+            version: datos?.version || '',
             novedades: Array.isArray(datos?.novedades) ? datos.novedades.filter(n => typeof n === 'string') : [],
             accion: 'Actualizar',
             alAceptar: () => worker.postMessage('SKIP_WAITING')

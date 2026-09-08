@@ -72,8 +72,16 @@
                 boton('+ Agregar paso',()=>cambiar(()=>b.items.push({texto:'',hijos:[]})),caja);
             }
             if (b.tipo === 'tabla') {
-                campo(caja,b,'titulo','Título de la tabla','input');
-                campo(caja,b,'colorear','Color de la primera columna','select',[['alternado','Alternado'],['rosa','Primario'],['verde','Secundario'],['no','Sin color']]);
+                campo(caja,b,'titulo','Título gris arriba de la tabla (opcional)','input');
+                campo(caja,b,'conEncabezado','La tabla tiene encabezado','checkbox');
+                campo(caja,b,'banda','Banda de color dentro del encabezado (opcional)','input');
+                campo(caja,b,'bordes','Bordes de tabla','checkbox');
+                campo(caja,b,'tarjetas','En celular, cada fila como tarjeta','checkbox');
+                campo(caja,b,'anchos','Ancho de las columnas','select',[['montaje','Montaje de AA'],['auto','Automático · permitir encoger'],['parejo','Parejas'],['medida','A la medida']]);
+                const porcentajes = campo(caja,b,'anchoCols','Porcentajes por columna (suman 100; ejemplo: 25/25/25/25)','input');
+                const actualizarAnchos = () => { porcentajes.parentElement.hidden = b.anchos !== 'medida'; };
+                actualizarAnchos(); caja.addEventListener('change',actualizarAnchos);
+                campo(caja,b,'colorear','Color de la primera columna','select',[['alternado','Alternado · color del aula / verde claro'],['rosa','Un solo color · color del aula'],['verde','Un solo color · verde claro'],['no','Sin color']]);
                 campo(caja,b,'encabezadoColor','Colorear encabezado','checkbox');
                 b.encabezados.forEach((t,j)=>{
                     const c=document.createElement('div');c.className='aa-tabla-celda';
@@ -119,7 +127,7 @@
         const frame=$('#preview-frame');const anterior=frame.contentDocument?.scrollingElement?.scrollTop || 0;
         frame.srcdoc='<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><style>'+CSS_PREVIA_AA+'</style><style>'+HOJA_MOODLE_DEFAULT+'</style><style>@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;700&display=swap");</style></head><body>'+previa+'</body></html>';
         frame.onload=()=>{if(frame.contentDocument?.scrollingElement)frame.contentDocument.scrollingElement.scrollTop=anterior;};
-        const avisos=[];const recorrer=lista=>lista.forEach(b=>{if(b.tipo==='evaluacionAA'&&(!b.url||AA.segura(b.url)==='#'))avisos.push('Completa el enlace de evaluación.');if(b.tipo==='imagen'&&!b.src)avisos.push('Falta la ruta de una imagen.');(b.items||[]).forEach(it=>{if(it.hijos)recorrer(it.hijos);});});recorrer(pagina.bloques);
+        const avisos=[];const recorrer=lista=>lista.forEach(b=>{if(b.tipo==='tabla'&&b.anchos==='medida'){const v=String(b.anchoCols||'').split(/[\s/;,]+/).filter(Boolean).map(Number);if(v.length!==b.encabezados.length||v.some(n=>!Number.isFinite(n)||n<=0)||Math.abs(v.reduce((a,n)=>a+n,0)-100)>=.1)avisos.push('Revisa los anchos: un porcentaje por columna y un total de 100. Mientras tanto se usa ancho automático.');}if(b.tipo==='evaluacionAA'&&(!b.url||AA.segura(b.url)==='#'))avisos.push('Completa el enlace de evaluación.');if(b.tipo==='imagen'&&!b.src)avisos.push('Falta la ruta de una imagen.');(b.items||[]).forEach(it=>{if(it.hijos)recorrer(it.hijos);});});recorrer(pagina.bloques);
         $('#revision').textContent=[...new Set(avisos)].join(' ') || 'El HTML se pega en la Descripción de la actividad. Revisa los archivos enlazados antes de guardar en Moodle.';
     }
     function pestana(nombre) {

@@ -16,7 +16,7 @@
     const bloque = (tipo, datos = {}) => Object.assign({ tipo }, {
         titulo: { texto: '', nivel: 'h2' }, texto: { texto: '', alineacion: 'izquierda', aaMulticol: false },
         pasos: { caja: true, items: [{ texto: '', hijos: [] }] }, lista: { estilo: 'vinetas', items: ['', ''] },
-        tabla: { titulo: '', encabezados: ['Columna 1', 'Columna 2'], filas: [['', ''], ['', '']], colorear: 'alternado', encabezadoColor: false },
+        tabla: { titulo: '', encabezados: ['Columna 1', 'Columna 2'], filas: [['', ''], ['', '']], colorear: 'alternado', encabezadoColor: false, bordes: true, tarjetas: true, conEncabezado: true, banda: '', anchos: 'montaje', anchoCols: '' },
         imagen: { src: '', alt: '', pie: '' },
         evaluacionAA: { antes: '', enlace: 'rúbrica', url: '', negrita: true, despues: '' }, crudo: { html: '' }
     }[tipo], datos);
@@ -39,9 +39,20 @@
                 return fila(b.caja ? `<div class="card-body col-sm-12 p-4 bg-primary-10 rounded-2"><div class="card-text">${lista}</div></div>` : lista);
             }
             case 'tabla': {
-                const cabecera = b.encabezados.map(t => `<th scope="col" class="text-center align-middle${b.encabezadoColor ? ' bg-primary-10' : ''}">${marcas(t)}</th>`).join('');
-                const filas = b.filas.map((f, i) => `<tr class="align-middle">${f.map((t, j) => `<td${j === 0 && b.colorear !== 'no' ? ` class="${b.colorear === 'verde' ? 'bg-secondary-10' : b.colorear === 'rosa' || i % 2 === 0 ? 'bg-primary-10' : 'bg-secondary-10'}"` : ''} data-label="${escapar(limpio(b.encabezados[j]))}">${marcas(t) || '&nbsp;'}</td>`).join('')}</tr>`).join('\n');
-                return `<div class="row bloque mt-3"><div class="col-10 mx-auto"><div class="table-responsive">${b.titulo ? `<div class="container-fluid bg-neutral-claro-50 border border-neutral-claro-50 rounded-1 rounded-top"><p class="text-muted my-2 text-center">${marcas(b.titulo)}</p></div>` : ''}<table class="table table-bordered MW-auto tabla-responsive-cards"><thead class="thead bg-primary-20"><tr>${cabecera}</tr></thead><tbody>${filas}</tbody></table></div></div></div>`;
+                const conEncabezado = b.conEncabezado !== false;
+                const valores = String(b.anchoCols || '').split(/[\s/;,]+/).filter(Boolean).map(Number);
+                const validos = valores.length === b.encabezados.length && valores.every(n => Number.isFinite(n) && n > 0) && Math.abs(valores.reduce((a,n) => a+n,0)-100) < .1;
+                const ancho = j => b.anchos === 'parejo' ? 100 / b.encabezados.length : b.anchos === 'medida' && validos ? valores[j] : null;
+                // El th ya lleva el peso definido por Moodle; no sumar la negrita del Word.
+                const cabecera = b.encabezados.map((t,j) => `<th scope="col" class="text-center align-middle${b.encabezadoColor ? ' bg-primary-10' : ''}"${ancho(j) ? ` style="width: ${ancho(j)}%;"` : ''}>${marcas(t).replace(/<\/?strong>/g, '')}</th>`).join('');
+                const cuerpo = conEncabezado ? b.filas : [b.encabezados, ...b.filas];
+                const filas = cuerpo.map((f, i) => `<tr class="align-middle">${f.map((t, j) => `<td${j === 0 && b.colorear !== 'no' ? ` class="${b.colorear === 'verde' ? 'bg-secondary-10' : b.colorear === 'rosa' || i % 2 === 0 ? 'bg-primary-10' : 'bg-secondary-10'}"` : ''}${conEncabezado ? ` data-label="${escapar(limpio(b.encabezados[j]))}"` : ''}${!conEncabezado && i === 0 && ancho(j) ? ` style="width: ${ancho(j)}%;"` : ''}>${marcas(t) || '&nbsp;'}</td>`).join('')}</tr>`).join('\n');
+                const clases = ['table'];
+                if (b.bordes !== false) clases.push('table-bordered');
+                if (b.anchos && b.anchos !== 'montaje') clases.push('MW-auto');
+                if (conEncabezado && b.tarjetas !== false) clases.push('tabla-responsive-cards');
+                const banda = b.banda ? `<tr><th class="text-center bg-primary-20" colspan="${b.encabezados.length}">${marcas(b.banda)}</th></tr>` : '';
+                return `<div class="row bloque mt-3"><div class="col-10 mx-auto"><div class="table-responsive">${b.titulo ? `<div class="container-fluid bg-neutral-claro-50 border border-neutral-claro-50 rounded-1 rounded-top"><p class="text-muted my-2 text-center">${marcas(b.titulo)}</p></div>` : ''}<table class="${clases.join(' ')}">${conEncabezado ? `<thead class="thead bg-primary-20">${banda}<tr>${cabecera}</tr></thead>` : ''}<tbody>${filas}</tbody></table><div class="indicador-scroll d-none d-sm-block d-md-none"><i class="texto-scroll">Scroll a la derecha para ver más</i><div class="flecha-scroll">...</div></div></div></div></div>`;
             }
             case 'imagen': return fila(`<img class="img-fluid d-block mx-auto" src="${segura(b.src)}" alt="${escapar(b.alt)}">${b.pie ? `<p class="text-muted text-center">${marcas(b.pie)}</p>` : ''}`);
             case 'evaluacionAA': {
@@ -73,7 +84,16 @@
         // Una tabla combinada se conserva completa; no se aplana al editar.
         if (!tabla.rows.length || tabla.querySelector('[rowspan],[colspan]')) return bloque('crudo', { html: nodo.outerHTML });
         const filas = [...tabla.rows];
+        const primera = tabla.tBodies[0]?.rows[0]?.cells[0];
+        const colores = [...(tabla.tBodies[0]?.rows || [])].map(f => f.cells[0]?.className || '');
+        const porcentajes = [...filas[0].cells].map(c => c.style.width).filter(v => v.endsWith('%'));
         return bloque('tabla', { titulo: nodo.querySelector('.table-responsive > div p')?.textContent || '',
+            conEncabezado: !!tabla.tHead, bordes: tabla.classList.contains('table-bordered'),
+            tarjetas: tabla.classList.contains('tabla-responsive-cards'),
+            encabezadoColor: !!tabla.querySelector('th.bg-primary-10'),
+            anchos: porcentajes.length === filas[0].cells.length ? 'medida' : tabla.classList.contains('MW-auto') ? 'auto' : 'montaje',
+            anchoCols: porcentajes.map(v => parseFloat(v)).join('/'),
+            colorear: colores.some(c => c.includes('bg-primary')) && colores.some(c => c.includes('bg-secondary')) ? 'alternado' : primera?.className.includes('bg-secondary') ? 'verde' : primera?.className.includes('bg-primary') ? 'rosa' : 'no',
             encabezados: [...filas[0].cells].map(aMarcas), filas: filas.slice(1).map(f => [...f.cells].map(aMarcas)) });
     }
     function desdeWord(entrada, imagenes = new Map()) {

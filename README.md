@@ -1209,8 +1209,9 @@ El aviso incluye el resumen `NOVEDADES` definido junto a `VERSION` en `sw.js`.
 **En cada entrega, actualizar ambos:** escribir 1–3 frases breves en español
 que nombren la herramienta y el beneficio o corrección. La página consulta las
 notas al SW en espera, así que corresponden a la versión que se va a activar.
-El botón **Actualizar** mantiene el flujo de activación y recarga; cerrar el
-aviso permite seguir trabajando. Si un SW antiguo no tiene notas, se conserva
+El cuadro glass aparece centrado y permanece abierto hasta pulsar **Actualizar**.
+No se cierra por Escape ni al tocar el fondo. Durante la activación muestra una
+animación de progreso y recarga al confirmar el SW; si tarda, permite reintentar. Si un SW antiguo no tiene notas, se conserva
 el aviso básico. Una pestaña que ya tenía cargado el código anterior del aviso
 mostrará el aviso básico hasta recargarse.
 

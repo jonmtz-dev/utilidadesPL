@@ -13,10 +13,10 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.90.1';
+const VERSION = '1.92.0';
 // Actualizar este resumen junto con VERSION en cada entrega, en lenguaje de usuario.
 const NOVEDADES = [
-    'Nuevo cajón integrado: AA a HTML. Debido a que las AA manejan diferentes estilos, se agregó la herramienta aparte para que cargues tus AA.'
+    'AA a HTML: tablas con el maquetado del aula, opciones de ancho y encabezado, y colores alternados según la paleta seleccionada.'
 ];
 const CACHE = `panel-herramientas-v${VERSION}`;
 

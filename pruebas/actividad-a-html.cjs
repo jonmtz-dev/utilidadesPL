@@ -117,6 +117,18 @@ fs.mkdirSync(salida, { recursive: true });
         await pagina.waitForTimeout(400);
         assert.equal(await pagina.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         await pagina.screenshot({ path: path.join(salida, 'movil.png'), fullPage: true, animations: 'disabled' });
+        const tablasAA = await pagina.evaluate(() => {
+            const b = AA.bloque('tabla', { encabezados: ['**Situación**','Respuesta'], filas: [['Uno','Sí'],['Dos','']] });
+            const dom = () => new DOMParser().parseFromString(AA.htmlBloque(b), 'text/html');
+            let d = dom();
+            const base = !d.querySelector('.MW-auto') && !d.querySelector('th strong') && !!d.querySelector('.indicador-scroll') && !!d.querySelector('td.bg-primary-10') && !!d.querySelector('td.bg-secondary-10');
+            b.anchos='medida'; b.anchoCols='30/70'; b.encabezadoColor=true;
+            d=dom(); const anchos=d.querySelector('th').style.width==='30%' && !!d.querySelector('th.bg-primary-10');
+            b.conEncabezado=false;d=dom();
+            const sinEncabezado=!d.querySelector('thead') && !d.querySelector('.tabla-responsive-cards') && d.querySelectorAll('tbody tr').length===3;
+            return {base,anchos,sinEncabezado};
+        });
+        assert.deepEqual(tablasAA, {base:true,anchos:true,sinEncabezado:true});
         assert.deepEqual(errores, []);
         assert.deepEqual(dependencias, []);
         assert.equal(await pagina.locator('#toolbar button').count(), 7);

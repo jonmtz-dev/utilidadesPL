@@ -42,3 +42,16 @@ La prueba comprueba cuatro Word, la conservación del DOM de cuatro HTML,
 edición de pasos, paletas, espacio inferior, deshacer, archivo incorrecto,
 descarga, temas y tablas móviles. Verifica que no se carguen archivos del Guion.
 La comprobación del montaje final en Moodle requiere pegarlo en la plataforma.
+
+## Tablas de AA
+
+El ancho predeterminado «Montaje de AA» reproduce la referencia entregada:
+`table table-bordered tabla-responsive-cards`, sin `MW-auto`, con título gris
+exterior e indicador de desplazamiento. Los encabezados usan el peso del tema,
+sin duplicarlo con `<strong>` procedente del Word. El título conserva su texto.
+Automático, Parejas y A la medida permiten encoger usando `MW-auto`; los anchos
+personalizados deben sumar 100 y se aplican en los encabezados como porcentajes.
+Sin encabezado, sus textos pasan a la primera fila y se desactivan las tarjetas.
+El alternado usa `bg-primary-10` / `bg-secondary-10`, que siguen la paleta del
+contenedor; no se aplica opacidad a la celda porque también afectaría al texto.
+El HTML importado sin editar sigue conservándose íntegramente.

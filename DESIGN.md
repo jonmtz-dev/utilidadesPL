@@ -73,3 +73,17 @@ a Página. La vista previa usa el tema real del aula Moodle 5.1.
 | Scroll | `assets/shared.css`, `reparto.js` | Panel completo desplazable | Escritorio y móvil |
 | Estado y avisos | `import-info`, `revision` | Enlace pendiente y Word incorrecto | Error recuperable y Deshacer |
 | Importación | `assets/docx.js` y modelo propio | Marcas, incisos manuales y notas | Cuatro Word y cuatro HTML |
+
+## Aviso de actualización
+
+`assets/pwa.js` ofrece un diálogo modal centrado con los tokens glass compartidos.
+Permanece abierto hasta Actualizar: no tiene cierre por Escape ni por fondo.
+El diálogo nativo mantiene el foco y bloquea la interacción con el fondo.
+Durante la activación se muestra progreso indeterminado, sin porcentaje ficticio;
+la recarga ocurre tras la confirmación del SW. Si tarda, ofrece reintentar.
+La animación respeta movimiento reducido y el cuadro cabe en móvil.
+
+Las tablas de AA parten del montaje entregado (sin MW-auto) y ofrecen anchos,
+bordes, encabezado y banda de color con formularios propios. La primera columna
+usa las clases del tema para alternar color de aula y verde claro; nunca hex
+fijos. Guion y Convertidor sirven de referencia, sin modificar sus editores.
