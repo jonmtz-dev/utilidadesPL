@@ -35,7 +35,12 @@
             if (hijo.nodeType !== 1) return;
             const et = hijo.tagName.toLowerCase();
             const dentro = aMarcas(hijo);
-            if (et === 'strong' || et === 'b') salida += `**${dentro}**`;
+            if (et === 'img') {
+                const alt = (hijo.getAttribute('alt') || '').replace(/[\]\r\n]/g, ' ').trim();
+                const src = hijo.getAttribute('src') || '';
+                if (src) salida += `![${alt}](${src})`;
+            }
+            else if (et === 'strong' || et === 'b') salida += `**${dentro}**`;
             else if (et === 'em' || et === 'i') salida += `*${dentro}*`;
             else if (et === 'br') salida += '\n';
             else if (et === 'mark') salida += `==${dentro}==`;
@@ -183,20 +188,26 @@
         const tabla = el.querySelector('table');
         if (!tabla) return null;
         const filasEnc = [...tabla.querySelectorAll(':scope > thead > tr')];
-        if (!filasEnc.length) return null;
+        const conEncabezado = filasEnc.length > 0;
 
         // Una fila de encabezado con un solo <th colspan> es la banda.
         let banda = '';
-        let filaTitulos = filasEnc[filasEnc.length - 1];
-        if (filasEnc.length > 1) {
+        const filaTitulos = conEncabezado ? filasEnc[filasEnc.length - 1] : null;
+        if (conEncabezado && filasEnc.length > 1) {
             const primera = filasEnc[0];
             const ths = [...primera.children];
             if (ths.length === 1 && ths[0].hasAttribute('colspan')) banda = aMarcas(ths[0]);
         }
-        const encabezados = [...filaTitulos.children].map(aMarcas);
+        const filasCuerpo = [...tabla.querySelectorAll(':scope > tbody > tr')];
+        const columnas = conEncabezado
+            ? filaTitulos.children.length
+            : filasCuerpo.reduce((max, tr) => Math.max(max, tr.children.length), 0);
+        const encabezados = conEncabezado
+            ? [...filaTitulos.children].map(aMarcas)
+            : Array.from({ length: columnas }, (_, c) => `Columna ${c + 1}`);
         if (!encabezados.length) return null;
 
-        const filas = [...tabla.querySelectorAll(':scope > tbody > tr')].map(tr =>
+        const filas = filasCuerpo.map(tr =>
             [...tr.children].map(aMarcas));
 
         /* El título gris que va ARRIBA de la tabla, fuera de ella: la banda
@@ -223,10 +234,10 @@
                 && conColor[0] === 'bg-secondary-10' ? 'plano' : 'alternado');
 
         return {
-            tipo: 'tabla', banda, encabezados, filas, titulo,
+            tipo: 'tabla', banda, encabezados, filas, titulo, conEncabezado,
             tarjetas: tabla.classList.contains('tabla-responsive-cards'),
             colorear,
-            encabezadoColor: [...filaTitulos.children].some(t => /bg-primary-\d/.test(t.className))
+            encabezadoColor: conEncabezado && [...filaTitulos.children].some(t => /bg-primary-\d/.test(t.className))
         };
     }
 
@@ -343,8 +354,6 @@
                 titulo: rotulo ? aMarcas(rotulo) : '',
                 img: img ? (img.getAttribute('src') || '') : '',
                 alt: img ? (img.getAttribute('alt') || '') : '',
-                anchoImg: img ? (Number(img.getAttribute('width')) || 0) : 0,
-                altoImg: img ? (Number(img.getAttribute('height')) || 0) : 0,
                 etiqueta: cara === 'resalte'
                     ? aMarcas(disp.querySelector('strong') || marca)
                     : (['boton', 'imagen-boton'].includes(cara) ? aMarcas(disp) : ''),

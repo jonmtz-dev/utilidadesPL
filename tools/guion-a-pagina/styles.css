@@ -309,13 +309,25 @@
 .rejilla { border-collapse: collapse; width: 100%; }
 .rejilla th, .rejilla td { padding: 2px; }
 .rejilla th { position: relative; }
-.rejilla input {
+.rejilla input,
+.rejilla textarea {
     width: 100%; min-width: 110px; box-sizing: border-box;
     background: var(--input-bg); border: 1px solid var(--control-border);
     border-radius: 7px; padding: 6px 7px; color: var(--text-main); font: inherit; font-size: 12.5px;
 }
-.rejilla th input { font-weight: 700; padding-right: 24px; }
-.rejilla th .mini-btn { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); font-size: 12px; }
+.rejilla textarea { min-width: 180px; resize: vertical; line-height: 1.35; }
+.rejilla th textarea { font-weight: 700; padding-right: 24px; }
+.rejilla th > .mini-btn--rojo { position: absolute; right: 3px; top: 3px; font-size: 12px; }
+.rejilla-celda { min-width: 180px; }
+.rejilla-columna {
+    display: block; min-width: 180px; padding: 9px 34px 9px 8px;
+    color: var(--text-muted); text-align: left; font-size: 12px;
+}
+.barra-marcas--celda { padding-right: 5px; }
+.barra-celda-ayuda {
+    margin-left: auto; align-self: center; color: var(--text-muted);
+    font-size: 10px; font-weight: 500; white-space: nowrap;
+}
 .rejilla-quitar { width: 30px; }
 .rejilla-acciones { display: flex; gap: 6px; margin-top: 7px; align-items: center; }
 

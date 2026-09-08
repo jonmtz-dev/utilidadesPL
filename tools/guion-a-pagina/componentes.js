@@ -101,6 +101,7 @@ function vaciarModales(n) {
  *
  *   **negritas**             -> <strong>
  *   *cursivas*               -> <em>
+ *   ![descripción](imagen)   -> <img> adaptable y centrada
  *   ==resaltado==            -> <mark class="bg-resalte-20">
  *   [texto](url)             -> <a target="_blank">
  *   {{palabra|título|texto}} -> la palabra resaltada abre una ventana con ese texto
@@ -134,6 +135,11 @@ function marcas(texto) {
             `<mark class="${RESALTE_VENTANA} border-0"><strong class="interactivo">${palabra.trim()}</strong></mark></a>`;
     });
 
+    /* La imagen va antes que la liga porque comparten la parte [texto](ruta).
+       Solo usa utilidades que ya trae Bootstrap/Moodle; el tamaño concreto lo
+       decide la columna y la proporción del archivo, no un style inventado. */
+    t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, url) =>
+        `<img class="img-fluid d-block mx-auto" src="${ligaSegura(url)}" alt="${alt}" width="400" height="400">`);
     t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, txt, url) =>
         `<a href="${ligaSegura(url)}" target="_blank" class="nomediaplugin">${txt}</a>`);
     t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
@@ -907,16 +913,18 @@ const COMPONENTES = {
     /* ---- Tabla ---- */
     tabla: {
         nombre: 'Tabla',
-        ayuda: 'Con encabezados; en celular se vuelve tarjetas',
+        ayuda: 'Con o sin encabezados; admite formato e imágenes en cada celda',
         icono: 'table',
         mini: MINI.tabla,
         nuevo: () => ({
             encabezados: ['Columna 1', 'Columna 2'],
             filas: [['', ''], ['', '']],
+            conEncabezado: true,
             colorear: 'no', tarjetas: true, titulo: '', encabezadoColor: false, banda: '',
             anchos: 'auto', anchoCols: []
         }),
-        resumen: b => `${(b.filas || []).length} filas × ${(b.encabezados || []).length} columnas`,
+        resumen: b => `${(b.filas || []).length} filas × ${(b.encabezados || []).length} columnas` +
+            (b.conEncabezado === false ? ' · sin encabezado' : ''),
         campos: [
             {
                 k: 'titulo', tipo: 'texto', etiqueta: 'Título gris, ARRIBA de la tabla (opcional)',
@@ -924,13 +932,37 @@ const COMPONENTES = {
                 ayuda: 'La banda gris que va fuera de la tabla, con el texto en gris claro. Es la que llevan casi todas las tablas del equipo: "Tabla 1. …".'
             },
             {
+                k: 'conEncabezado', tipo: 'check', porOmision: true,
+                etiqueta: 'La tabla tiene encabezado',
+                ayuda: 'Al apagarlo, los títulos que ya escribiste pasan a ser la primera fila; los nombres provisionales «Columna 1…» no. Si vuelves a encenderlo, la primera fila recupera su lugar como encabezado.',
+                alCambiar: (b, activo, anterior) => {
+                    if (activo === anterior) return;
+                    const columnas = (b.encabezados || []).length;
+                    b.filas = b.filas || [];
+                    if (!activo) {
+                        const titulos = (b.encabezados || []).slice();
+                        const traenContenido = titulos.some((t, c) => {
+                            const texto = String(t || '').trim();
+                            return texto && texto !== `Columna ${c + 1}`;
+                        });
+                        if (traenContenido) b.filas.unshift(titulos);
+                        b.encabezados = Array.from({ length: columnas }, (_, c) => `Columna ${c + 1}`);
+                    } else {
+                        const primera = b.filas.shift() || [];
+                        b.encabezados = Array.from({ length: columnas }, (_, c) => primera[c] || `Columna ${c + 1}`);
+                    }
+                }
+            },
+            {
                 k: 'banda', tipo: 'texto', etiqueta: 'Banda de color, DENTRO del encabezado (opcional)',
                 marcador: 'Contenido de Aprendizaje 1',
-                ayuda: 'El renglón de COLOR que cruza todas las columnas, ya dentro de la tabla y encima de los títulos. No es el gris de arriba: ese es el campo anterior.'
+                ayuda: 'El renglón de COLOR que cruza todas las columnas, ya dentro de la tabla y encima de los títulos. No es el gris de arriba: ese es el campo anterior.',
+                siOculta: b => b.conEncabezado === false
             },
             { k: 'rejilla', tipo: 'rejilla', etiqueta: 'Contenido' },
             {
                 k: 'anchos', tipo: 'opciones', etiqueta: 'Ancho de las columnas',
+                siOculta: b => b.conEncabezado === false,
                 ayuda: '«Automático» deja que el navegador reparta según el texto, y es lo que hace que una columna corta salga apretada aunque sobre espacio. «Parejas» las hace todas iguales. «A la medida» abre una casilla de % sobre cada columna, ahí arriba en el Contenido.',
                 ops: [
                     { v: 'auto', etiqueta: 'Automático', icono: 'magic-wand' },
@@ -940,11 +972,13 @@ const COMPONENTES = {
             },
             {
                 k: 'anchoCols', tipo: 'anchos', etiqueta: 'El % de cada columna',
+                siOculta: b => b.conEncabezado === false,
                 ayuda: 'Lo que dejes vacío se reparte solo. Si la suma pasa de 100, el navegador vuelve a repartir a su manera y se pierde lo elegido.'
             },
             {
                 k: 'tarjetas', tipo: 'check',
-                etiqueta: 'En celular, cada fila como tarjeta (recomendado)'
+                etiqueta: 'En celular, cada fila como tarjeta (recomendado)',
+                siOculta: b => b.conEncabezado === false
             },
             {
                 k: 'colorear', tipo: 'opciones', etiqueta: 'Color de la primera columna',
@@ -958,6 +992,7 @@ const COMPONENTES = {
             {
                 k: 'encabezadoColor', tipo: 'check',
                 etiqueta: 'Encabezado con el color del aula',
+                siOculta: b => b.conEncabezado === false,
                 ayuda: 'Apagado, el encabezado sale blanco: es lo que hacen las páginas ya publicadas. El montaje pone el color en el <thead> y Bootstrap lo tapa con el fondo de cada celda, así que ahí nunca se vio. Encendido, la clase va también en las celdas y sí se pinta —con el color de la paleta elegida arriba, sea reg, MM o la del módulo—.'
             }
         ],
@@ -965,13 +1000,14 @@ const COMPONENTES = {
             const enc = (b.encabezados || []);
             const filas = b.filas || [];
             if (!enc.length) return '';
+            const conEncabezado = b.conEncabezado !== false;
             /* MW-auto no es decorativa: la hoja pone
                `.mainPlantilla23 .table td { min-width: 200px }`, o sea 1000px de
                ancho mínimo en una tabla de cinco columnas, y ahí la tabla ya no
                puede encoger. `.table.MW-auto td { min-width: auto }` lo suelta.
                El montaje publicado la trae siempre. */
             const clases = ['table', 'table-bordered', 'MW-auto'];
-            if (b.tarjetas) clases.push('tabla-responsive-cards');
+            if (conEncabezado && b.tarjetas) clases.push('tabla-responsive-cards');
 
             // Envoltorio cotejado con la página publicada: .mt-3 y .col-10
             // (con .col-md-8 la tabla de 4 columnas salía estrecha y las celdas
@@ -989,20 +1025,19 @@ const COMPONENTES = {
                     `${ind(n + 4)}<p class="text-muted my-2 text-center">${marcas(b.titulo)}</p>`,
                     `${ind(n + 3)}</div>`);
             }
-            partes.push(
-                `${ind(n + 3)}<table class="${clases.join(' ')}">`,
-                `${ind(n + 4)}<thead class="thead bg-primary-20">`);
+            partes.push(`${ind(n + 3)}<table class="${clases.join(' ')}">`);
+            if (conEncabezado) partes.push(`${ind(n + 4)}<thead class="thead bg-primary-20">`);
             /* La banda que cruza todas las columnas ("Contenido de Aprendizaje 1").
                Va en su propio <tr> con un solo <th colspan>, tal cual el montaje.
                Lleva el color SIEMPRE, sin depender de la casilla de abajo: en la
                página publicada la banda se ve de color y los títulos no. */
-            if ((b.banda || '').trim()) {
+            if (conEncabezado && (b.banda || '').trim()) {
                 partes.push(
                     `${ind(n + 5)}<tr>`,
                     `${ind(n + 6)}<th class="text-center bg-primary-20" colspan="${enc.length}">${marcas(b.banda)}</th>`,
                     `${ind(n + 5)}</tr>`);
             }
-            partes.push(`${ind(n + 5)}<tr>`);
+            if (conEncabezado) partes.push(`${ind(n + 5)}<tr>`);
             /* El bg-primary-20 del <thead> viene del montaje real y se queda, pero
                ahí NO se ve: Bootstrap pinta el fondo en cada celda y la tapa. Para
                que el encabezado salga de color hay que repetir la clase en los
@@ -1030,13 +1065,16 @@ const COMPONENTES = {
             /* Sin ancho elegido, el mínimo de la palabra más larga. Con ancho
                elegido no se pone: el que decidió es quien manda. */
             const minimos = minimosDeTabla(b, enc.length);
-            enc.forEach((t, c) => {
-                const estilo = anchos[c]
-                    ? `width: ${anchos[c]}%;`
-                    : `min-width: ${minimos[c]}ch;`;
-                partes.push(`${ind(n + 6)}<th scope="col" class="${claseTh}" style="${estilo}">${marcas(t)}</th>`);
-            });
-            partes.push(`${ind(n + 5)}</tr>`, `${ind(n + 4)}</thead>`, `${ind(n + 4)}<tbody>`);
+            if (conEncabezado) {
+                enc.forEach((t, c) => {
+                    const estilo = anchos[c]
+                        ? `width: ${anchos[c]}%;`
+                        : `min-width: ${minimos[c]}ch;`;
+                    partes.push(`${ind(n + 6)}<th scope="col" class="${claseTh}" style="${estilo}">${marcas(t).replace(/\n/g, '<br>')}</th>`);
+                });
+                partes.push(`${ind(n + 5)}</tr>`, `${ind(n + 4)}</thead>`);
+            }
+            partes.push(`${ind(n + 4)}<tbody>`);
 
             const tono = tonoPrimeraColumna(b);
             filas.forEach((fila, i) => {
@@ -1046,7 +1084,8 @@ const COMPONENTES = {
                         ? 'bg-secondary-10'
                         : (i % 2 === 0 ? 'bg-primary-10' : 'bg-secondary-10');
                     const clase = tono !== 'no' && c === 0 ? ` class="${color}"` : '';
-                    partes.push(`${ind(n + 6)}<td${clase} data-label="${escapar(titulo)}">${marcas(fila[c] || '')}</td>`);
+                    const etiqueta = conEncabezado ? ` data-label="${escapar(titulo)}"` : '';
+                    partes.push(`${ind(n + 6)}<td${clase}${etiqueta}>${marcas(fila[c] || '').replace(/\n/g, '<br>')}</td>`);
                 });
                 partes.push(`${ind(n + 5)}</tr>`);
             });
@@ -1156,8 +1195,8 @@ const COMPONENTES = {
             estilo: 'boton', cuantas: '4', ancho: '100', panel: 'blanco',
             tamano: 'normal', flecha: true,
             items: [
-                { titulo: '', img: '', alt: '', anchoImg: 0, altoImg: 0, etiqueta: 'Primer botón', color: 'primary', hijos: [] },
-                { titulo: '', img: '', alt: '', anchoImg: 0, altoImg: 0, etiqueta: 'Segundo botón', color: 'primary', hijos: [] }
+                { titulo: '', img: '', alt: '', etiqueta: 'Primer botón', color: 'primary', hijos: [] },
+                { titulo: '', img: '', alt: '', etiqueta: 'Segundo botón', color: 'primary', hijos: [] }
             ]
         }),
         resumen: b => `${(b.items || []).length} desplegables`,
@@ -1200,7 +1239,7 @@ const COMPONENTES = {
             },
             {
                 k: 'items', tipo: 'repetible', etiqueta: 'Desplegables', nombreItem: 'Desplegable',
-                nuevo: () => ({ titulo: '', img: '', alt: '', anchoImg: 0, altoImg: 0, etiqueta: 'Nuevo desplegable', color: 'primary', hijos: [] }),
+                nuevo: () => ({ titulo: '', img: '', alt: '', etiqueta: 'Nuevo desplegable', color: 'primary', hijos: [] }),
                 campos: [
                     { k: 'titulo', tipo: 'texto', etiqueta: 'Título, ARRIBA de la imagen',
                       siOculta: (item, b) => b.estilo !== 'imagen' },
@@ -1265,18 +1304,16 @@ const COMPONENTES = {
                 } else {
                     if (estilo === 'imagen-boton') {
                         const fuente = (item.img || '').trim();
-                        const anchoImg = Number(item.anchoImg) > 0 ? Math.round(Number(item.anchoImg)) : 0;
-                        const altoImg = Number(item.altoImg) > 0 ? Math.round(Number(item.altoImg)) : 0;
-                        const medida = anchoImg && altoImg ? ` width="${anchoImg}" height="${altoImg}"` : '';
-                        /* La zona 16:9 reserva la misma altura para todas las
-                           imágenes aunque sus proporciones sean distintas. El
-                           div intermedio evita que .ratio estire el <img> y lo
-                           alinea abajo, de modo que los botones quedan parejos
-                           sin deformar las prendas ni escribir style=. */
+                        /* El montaje real de Moodle usa 400 × 400 como medida
+                           editorial y .img-fluid para adaptarla a su columna.
+                           No se conservan los pocos píxeles de visualización
+                           que Word guarda en el documento. La zona cuadrada y
+                           mh-100 mantienen alineados los botones sin deformar
+                           imágenes de proporciones distintas ni usar style=. */
                         if (fuente) partes.push(
-                            `${ind(n + 2)}<div class="ratio ratio-16x9">`,
+                            `${ind(n + 2)}<div class="ratio ratio-1x1">`,
                             `${ind(n + 3)}<div class="d-flex align-items-end justify-content-center">`,
-                            `${ind(n + 4)}<img class="img-fluid" src="${ligaSegura(fuente)}" alt="${escapar(item.alt || '')}"${medida}>`,
+                            `${ind(n + 4)}<img class="img-fluid mh-100" src="${ligaSegura(fuente)}" alt="${escapar(item.alt || '')}" width="400" height="400">`,
                             `${ind(n + 3)}</div>`,
                             `${ind(n + 2)}</div>`
                         );

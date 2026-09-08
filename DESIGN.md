@@ -45,7 +45,9 @@ como micrositios con identidad propia.
 - Las rejillas de contenido publicado se expresan con clases Bootstrap; cualquier
   clase nueva generada también debe existir en el subconjunto de la previa.
 - En series de imagen + acción, reservar una zona Bootstrap `ratio` común y
-  contener la imagen sin deformarla para mantener alineados los controles.
+  contener la imagen sin deformarla para mantener alineados los controles. La
+  medida editorial de los montajes de vocabulario es 400 × 400 con `img-fluid`;
+  nunca se hereda el tamaño de visualización que traía Word.
 - Las imágenes necesitan texto alternativo cuando son el único disparador. Si un
   botón contiguo ya nombra la acción, el `alt` puede quedar vacío si es decorativa.
 

@@ -598,7 +598,10 @@ document.addEventListener('click', function (e) {
         const bloquesQueSalen = soloTitulo ? [] : pagina.bloques;
 
         const recorrer = lista => (lista || []).forEach(b => {
-            [b.src, b.icono, ...(b.items || []).map(i => i.img)].forEach(u => {
+            const celdas = b.tipo === 'tabla'
+                ? [...(b.encabezados || []), ...(b.filas || []).flat()] : [];
+            const imagenesDeCeldas = celdas.flatMap(rutasDeImagenEnTexto);
+            [b.src, b.icono, ...(b.items || []).map(i => i.img), ...imagenesDeCeldas].forEach(u => {
                 const url = (u || '').trim();
                 if (url && !/^https?:/i.test(url)) imagenes.add(url.replace('@@PLUGINFILE@@/', ''));
             });
@@ -623,8 +626,12 @@ document.addEventListener('click', function (e) {
                     avisos.push({ tono: 'error', texto: 'Un botón desplegable con imagen no tiene texto alternativo. Como la imagen es la liga que abre el panel, sin alt el enlace se anuncia vacío.' });
                 }
             }
-            if (b.tipo === 'tabla' && !(b.encabezados || []).filter(t => String(t).trim()).length) {
+            if (b.tipo === 'tabla' && b.conEncabezado !== false &&
+                !(b.encabezados || []).filter(t => String(t).trim()).length) {
                 avisos.push({ tono: 'error', texto: 'Una tabla no tiene encabezados. Sin ellos no hay data-label y en celular las tarjetas salen sin título de columna.' });
+            }
+            if (b.tipo === 'tabla' && celdas.some(t => /!\[\s*\]\([^)]+\)/.test(String(t || '')))) {
+                avisos.push({ tono: 'aviso', texto: 'Hay una imagen de tabla sin texto alternativo. Escribe su descripción entre los corchetes de ![ ] en la celda.' });
             }
             if (b.tipo === 'instruccion' && !(b.icono || '').trim()) {
                 imagenes.add('icono-instruccion.png');
@@ -1558,7 +1565,8 @@ document.addEventListener('click', function (e) {
             l.className = 'toggle-switch';
             const input = document.createElement('input');
             input.type = 'checkbox';
-            input.checked = Boolean(bloque[campo.k]);
+            input.checked = bloque[campo.k] === undefined
+                ? Boolean(campo.porOmision) : Boolean(bloque[campo.k]);
             /* Si algo del componente depende de este interruptor hay que volver
                a dibujar la FICHA: los campos se filtran al dibujarlos
                (`siOculta`), así que sin esto apagar el recuadro de la
@@ -1579,7 +1587,10 @@ document.addEventListener('click', function (e) {
                 || !!COMPONENTES[bloque.tipo].alineaTexto;
             input.addEventListener('change', () => {
                 guardarHistorial();
+                const anterior = bloque[campo.k] === undefined
+                    ? Boolean(campo.porOmision) : Boolean(bloque[campo.k]);
                 bloque[campo.k] = input.checked;
+                if (campo.alCambiar) campo.alCambiar(bloque, input.checked, anterior);
                 refrescarSalida();
                 if (gatilla) { dibujarFicha(); dibujarLienzo(); }
             });
@@ -1590,6 +1601,8 @@ document.addEventListener('click', function (e) {
             t.textContent = campo.etiqueta;
             l.append(input, s, t);
             caja.appendChild(l);
+            const ayCheck = ayudaDe(campo);
+            if (ayCheck) caja.appendChild(ayCheck);
             return caja;
         }
 
@@ -1845,6 +1858,137 @@ document.addEventListener('click', function (e) {
         ($$('#vf-palabra').value ? $$('#vf-expli') : $$('#vf-palabra')).focus();
     }
 
+    /** Barra compacta para una celda: solo las cuatro cosas que sí caben ahí. */
+    function barraDeCelda(area, alCambiar) {
+        const barra = document.createElement('div');
+        barra.className = 'barra-marcas barra-marcas--celda';
+
+        const insertar = (antes, despues, reemplazo) => {
+            guardarHistorial();
+            const ini = area.selectionStart, fin = area.selectionEnd;
+            const elegido = area.value.slice(ini, fin) || reemplazo;
+            area.value = area.value.slice(0, ini) + antes + elegido + despues + area.value.slice(fin);
+            area.focus();
+            area.selectionStart = ini + antes.length;
+            area.selectionEnd = ini + antes.length + elegido.length;
+            alCambiar(area.value);
+        };
+
+        [
+            { i: 'text-b', t: 'Negritas', a: '**', b: '**', texto: 'texto' },
+            { i: 'text-italic', t: 'Cursivas', a: '*', b: '*', texto: 'texto' }
+        ].forEach(m => {
+            const boton = document.createElement('button');
+            boton.type = 'button';
+            boton.className = 'mini-btn';
+            boton.title = m.t;
+            boton.setAttribute('aria-label', m.t);
+            boton.innerHTML = `<i class="ph ph-${m.i}"></i>`;
+            boton.addEventListener('click', () => insertar(m.a, m.b, m.texto));
+            barra.appendChild(boton);
+        });
+
+        const imagen = document.createElement('button');
+        imagen.type = 'button';
+        imagen.className = 'mini-btn';
+        imagen.title = 'Insertar imagen';
+        imagen.setAttribute('aria-label', 'Insertar imagen');
+        imagen.innerHTML = '<i class="ph ph-image"></i>';
+        imagen.addEventListener('click', () => {
+            const ini = area.selectionStart, fin = area.selectionEnd;
+            abrirFormularioImagenCelda(barra, area.value.slice(ini, fin), (datos, registrar) => {
+                if (registrar) guardarHistorial();
+                const alt = datos.alt.replace(/[\]\r\n]/g, ' ').trim();
+                const marca = `![${alt}](${datos.src})`;
+                area.value = area.value.slice(0, ini) + marca + area.value.slice(fin);
+                area.focus();
+                area.selectionStart = area.selectionEnd = ini + marca.length;
+                alCambiar(area.value);
+            });
+        });
+        barra.appendChild(imagen);
+
+        const ayuda = document.createElement('span');
+        ayuda.className = 'barra-celda-ayuda';
+        ayuda.textContent = 'Enter = salto';
+        barra.appendChild(ayuda);
+        return barra;
+    }
+
+    /** Ruta y texto alternativo de una imagen que irá dentro de la celda. */
+    function abrirFormularioImagenCelda(barra, seleccion, alAceptar) {
+        barra.parentElement.querySelectorAll('.imagen-celda-form').forEach(f => f.remove());
+
+        const caja = document.createElement('div');
+        caja.className = 'ventana-form imagen-celda-form';
+        caja.innerHTML = `
+            <p class="ventana-form-titulo"><i class="ph ph-image"></i> Imagen de la celda</p>
+            <label class="campo-etiqueta">Archivo o URL</label>
+            <input class="plain-input" data-ic="src" placeholder="@@PLUGINFILE@@/imagen.png">
+            <label class="campo-etiqueta">Texto alternativo</label>
+            <input class="plain-input" data-ic="alt" placeholder="Describe lo que aporta la imagen">
+            <p class="ventana-form-error hidden"></p>
+            <div class="ventana-form-pie">
+                <button type="button" class="btn-secondary btn-chico" data-ic="galeria"><i class="ph ph-images"></i> Del guion</button>
+                <button type="button" class="btn-secondary btn-chico" data-ic="cancelar">Cancelar</button>
+                <button type="button" class="btn-primary btn-chico" data-ic="ok">Insertar</button>
+            </div>`;
+        barra.parentElement.appendChild(caja);
+
+        const buscar = s => caja.querySelector(s);
+        const src = buscar('[data-ic="src"]');
+        const alt = buscar('[data-ic="alt"]');
+        const error = buscar('.ventana-form-error');
+        alt.value = String(seleccion || '').trim();
+        const cerrar = () => caja.remove();
+        const validar = valor => {
+            if (!valor) return 'Escribe el nombre del archivo o elige una imagen del guion.';
+            if (/[)\s]/.test(valor)) return 'La ruta no puede llevar espacios ni el carácter ).';
+            return '';
+        };
+
+        buscar('[data-ic="cancelar"]').addEventListener('click', cerrar);
+        buscar('[data-ic="galeria"]').addEventListener('click', () => {
+            abrirGaleria(valor => {
+                const nombre = valor.replace('@@PLUGINFILE@@/', '').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
+                cerrar();
+                alAceptar({ src: valor, alt: alt.value.trim() || nombre }, false);
+            });
+        });
+        buscar('[data-ic="ok"]').addEventListener('click', () => {
+            const valor = src.value.trim();
+            const fallo = validar(valor);
+            if (fallo) {
+                error.textContent = fallo;
+                error.classList.remove('hidden');
+                src.focus();
+                return;
+            }
+            cerrar();
+            alAceptar({ src: valor, alt: alt.value.trim() }, true);
+        });
+        caja.addEventListener('input', () => error.classList.add('hidden'));
+        caja.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { e.stopPropagation(); cerrar(); }
+        });
+        src.focus();
+    }
+
+    /** Un textarea enriquecido, reutilizado por encabezados y celdas. */
+    function editorDeCelda(valor, alCambiar, marcador) {
+        const caja = document.createElement('div');
+        caja.className = 'rejilla-celda';
+        const area = document.createElement('textarea');
+        area.className = 'plain-input area-rica';
+        area.rows = 3;
+        area.value = valor || '';
+        area.placeholder = marcador || '';
+        area.addEventListener('input', () => alCambiar(area.value));
+        area.addEventListener('focus', guardarUnaVez);
+        caja.append(barraDeCelda(area, alCambiar), area);
+        return caja;
+    }
+
     /* Rejilla de la tabla: encabezados + celdas, con botones para filas/columnas. */
     function rejillaDeTabla(bloque, card) {
         const caja = document.createElement('div');
@@ -1854,17 +1998,22 @@ document.addEventListener('click', function (e) {
 
         const thead = document.createElement('thead');
         const trh = document.createElement('tr');
+        const conEncabezado = bloque.conEncabezado !== false;
         (bloque.encabezados || []).forEach((t, c) => {
             const th = document.createElement('th');
-            const inp = document.createElement('input');
-            inp.value = t;
-            inp.placeholder = `Columna ${c + 1}`;
-            inp.addEventListener('input', () => {
-                bloque.encabezados[c] = inp.value;
-                programarRefresco();
-            });
-            inp.addEventListener('focus', guardarUnaVez);
+            if (conEncabezado) {
+                th.appendChild(editorDeCelda(t, valor => {
+                    bloque.encabezados[c] = valor;
+                    programarRefresco();
+                }, `Columna ${c + 1}`));
+            } else {
+                const nombre = document.createElement('span');
+                nombre.className = 'rejilla-columna';
+                nombre.textContent = `Columna ${c + 1}`;
+                th.appendChild(nombre);
+            }
             const quitar = document.createElement('button');
+            quitar.type = 'button';
             quitar.className = 'mini-btn mini-btn--rojo';
             quitar.title = 'Quitar columna';
             quitar.innerHTML = '<i class="ph ph-x"></i>';
@@ -1877,7 +2026,7 @@ document.addEventListener('click', function (e) {
                 if (bloque.anchoCols) bloque.anchoCols.splice(c, 1);
                 dibujarTodo();
             });
-            th.append(inp, quitar);
+            th.appendChild(quitar);
             trh.appendChild(th);
         });
         thead.appendChild(trh);
@@ -1888,19 +2037,16 @@ document.addEventListener('click', function (e) {
             const tr = document.createElement('tr');
             (bloque.encabezados || []).forEach((_, c) => {
                 const td = document.createElement('td');
-                const inp = document.createElement('input');
-                inp.value = fila[c] || '';
-                inp.addEventListener('input', () => {
-                    fila[c] = inp.value;
+                td.appendChild(editorDeCelda(fila[c], valor => {
+                    fila[c] = valor;
                     programarRefresco();
-                });
-                inp.addEventListener('focus', guardarUnaVez);
-                td.appendChild(inp);
+                }));
                 tr.appendChild(td);
             });
             const tdQuitar = document.createElement('td');
             tdQuitar.className = 'rejilla-quitar';
             const quitar = document.createElement('button');
+            quitar.type = 'button';
             quitar.className = 'mini-btn mini-btn--rojo';
             quitar.title = 'Quitar fila';
             quitar.innerHTML = '<i class="ph ph-trash"></i>';
@@ -1918,6 +2064,7 @@ document.addEventListener('click', function (e) {
         const acciones = document.createElement('div');
         acciones.className = 'rejilla-acciones';
         const bFila = document.createElement('button');
+        bFila.type = 'button';
         bFila.className = 'btn-secondary btn-chico';
         bFila.innerHTML = '<i class="ph ph-plus"></i> Fila';
         bFila.addEventListener('click', () => {
@@ -1926,6 +2073,7 @@ document.addEventListener('click', function (e) {
             dibujarTodo();
         });
         const bCol = document.createElement('button');
+        bCol.type = 'button';
         bCol.className = 'btn-secondary btn-chico';
         bCol.innerHTML = '<i class="ph ph-plus"></i> Columna';
         bCol.addEventListener('click', () => {
@@ -2529,6 +2677,11 @@ document.addEventListener('click', function (e) {
         return imagenesDocx.find(i => i.nombre === nombre || (i.alias || []).includes(nombre)) || null;
     }
 
+    /** Rutas de las imágenes escritas con la marca ![descripción](archivo). */
+    function rutasDeImagenEnTexto(texto) {
+        return [...String(texto || '').matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)].map(m => m[1]);
+    }
+
     /* La galería se abre desde un campo concreto y le devuelve el nombre. */
     let campoEsperandoImagen = null;
 
@@ -2576,7 +2729,10 @@ document.addEventListener('click', function (e) {
     function imagenesUsadas() {
         const pedidos = new Map();
         const recorrer = lista => (lista || []).forEach(b => {
-            [b.src, b.icono, ...(b.items || []).map(i => i.img)].forEach(v => {
+            const celdas = b.tipo === 'tabla'
+                ? [...(b.encabezados || []), ...(b.filas || []).flat()] : [];
+            const imagenesDeCeldas = celdas.flatMap(rutasDeImagenEnTexto);
+            [b.src, b.icono, ...(b.items || []).map(i => i.img), ...imagenesDeCeldas].forEach(v => {
                 const nombre = String(v || '').replace('@@PLUGINFILE@@/', '').trim();
                 const img = imagenDelGuion(v);
                 if (img && !pedidos.has(nombre)) pedidos.set(nombre, { nombre, bytes: img.bytes });
@@ -3452,6 +3608,23 @@ document.addEventListener('click', function (e) {
             .replace(/\s+/g, ' ').trim();
     }
 
+    /** Texto, saltos e imágenes de una celda del Word, sin aplanarlos. */
+    function contenidoRicoDeCelda(celda) {
+        const parrafos = celda.contenido || [];
+        if (!parrafos.length) {
+            const lineas = celda.lineas || [];
+            return lineas.length ? lineas.map(sinMarcas).filter(Boolean).join('\n') : sinMarcas(celda.texto);
+        }
+        return parrafos.map(p => {
+            const imagenes = (p.imagenes || []).map(rId => {
+                const src = srcDeMontaje(rId, p.comentarios);
+                return src ? `![](${src})` : '';
+            }).filter(Boolean);
+            const texto = sinMarcas(p.texto);
+            return [...imagenes, texto].filter(Boolean).join('\n');
+        }).filter(Boolean).join('\n');
+    }
+
     /** Lee una celda con el contrato editorial de imagen + botón + contenido. */
     function datosBotonImagenDeCelda(celda) {
         const lineas = (celda.lineas || []).map(l => String(l || '').replace(/\*\*/g, '').trim());
@@ -3462,13 +3635,8 @@ document.addEventListener('click', function (e) {
         const etiqueta = lineas.slice(0, fin).map(sinMarcas).filter(Boolean).join(' ');
         const texto = lineas.slice(contenido + 1).map(sinMarcas).filter(Boolean).join('\n\n');
         const rId = (parrafoImagen.imagenes || [])[0];
-        const medida = (parrafoImagen.imagenesInfo || []).find(i => i.id === rId) || {};
         const img = srcDeMontaje(rId, parrafoImagen.comentarios);
-        return etiqueta && texto && img ? {
-            etiqueta, texto, img,
-            anchoImg: Number(medida.ancho) || 0,
-            altoImg: Number(medida.alto) || 0
-        } : null;
+        return etiqueta && texto && img ? { etiqueta, texto, img } : null;
     }
 
     /**
@@ -3873,8 +4041,7 @@ document.addEventListener('click', function (e) {
                     alineacion: 'izquierda'
                 });
                 return {
-                    titulo: '', img: dato.img, alt: '', anchoImg: dato.anchoImg,
-                    altoImg: dato.altoImg, etiqueta: dato.etiqueta,
+                    titulo: '', img: dato.img, alt: '', etiqueta: dato.etiqueta,
                     color: 'primary', hijos: [texto]
                 };
             });
@@ -3884,13 +4051,13 @@ document.addEventListener('click', function (e) {
                 tamano: 'chico', flecha: true, items
             });
         }
-        const encabezados = (filas[0] || []).map(c => sinMarcas(c.texto));
+        const encabezados = (filas[0] || []).map(contenidoRicoDeCelda);
         const cuerpo = filas.slice(1);
 
         if (decision === 'tabla') {
             return Object.assign(crearBloque('tabla', false), {
                 encabezados,
-                filas: cuerpo.map(f => f.map(c => sinMarcas(c.texto))),
+                filas: cuerpo.map(f => f.map(contenidoRicoDeCelda)),
                 tarjetas: true,
                 /* Encendido al importar: el Word llega sin sombreado (todas las
                    celdas en "auto") pero el montaje publicado SIEMPRE alterna la

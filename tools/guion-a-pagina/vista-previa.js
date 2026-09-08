@@ -84,7 +84,8 @@ hr { border: 0; border-top: 1px solid #d5dce3; margin: 1.5rem 0; }
 .d-inline { display: inline; }
 .d-inline-block { display: inline-block; }
 .flex-shrink-0 { flex-shrink: 0; }
-.h-100 { height: 100%; }
+.h-100 { height: 100% !important; }
+.mh-100 { max-height: 100% !important; }
 .m-0 { margin: 0; }
 .mb-3 { margin-bottom: 1rem; }
 .mb-4 { margin-bottom: 1.5rem; }
@@ -327,6 +328,7 @@ a { color: var(--primary-50, #6b4c8b); }
 /* --- Video --- */
 .ratio { position: relative; width: 100%; }
 .ratio::before { display: block; content: ""; padding-top: 56.25%; }
+.ratio-1x1::before { padding-top: 100%; }
 .ratio-16x9::before { padding-top: 56.25%; }
 .ratio > * { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 

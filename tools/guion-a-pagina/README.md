@@ -596,9 +596,11 @@ las celdas, omite las vacías y crea un solo Botón desplegable con cara
 **Imagen + botón**. La salida usa `row-cols-1 row-cols-sm-2 row-cols-md-3
 row-cols-lg-5`, por lo que conserva cinco columnas en escritorio y se adapta en
 pantallas menores sin medidas inventadas. Cada ilustración vive en una zona
-Bootstrap `ratio ratio-16x9`: un contenedor flex intermedio respeta su tamaño y la
-alinea abajo, de manera que imágenes de proporciones distintas no desnivelan los
-botones ni se deforman.
+Bootstrap `ratio ratio-1x1`: un contenedor flex intermedio la alinea abajo y
+`mh-100` la contiene sin deformarla. El `<img>` sale con la medida editorial
+`width="400" height="400"` del montaje real de Moodle y con `img-fluid`; **no**
+hereda los 40–130 px con que Word la dibujaba en la hoja. Así las ilustraciones
+aprovechan su columna y las proporciones distintas no desnivelan los botones.
 
 ### Dos clases del aula que la copia de la hoja no trae
 
@@ -1569,6 +1571,24 @@ publicada la banda se ve de color y los títulos de columna no.
 
 La tabla que trae armada el bloque Presentación viene con su banda puesta,
 porque en ese montaje siempre la lleva.
+
+### Tablas sin encabezado y contenido enriquecido
+
+El interruptor **La tabla tiene encabezado** controla la estructura, no solo la
+apariencia. Al apagarlo, un encabezado ya escrito pasa a ser la primera fila de
+datos y la salida omite por completo `<thead>`, `<th>` y `data-label`. Los textos
+provisionales *Columna 1…* no se convierten en datos. Al volver a encenderlo, la
+primera fila se promueve a encabezado. Sin encabezado tampoco se ofrecen la
+banda, su color, anchos manuales ni el modo de tarjetas: todos dependen de los
+títulos de columna para tener sentido.
+
+Cada encabezado y celda usa un textarea con acciones compactas para **negritas**,
+*cursivas* e imagen. `Enter` se publica como `<br>`. La imagen se guarda como la
+marca `![descripción](@@PLUGINFILE@@/archivo.png)` y sale únicamente con clases
+ya disponibles (`img-fluid d-block mx-auto`) y la medida editorial 400 × 400;
+no se genera `style`. El importador reconstruye estas marcas desde `<strong>`,
+`<em>`, `<br>` e `<img>`, y el ZIP/listado de imágenes también incluye las que
+estén dentro de las celdas.
 
 ## Piezas de las plantillas 01S.05
 
