@@ -95,6 +95,13 @@ convierte en fórmula. De dónde sale el código, en este orden:
    notara. El aviso de importación dice cuántas salieron por esta vía
    ("2 sin código de producción: revísalas").
 
+Hay un tercer aspecto del mismo primer caso: algunos archivos exportados desde
+Google Docs guardan la expresión visible como una **imagen diminuta**, no como
+OMML, pero conservan el LaTeX en el comentario anclado (`V_x`, `V_{rx}` o
+`R=\\sqrt{…}`). Con la opción `latex` encendida, ese dibujo se sustituye por el
+`$$…$$` del comentario en la misma posición del párrafo. Las imágenes normales
+no cambian: sin comentario matemático siguen siendo bloques Imagen.
+
 En la vista previa el `$$…$$` se muestra destacado, con su código a la vista: la
 herramienta no renderiza matemáticas —eso rompería el trato de "sin
 dependencias"— así que la previa enseña exactamente lo que va a viajar a Moodle.
@@ -344,3 +351,6 @@ los textos y enlaces de ese estado exacto.
    un renglón con fórmula.
 14. Tras tocar `assets/docx.js`, importar el mismo Word en **Guion Instruccional
    a Página**: no debe aparecer ni un `$$` (la opción va apagada por omisión).
+15. Importar un Word exportado desde Google Docs con ecuaciones guardadas como
+    imagen y LaTeX en comentarios: los incisos deben conservar `$$V_x$$`,
+    `$$V_{rx}$$` y la fórmula completa, sin crear bloques Imagen extra.

@@ -433,7 +433,9 @@ function omathALatex(nodo) {
 /* La marca con que producción PUEDE escribir el código de una fórmula en un
    comentario del Word. No todos los guiones la traen: en los dos Word de M18
    cotejados, uno deja solamente `f(t)=t^{2}-4t+9`. Más abajo se acepta esa
-   variante únicamente si el comentario está anclado sobre un objeto OMML. */
+   variante únicamente si el comentario está anclado sobre un objeto OMML o
+   sobre una imagen de ecuación. Algunos Word exportados desde Google Docs no
+   conservan OMML: dejan un `w:drawing` diminuto y el LaTeX en el comentario. */
 const MARCA_LATEX_COMENTARIO = /^\s*c[oó]digo\s+para\s+producci[oó]n\s*:?\s*/i;
 
 /** ¿El comentario del Word es un código de fórmula y no una indicación? */
@@ -455,15 +457,21 @@ function limpiarLatexDeComentario(texto) {
 function pareceCodigoLatex(texto) {
     const latex = limpiarLatexDeComentario(texto);
     if (!latex || /^(montaje|nota|revisar|corregir|sustituir|vincular|insertar)\b/i.test(latex)) return false;
-    return /\\[a-zA-Z]+|[_^]\s*\{|[{}]|[=<>+\-*/]|[→←∞≤≥≠≈±∑∫]/.test(latex);
+    /* `V_x` es código válido aunque no use llaves. Se acepta esa forma solo
+       cuando TODO el comentario es una variable con subíndices o exponentes;
+       así un nombre de archivo con guion bajo no se vuelve fórmula. */
+    const variableConIndices = /^[a-zA-Z\\]+(?:[_^](?:\{[^{}]+\}|[a-zA-Z0-9]))+$/;
+    return variableConIndices.test(latex)
+        || /\\[a-zA-Z]+|[_^]\s*\{|[{}]|[=<>+\-*/]|[→←∞≤≥≠≈±∑∫]/.test(latex);
 }
 
 /**
- * Ids de comentarios cuyo rango contiene una ecuación OMML.
+ * Ids de comentarios cuyo rango contiene una ecuación OMML o una imagen.
  *
  * La relación se saca del document.xml, no del texto del ancla: una ecuación
- * vive en `m:t` y el lector de comentarios solo recoge `w:t`, por lo que el
- * ancla de estos comentarios normalmente está vacía.
+ * vive en `m:t`, y una ecuación pegada desde Google Docs puede vivir como
+ * `w:drawing`; el lector de comentarios solo recoge `w:t`, por lo que el ancla
+ * de ambos formatos normalmente está vacía.
  */
 async function comentariosAncladosAFormulaDocx(file) {
     const doc = await abrirDocumentoDocx(file);
@@ -481,7 +489,8 @@ async function comentariosAncladosAFormulaDocx(file) {
                 abiertos.delete(n.getAttributeNS(W_NS, 'id'));
                 continue;
             }
-            if (n.namespaceURI === M_NS && n.localName === 'oMath') {
+            if ((n.namespaceURI === M_NS && n.localName === 'oMath')
+                || (n.namespaceURI === W_NS && n.localName === 'drawing')) {
                 abiertos.forEach(id => ids.add(id));
                 continue;
             }
@@ -511,8 +520,9 @@ async function leerLatexDeComentariosDocx(file) {
 }
 
 /**
- * Las piezas de texto de un párrafo, en orden: `{ run }` para un `w:r` normal
- * y `{ math, comentarios }` para una ecuación.
+ * Las piezas de texto de un párrafo, en orden: `{ run }` para un `w:r` normal,
+ * `{ math, comentarios }` para una ecuación OMML y
+ * `{ drawing, comentarios }` para una ecuación guardada como imagen.
  *
  * Sin fórmulas se conserva EXACTAMENTE lo de siempre —todos los `w:r`
  * descendientes— porque tres herramientas dependen de ese recorrido. Con
@@ -545,7 +555,17 @@ function unidadesDeParrafo(p, conLatex, conComentarios) {
                 // Los comentarios abiertos viajan CON el run: es lo que permite
                 // saber qué comentario describe QUÉ palabra cuando en un mismo
                 // párrafo hay varias señaladas.
-                if (n.localName === 'r') { salida.push({ run: n, comentarios: [...abiertos] }); continue; }
+                if (n.localName === 'r') {
+                    /* Google Docs exporta algunas ecuaciones como imagen y deja
+                       el LaTeX en un comentario sobre ese dibujo. Solo con
+                       `latex` se entrega como unidad especial; con la opción
+                       apagada el recorrido de runs queda idéntico al anterior. */
+                    const tieneDibujo = conLatex && n.getElementsByTagNameNS(W_NS, 'drawing').length;
+                    salida.push(tieneDibujo
+                        ? { drawing: n, comentarios: [...abiertos] }
+                        : { run: n, comentarios: [...abiertos] });
+                    continue;
+                }
                 if (n.localName === 'commentRangeStart') { abiertos.add(n.getAttributeNS(W_NS, 'id')); continue; }
                 if (n.localName === 'commentRangeEnd') { abiertos.delete(n.getAttributeNS(W_NS, 'id')); continue; }
                 // Las propiedades del párrafo no traen texto y sí traen `w:rPr`.
@@ -599,17 +619,22 @@ function segmentosDeParrafo(p, opciones) {
     /** El `w:val` de un nodo de formato, o '' si no está. */
     const valorDe = nodo => (nodo && nodo.getAttributeNS(W_NS, 'val')) || '';
     const segmentos = [];
+    // Un mismo comentario puede envolver más de una representación de la
+    // ecuación. Su código debe entrar una vez, no una vez por nodo interno.
+    const comentariosConsumidos = new Set();
     for (const unidad of unidadesDeParrafo(p, conLatex, conColores)) {
-        if (unidad.math) {
+        if (unidad.math || unidad.drawing) {
             /* El comentario manda: es el código que autorizó producción. La
-               conversión automática es el respaldo (`auto` deja que la
-               herramienta avise cuáles conviene revisar). */
+               conversión automática es el respaldo para OMML (`auto` deja que
+               la herramienta avise cuáles conviene revisar). Una imagen no se
+               puede convertir: ahí el comentario es obligatorio. */
             let latex = '', auto = false;
             for (const id of unidad.comentarios) {
+                if (comentariosConsumidos.has(id)) continue;
                 const codigo = latexPorComentario && latexPorComentario.get(id);
-                if (codigo) { latex = codigo; break; }
+                if (codigo) { latex = codigo; comentariosConsumidos.add(id); break; }
             }
-            if (!latex) { latex = omathALatex(unidad.math).trim(); auto = true; }
+            if (!latex && unidad.math) { latex = omathALatex(unidad.math).trim(); auto = true; }
             // Un `$$…$$` NUNCA se fusiona con el texto de al lado: si entrara al
             // segmento vecino, las marcas `**` podrían acabar dentro del código.
             if (latex) segmentos.push({ texto: `$$${latex}$$`, negrita: false, cursiva: false, math: true, auto });

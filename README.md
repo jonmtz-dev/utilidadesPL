@@ -893,6 +893,11 @@ Las fórmulas se obtienen de dos fuentes, en este orden:
    una nota como “Revisar esta fórmula” sigue siendo una indicación editorial.
 2. La conversión del objeto OMML cuando no hay código de producción.
 
+Los Word exportados desde Google Docs pueden sustituir el objeto OMML por una
+imagen diminuta y dejar el LaTeX en el comentario anclado. Con `latex: true`,
+ese formato también se recupera en su posición como `$$…$$`; una imagen normal sin
+comentario matemático conserva el comportamiento anterior.
+
 El modelo esperado guarda los códigos en el campo adicional `formulas` de cada
 texto. El verificador no coteja el `textContent` que inyecta MathJax —ahí una
 ecuación aparece repetida como dibujo, MathML accesible y TeX—: compara el texto

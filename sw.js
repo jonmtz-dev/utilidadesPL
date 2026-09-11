@@ -13,12 +13,11 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.93.2';
+const VERSION = '1.93.3';
 // Actualizar este resumen junto con VERSION en cada entrega, en lenguaje de usuario.
 const NOVEDADES = [
-    'Nuevo cuadro de actualización centrado con efecto glass, resumen de novedades y animación al actualizar.',
-    'AA a HTML: tablas con el maquetado del aula, opciones de ancho y encabezado, y colores alternados según la paleta seleccionada.',
-    'AA a HTML: selecciona textos desde la vista previa para editarlos. También se corrigió la importación de foros con pasos escritos a mano, citas y listas de cotejo, con viñetas negras sólidas.'
+    'Integrador HTML: recupera las fórmulas que algunos Word guardan como imagen con el código LaTeX en un comentario.',
+    'Las expresiones importadas conservan los delimitadores $$…$$ requeridos por Moodle 3.11.'
 ];
 const CACHE = `panel-herramientas-v${VERSION}`;
 
