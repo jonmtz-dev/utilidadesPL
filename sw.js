@@ -13,11 +13,12 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.93.3';
+const VERSION = '1.94.0';
 // Actualizar este resumen junto con VERSION en cada entrega, en lenguaje de usuario.
 const NOVEDADES = [
     'Integrador HTML: recupera las fórmulas que algunos Word guardan como imagen con el código LaTeX en un comentario.',
-    'Las expresiones importadas conservan los delimitadores $$…$$ requeridos por Moodle 3.11.'
+    'Las expresiones importadas conservan los delimitadores $$…$$ requeridos por Moodle 3.11.',
+    'Nuevo: QA de Cuestionarios (Moodle 3.11). Coteja el cuestionario montado contra el guion, incluidas las fechas contra los ajustes.'
 ];
 const CACHE = `panel-herramientas-v${VERSION}`;
 
@@ -93,6 +94,11 @@ const APP_SHELL = [
     'tools/qa-311/script.js',
     'tools/qa-311/verificador.js',
     'tools/qa-311/styles.css',
+    'tools/qa-cuestionario-311/index.html',
+    'tools/qa-cuestionario-311/script.js',
+    'tools/qa-cuestionario-311/lector.js',
+    'tools/qa-cuestionario-311/verificador.js',
+    'tools/qa-cuestionario-311/styles.css',
     'tools/qa-51/index.html',
     'tools/qa-51/script.js',
     'tools/qa-51/verificador.js',

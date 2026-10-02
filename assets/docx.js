@@ -629,12 +629,17 @@ function segmentosDeParrafo(p, opciones) {
                la herramienta avise cuáles conviene revisar). Una imagen no se
                puede convertir: ahí el comentario es obligatorio. */
             let latex = '', auto = false;
+            const yaRepresentada = unidad.comentarios.some(id =>
+                comentariosConsumidos.has(id) && latexPorComentario && latexPorComentario.has(id));
             for (const id of unidad.comentarios) {
                 if (comentariosConsumidos.has(id)) continue;
                 const codigo = latexPorComentario && latexPorComentario.get(id);
                 if (codigo) { latex = codigo; comentariosConsumidos.add(id); break; }
             }
-            if (!latex && unidad.math) { latex = omathALatex(unidad.math).trim(); auto = true; }
+            if (!latex && unidad.math && !yaRepresentada) {
+                latex = omathALatex(unidad.math).trim();
+                auto = true;
+            }
             // Un `$$…$$` NUNCA se fusiona con el texto de al lado: si entrara al
             // segmento vecino, las marcas `**` podrían acabar dentro del código.
             if (latex) segmentos.push({ texto: `$$${latex}$$`, negrita: false, cursiva: false, math: true, auto });

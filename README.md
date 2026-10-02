@@ -108,6 +108,9 @@ tools/
     index.html · script.js · verificador.js · styles.css
   qa-311/                   Revisa actividad y rúbrica en Moodle 3.11
     index.html · script.js · verificador.js · styles.css
+  qa-cuestionario-311/      Revisa un cuestionario (mod/questionnaire) en Moodle 3.11
+    README.md                Qué lee del Word y de Moodle, y qué ya encontró
+    index.html · script.js · lector.js · verificador.js · styles.css
   bibliografias-margarita/  Word de fuentes → página 5.1, y QA de lo ya montado
     index.html · script.js · qa.js · verificador.js · styles.css
 .claude/launch.json         Config del servidor local para previsualizar
@@ -895,8 +898,8 @@ Las fórmulas se obtienen de dos fuentes, en este orden:
 
 Los Word exportados desde Google Docs pueden sustituir el objeto OMML por una
 imagen diminuta y dejar el LaTeX en el comentario anclado. Con `latex: true`,
-ese formato también se recupera en su posición como `$$…$$`; una imagen normal sin
-comentario matemático conserva el comportamiento anterior.
+ese formato también se recupera en su posición como `$$…$$`; una imagen normal
+sin comentario matemático conserva el comportamiento anterior.
 
 El modelo esperado guarda los códigos en el campo adicional `formulas` de cada
 texto. El verificador no coteja el `textContent` que inyecta MathJax —ahí una
@@ -906,6 +909,26 @@ humano alrededor de la fórmula por un lado y el contenido de
 todavía no terminó de renderizar. `{t}^{3}` y `t^{3}` se consideran la misma
 notación; cambiar un exponente, término o cantidad sí produce un error de
 **FÓRMULAS**.
+
+### QA de Cuestionarios 3.11 (`tools/qa-cuestionario-311/`)
+
+Para el plugin **Cuestionario** (`mod/questionnaire`), no para los Exámenes
+(`mod/quiz`): son actividades distintas, con otras páginas y sin respuesta
+correcta. El QA de cuestionario formativo de 5.1 coteja reactivos de cuatro
+opciones; este coteja la plantilla de **pantallas** de producción (introducción,
+encabezado, preguntas abiertas y de opciones) y, sobre todo, las **fechas del
+texto contra los ajustes**. Detalle, hallazgos reales y cómo se probó en
+`tools/qa-cuestionario-311/README.md`.
+
+Dos cosas que cuestan encontrar:
+
+- **No comparte el lector de Word con `qa-311`**: aquel entiende una actividad y
+  una rúbrica; este, la tabla `Pantalla | Contenido`. Se apoya en
+  `assets/docx.js` sin tocarlo.
+- **Un verificador serializado con `toString()` no puede llevar caracteres
+  invisibles crudos** (`U+00A0`, `U+200B`, `U+FEFF`). Van como ` `: un editor
+  los borra sin avisar. Escribirlos con la herramienta de archivos los convierte
+  en crudos sin que se note, así que hay que revisarlo tras guardar.
 
 ---
 

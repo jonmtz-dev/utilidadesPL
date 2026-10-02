@@ -69,6 +69,18 @@ const TOOLS = [
         url: 'tools/qa-311/index.html',
         status: 'ready'
     },
+    {
+        slug: 'qa-cuestionario-311',
+        grupo: 'qa',
+        moodle: '3.11',
+        title: 'QA de Cuestionarios',
+        description: 'Coteja el cuestionario montado (plugin Cuestionario) contra el guion: introducción, preguntas y opciones, tipo de cada pregunta y las fechas contra los ajustes. Solo lee.',
+        icon: 'exam',
+        accent: ['#0f9d58', '#1f6f4a'],
+        tags: ['QA', 'Cuestionarios', 'Word', 'Fechas'],
+        url: 'tools/qa-cuestionario-311/index.html',
+        status: 'ready'
+    },
     /* ---------- Moodle 5.1 ---------- */
     {
         slug: 'guion-a-pagina',
