@@ -250,3 +250,13 @@ const PLATAFORMAS = [
         acento: '#9d2248'
     }
 ];
+
+// Accesos del asistente: Firefox usa el XPI firmado por Mozilla, no el ZIP de desarrollo.
+const BITMO = {
+    moodle: '5.1',
+    icono: 'assets/bitmo/icon128.png',
+    chrome: 'https://chromewebstore.google.com/detail/bitmo-%C2%B7-asistente-de-mont/ldoedlinlkejfcnolphchnaonppklfbd?hl=es',
+    firefox: 'assets/bitmo/bitmo-firefox-0.5.9.xpi',
+    versionFirefox: '0.5.9',
+    firefoxMinimo: '140'
+};

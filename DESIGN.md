@@ -53,6 +53,26 @@ como micrositios con identidad propia.
 
 ## Límites
 
+La franja de BitMo vive al inicio de la rejilla de Margarita Maza; comparte su
+scroll y no aparece en Prepa en Línea ni en «Ver todas». El buscador permite
+encontrarla por BitMo, asistente o navegador. Reutiliza `.glass-panel`,
+`.btn-primary` y `.btn-secondary`; sus variantes se limitan a `.bitmo-*` en
+`assets/launcher.css`. Los destinos, versión firmada y Moodle pertenecen a
+`BITMO` en `assets/tools.js`. Chrome abre su ficha en otra pestaña; Firefox
+descarga un XPI firmado desde una ruta relativa, con instrucciones desplegables.
+En escritorio, los botones se alinean en dos columnas para mantener la franja
+compacta (unos 166 px cerrada); en móvil se apilan sin reducir el área táctil.
+La ✕ guarda `panel-bitmo-anuncio-oculto` en localStorage; respeta la elección
+al recargar y entre pestañas del mismo origen. «Mostrar BitMo» en la barra de
+búsqueda revierte la preferencia. Ambas acciones trasladan el foco al control
+que queda visible. Si el almacenamiento está bloqueado, funciona por visita.
+
+El modelo B conserva `assets/shared.css` como fuente canónica: la franja consume
+`--glass-*`, `--text-main`, `--accent`, `--control-*` y `--surface-*` existentes.
+Sus tokens adicionales son `--bitmo-text-secondary` (#515964 claro, #bdc4ce
+oscuro) y `--bitmo-on-accent` (#ffffff claro, #10263e oscuro). Este último mantiene
+legible el botón azul en oscuro sin cambiar los botones de las herramientas.
+
 - Sin framework, build, npm en ejecución ni estilos en línea nuevos.
 - Sin rutas absolutas: la PWA se publica dentro de un subdirectorio.
 - Sin alterar estilos ya compartidos para resolver una sola herramienta.

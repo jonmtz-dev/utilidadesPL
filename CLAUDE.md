@@ -1,0 +1,112 @@
+# Contexto para Claude
+
+**Lee `README.md` antes de tocar nada.** Tiene el porqué del proyecto, el
+contrato con el CSS que vive en Moodle, el sistema de diseño y las trampas ya
+descubiertas. Este archivo solo es el resumen.
+
+## Qué es
+
+Panel de herramientas (cajón de apps) para maquetar contenido en Moodle.
+HTML/CSS/JS planos, **sin build ni dependencias**. No propongas React, Vite ni
+npm: la gracia es abrir `index.html` y que funcione.
+
+Idioma: **todo en español** (UI, comentarios, commits).
+
+## Reglas que importan
+
+- El launcher se dibuja solo desde el arreglo `TOOLS` de `assets/tools.js`.
+  Agregar una herramienta = carpeta en `tools/<slug>/` + un objeto ahí.
+  **Una carpeta puede tener dos tarjetas**: Bibliografías Margarita Maza sale en
+  Montaje y otra vez en Revisión · QA (`?modo=qa`), porque hace las dos cosas.
+  El `slug` de esa segunda tarjeta no es el de la carpeta y da igual: la
+  insignia y el botón de volver miran la dirección, no el slug.
+- **No todas las herramientas son para la misma versión de Moodle.** Va en el
+  campo `moodle` de cada objeto de `TOOLS`, y de ahí salen **las dos**
+  insignias: la de la tarjeta del panel (`launcher.js`) y la del encabezado de
+  la herramienta (`assets/version-moodle.js`). **Nunca escribas la versión en el
+  HTML de una herramienta:** se desincronizaría, que es el mismo error que dejó
+  vivo el hex `#d8a7b6` duplicado durante meses.
+
+  | Herramienta | Moodle |
+  |---|---|
+  | Adaptador de Rúbricas · Generador de Bibliografías · Integrador HTML | **3.11** |
+  | Convertidor de Tablas · Micrositio a Página · Bibliografías Margarita Maza · Guion Instruccional a Página · QA de Actividad y Rúbrica | **5.1** |
+
+  Importa de verdad: el editor de rúbricas y el de libros cambiaron entre una y
+  otra, así que usar la herramienta equivocada produce HTML que se ve bien aquí
+  y falla allá.
+- Los componentes de UI compartidos ya existen en `assets/shared.css`
+  (`.glass-panel`, `.toggle-switch`, `.btn-primary`, `.tabs`, `.code-output`…).
+  Reutilízalos; no los reescribas por herramienta.
+- **En `assets/` compartido: agrega, no cambies.** Lo que ya sirve se queda; lo
+  nuevo entra como **campo adicional** o como **opción apagada por omisión**.
+  `docx.js` lo usan tres herramientas y cada una lee el mismo Word distinto: por
+  eso las tablas anidadas de una celda llegaron como campo nuevo (`contenido`,
+  sin tocar `lineas`/`texto`) y los saltos de línea del Word como opción
+  (`textoDeParrafoConNegritas(p, { saltos: true })`) — devolverlos siempre habría
+  partido en dos los `<li>` del Integrador HTML. Al terminar, **prueba la otra
+  herramienta**, no solo la tuya. Detalle y tabla de casos en el README §5.
+- **Antes de reusar el nombre de un campo, revisa que ningún componente ya lo
+  tenga.** La indicación del guion y el pie de figura compartían `nota`, y un
+  `<Figura>` del Word acabó publicándose como pie de la imagen.
+- Colores: si cambia entre claro y oscuro, va como token en `:root` /
+  `:root[data-theme="dark"]` de `shared.css`. Nunca hardcodeado.
+- **Las vistas previas (`.preview-container`) son islas claras a propósito** —
+  imitan la página real de Moodle. No las "arregles" para que sigan el tema
+  oscuro, y no uses tokens temáticos en nada que se inyecte dentro de ellas.
+- Layout: el gutter va como `padding` del `body` (no margen del contenedor) y la
+  cadena de flex necesita `min-height: 0`. El README explica por qué.
+- **Ninguna barra de scroll a media pantalla.** Si una zona de un panel
+  scrollea, va con `.scroll-sin-barra .scroll-difuso` + `data-pista-scroll`
+  (`assets/scroll-pista.js` difumina el borde solo cuando queda contenido) y, si
+  conviene anunciarlo, una píldora `.pista-mas`. Los paneles enteros ya llevan
+  barra fina. Ojo: `.scroll-difuso` **no** va en un contenedor de `.glass-panel`
+  —la máscara apaga el `backdrop-filter` de los hijos—. Detalle en el README §4.
+- En JS, arrancar siempre con el patrón `document.readyState === 'loading'`,
+  no solo con `DOMContentLoaded`.
+- **Las tres herramientas de QA generan un marcador (bookmarklet)** que se
+  ejecuta dentro de Moodle: el verificador vive como función normal y se manda
+  con `toString()`, nunca dentro de una plantilla de texto. En Bibliografías,
+  además, **el motor del cotejo es uno solo** (`qa.js` →`MOTOR_QA_BIBLIO`) y lo
+  comparten el marcador y el modo de pegar HTML. Si tocas una regla, tócala ahí:
+  duplicarla es volver al error del hex repetido.
+- **Guion Instruccional a Página también tiene su doc:**
+  `tools/guion-a-pagina/README.md`. Léelo antes de tocar `componentes.js`. Su
+  markup está **copiado de una página real ya montada**, no deducido del CSS:
+  las ventanas emergentes son **modales de Bootstrap** y los botones del
+  acordeón llevan `bg-neutral-claro-50 text-primary`. Deducirlo del tema dio las
+  dos cosas mal. Ahí también está el catálogo de marcas del guion (`<Figura>`,
+  `<Crear un grupo de N botones>`…), que nunca deben llegar al HTML.
+  **Su salida lleva `ms-convertido` en el contenedor** y no es que venga de un
+  micrositio: es el interruptor con el que la hoja del aula pinta este
+  contenido —el gris fuerte de `.btn-secondary`, el hover del acordeón con
+  letra blanca, la banda de la tabla— y también, a sabiendas, los enlaces
+  azules y subrayados. Sin esa clase el mismo markup se ve distinto.
+- **Micrositio a Página tiene su propio doc de reglas:**
+  `tools/micrositio-a-pagina/REGLAS.md`. Léelo antes de tocar el blindaje de
+  estilos, la marca `.ms-convertido` o el tablero de la pestaña CSS. Regla de
+  oro ahí: los estados (hover/abierto) NUNCA van inline (TinyMCE borra `<style>`
+  y las `--bs-*`; congelar el reposo mata el hover) — van como reglas aditivas
+  `.ms-convertido` en el tema de Moodle. Y la hoja del usuario no se edita jamás.
+
+## PWA (importante)
+
+Es una PWA instalable publicada en GitHub Pages, en un **subdirectorio**.
+Liga oficial: <https://jonmtz-dev.github.io/utilidadesPL/> (repo del trabajo
+`jonmtz-dev/utilidadesPL`). Hay una copia de respaldo en la cuenta personal.
+Consecuencias:
+
+- **Nunca uses rutas absolutas** (`/assets/...`): funcionan en local y se rompen
+  en producción. Todo relativo. El código no depende del nombre del repo ni de
+  la cuenta, y así debe seguir.
+- `sw.js` va en la raíz del repo (un SW solo controla su carpeta hacia abajo).
+- **Al publicar cambios hay que subir `VERSION` en `sw.js`**, o el aviso de
+  "nueva versión" no aparece y la caché offline se queda vieja.
+- Los Service Workers no corren en `file://`. Para probar: `python -m http.server`.
+
+## Verificar
+
+Hay que probar el flujo de verdad en el navegador, no solo mirar un screenshot:
+generar la salida y confirmar el HTML (`data-label`, `span.nolink`), revisar que
+la página no scrollee en escritorio, y revisar ambos temas. Para servirlo:
+`python -m http.server 5510`.

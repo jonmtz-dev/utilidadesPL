@@ -4,6 +4,27 @@ Cajón de apps con utilidades propias para maquetar contenido en Moodle.
 Sin build, sin dependencias, sin `npm install`: son archivos HTML/CSS/JS planos.
 Se abre `index.html` en el navegador y funciona.
 
+### Asistencia de montaje con BitMo
+
+Al elegir Margarita Maza aparece BitMo arriba de las herramientas. Incluye su
+icono, acceso a Chrome Web Store (para los correos institucionales autorizados
+del equipo) y descarga del XPI firmado por Mozilla para Firefox 140 o posterior.
+La franja respeta ambos temas, el buscador y el scroll de la rejilla.
+La ✕ permite ocultarla de forma persistente en ese navegador; «Mostrar BitMo»,
+junto al buscador, permite recuperarla. La preferencia se guarda localmente
+(clave `panel-bitmo-anuncio-oculto`) y se sincroniza entre pestañas del panel.
+Si el navegador bloquea localStorage, la elección dura esta visita.
+
+Los enlaces y la versión se mantienen en `BITMO`, al final de `assets/tools.js`.
+El archivo `assets/bitmo/bitmo-firefox-0.5.9.xpi` procede de la versión aprobada
+por Mozilla 6573568, archivo 5117704. SHA-256:
+`10ff1c9a4776b7bf482f22a8bab42c9d4004d5185d47395d21f04ea46a023764`.
+Para actualizarlo, sustituye el XPI por una versión firmada, actualiza `BITMO`
+y su ruta en `APP_SHELL` de `sw.js`, y sube `VERSION` con sus novedades. No uses
+el ZIP de desarrollo. El XPI se distribuye sin listado público en Mozilla;
+quien tenga acceso al archivo puede instalarlo, a diferencia de la lista de
+correos autorizados de Chrome. El icono y el XPI también quedan en la caché PWA.
+
 **Ojo: no todas las herramientas son para la misma versión de Moodle.** Cada una
 lo indica con una insignia, en su tarjeta del panel y en su propio encabezado:
 

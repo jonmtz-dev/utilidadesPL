@@ -12,6 +12,78 @@ function initLauncher() {
     // Plataforma elegida en la portada; null = se están viendo todas.
     let plataforma = null;
 
+    const preferenciaBitmo = 'panel-bitmo-anuncio-oculto';
+    let bitmoOculto = false;
+    try { bitmoOculto = localStorage.getItem(preferenciaBitmo) === '1'; }
+    catch (e) { /* Si se bloquea el almacenamiento, funciona durante esta visita. */ }
+
+    // Forma parte de la rejilla para compartir su scroll; no reduce el espacio
+    // disponible de las herramientas en pantallas bajas.
+    const bitmo = document.createElement('section');
+    bitmo.id = 'bitmo-anuncio';
+    bitmo.className = 'bitmo-banner glass-panel hidden';
+    bitmo.setAttribute('aria-labelledby', 'bitmo-titulo');
+    bitmo.innerHTML = `
+        <button class="bitmo-cerrar" type="button" aria-label="Ocultar anuncio de BitMo" title="No volver a mostrar este anuncio">
+            <i class="ph ph-x" aria-hidden="true"></i>
+        </button>
+        <div class="bitmo-presentacion">
+            <div class="bitmo-icono"><img src="${BITMO.icono}" width="112" height="112" alt="" decoding="async"></div>
+            <div class="bitmo-copy">
+                <p class="bitmo-etiqueta">BitMo <span aria-hidden="true">·</span> Moodle ${BITMO.moodle}</p>
+                <h2 id="bitmo-titulo">Un compañero para tu montaje</h2>
+                <p class="bitmo-descripcion">Descarga BitMo, tu asistente inteligente para configurar el montaje en Moodle ${BITMO.moodle}.</p>
+                <p class="bitmo-detalle">Guías de configuración y revisión de recursos, directamente en tu aula.</p>
+            </div>
+        </div>
+        <div class="bitmo-descargas">
+            <a class="btn-primary bitmo-boton bitmo-chrome" href="${BITMO.chrome}" target="_blank" rel="noopener noreferrer" aria-describedby="bitmo-acceso-chrome">
+                <i class="ph ph-google-chrome-logo" aria-hidden="true"></i> Agregar a Chrome
+                <i class="ph ph-arrow-up-right bitmo-flecha" aria-hidden="true"></i>
+            </a>
+            <p class="bitmo-nota" id="bitmo-acceso-chrome">Solo para el equipo con correo institucional autorizado. Inicia sesión en Chrome con ese correo.</p>
+            <a class="btn-secondary bitmo-boton bitmo-firefox" href="${BITMO.firefox}" download="bitmo-firefox-${BITMO.versionFirefox}.xpi" aria-describedby="bitmo-acceso-firefox">
+                <i class="ph ph-browser" aria-hidden="true"></i> Descargar para Firefox
+                <i class="ph ph-download-simple bitmo-flecha" aria-hidden="true"></i>
+            </a>
+            <p class="bitmo-nota" id="bitmo-acceso-firefox">Versión ${BITMO.versionFirefox} · Firmada por Mozilla · Firefox ${BITMO.firefoxMinimo}+</p>
+            <details class="bitmo-instalacion">
+                <summary>Cómo instalar en Firefox</summary>
+                <p>Descarga el archivo .xpi. En Firefox, abre Complementos y temas → Extensiones. En el menú del engrane elige «Instalar complemento desde archivo…» y selecciona el archivo descargado.</p>
+            </details>
+        </div>`;
+    grid.appendChild(bitmo);
+
+    const cerrarBitmo = bitmo.querySelector('.bitmo-cerrar');
+    const restaurarBitmo = document.createElement('button');
+    restaurarBitmo.type = 'button';
+    restaurarBitmo.className = 'bitmo-restaurar hidden';
+    restaurarBitmo.textContent = 'Mostrar BitMo';
+    restaurarBitmo.setAttribute('aria-controls', bitmo.id);
+    barra.appendChild(restaurarBitmo);
+
+    function guardarVisibilidadBitmo(ocultar) {
+        bitmoOculto = ocultar;
+        try {
+            if (ocultar) localStorage.setItem(preferenciaBitmo, '1');
+            else localStorage.removeItem(preferenciaBitmo);
+        } catch (e) { /* La elección se conserva en memoria si no se puede guardar. */ }
+        applyFilter();
+    }
+    cerrarBitmo.addEventListener('click', () => {
+        guardarVisibilidadBitmo(true);
+        restaurarBitmo.focus();
+    });
+    restaurarBitmo.addEventListener('click', () => {
+        guardarVisibilidadBitmo(false);
+        cerrarBitmo.focus();
+    });
+    window.addEventListener('storage', (e) => {
+        if (e.key !== preferenciaBitmo && e.key !== null) return;
+        bitmoOculto = e.key === preferenciaBitmo && e.newValue === '1';
+        applyFilter();
+    });
+
     function buildCard(tool, index) {
         const isReady = tool.status === 'ready' && tool.url;
         const card = document.createElement(isReady ? 'a' : 'div');
@@ -147,7 +219,15 @@ function initLauncher() {
             cabecera.classList.toggle('hidden', !tiene || gruposEnPantalla < 2);
         });
 
-        noResults.classList.toggle('hidden', visible > 0);
+        // El asistente pertenece a Margarita Maza. También se puede encontrar
+        // por nombre o navegador sin alterar el filtro de las tarjetas.
+        const correspondeBitmo = plataforma === BITMO.moodle && (!query ||
+            'bitmo asistente configuración montaje chrome firefox mozilla'.includes(query));
+        const mostrarBitmo = correspondeBitmo && !bitmoOculto;
+        const mostrarRestaurar = correspondeBitmo && bitmoOculto;
+        bitmo.classList.toggle('hidden', !mostrarBitmo);
+        restaurarBitmo.classList.toggle('hidden', !mostrarRestaurar);
+        noResults.classList.toggle('hidden', visible > 0 || mostrarBitmo || mostrarRestaurar);
     }
 
     searchInput.addEventListener('input', applyFilter);

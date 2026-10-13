@@ -20,6 +20,9 @@
 
     --text-main: #1d1d1f;
     --text-muted: #86868b;
+    /* Texto explicativo de la franja BitMo: conserva contraste sobre el glass. */
+    --bitmo-text-secondary: #515964;
+    --bitmo-on-accent: #ffffff;
 
     --accent: #0066cc;
     --accent-hover: #004499;
@@ -67,6 +70,8 @@
 
     --text-main: #e9e9ec;
     --text-muted: #9b9ba4;
+    --bitmo-text-secondary: #bdc4ce;
+    --bitmo-on-accent: #10263e;
 
     --accent: #4da3ff;
     --accent-hover: #7cbcff;

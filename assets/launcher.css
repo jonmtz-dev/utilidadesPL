@@ -2,6 +2,117 @@
    Launcher (cajón de apps)
    ========================================================================== */
 
+/* Asistencia de Margarita Maza. Reutiliza el glass y los botones del panel. */
+.bitmo-banner {
+    position: relative;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 500px;
+    align-items: center;
+    gap: 24px;
+    padding: 18px 24px;
+    border-radius: 24px;
+    padding-right: 56px;
+}
+
+.bitmo-cerrar {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--bitmo-text-secondary);
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    cursor: pointer;
+}
+.bitmo-cerrar:hover { background: var(--control-bg); color: var(--text-main); }
+.bitmo-cerrar:active { background: var(--control-border); }
+.bitmo-restaurar {
+    flex-shrink: 0;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid var(--control-border);
+    border-radius: 12px;
+    background: var(--control-bg);
+    color: var(--text-main);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+.bitmo-restaurar:hover { background: var(--surface-translucent); }
+.bitmo-restaurar:active { background: var(--surface-raised); }
+.bitmo-cerrar:focus-visible, .bitmo-restaurar:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+.bitmo-presentacion { display: flex; align-items: center; gap: 20px; min-width: 0; }
+.bitmo-icono {
+    display: grid;
+    place-items: center;
+    flex: 0 0 96px;
+    min-height: 104px;
+    border-radius: 22px;
+    background: var(--control-bg);
+    border: 1px solid var(--control-border);
+}
+.bitmo-icono img { display: block; width: 84px; height: 84px; object-fit: contain; }
+.bitmo-copy { max-width: 620px; min-width: 0; }
+.bitmo-etiqueta { color: var(--accent); font-size: 13px; font-weight: 650; margin-bottom: 5px; }
+.bitmo-etiqueta span { margin: 0 5px; }
+.bitmo-copy h2 { font-size: clamp(22px, 2vw, 24px); line-height: 1.2; letter-spacing: -.6px; margin-bottom: 6px; }
+.bitmo-descripcion { color: var(--text-main); font-size: 14px; line-height: 1.55; }
+.bitmo-detalle { margin-top: 6px; color: var(--bitmo-text-secondary); font-size: 12.5px; line-height: 1.55; }
+.bitmo-descargas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; min-width: 0; align-items: start; }
+.bitmo-chrome { grid-column: 1; grid-row: 1; }
+#bitmo-acceso-chrome { grid-column: 1; grid-row: 2 / 4; }
+.bitmo-firefox { grid-column: 2; grid-row: 1; }
+#bitmo-acceso-firefox { grid-column: 2; grid-row: 2; }
+.bitmo-instalacion { grid-column: 2; grid-row: 3; }
+.bitmo-boton { width: 100%; min-height: 46px; text-decoration: none; font-size: 13px; padding: 11px 12px; }
+.bitmo-boton > i { font-size: 20px; }
+.bitmo-boton .bitmo-flecha { margin-left: auto; font-size: 17px; }
+.bitmo-chrome { color: var(--bitmo-on-accent); }
+.bitmo-boton:active { transform: translateY(0); }
+.bitmo-boton:focus-visible, .bitmo-instalacion summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+.bitmo-nota { color: var(--bitmo-text-secondary); font-size: 12px; line-height: 1.55; }
+.bitmo-instalacion { font-size: 12px; color: var(--bitmo-text-secondary); }
+.bitmo-instalacion summary { cursor: pointer; width: fit-content; padding: 4px 0; color: var(--text-main); }
+.bitmo-instalacion summary:hover { color: var(--accent); }
+.bitmo-instalacion p { margin-top: 7px; line-height: 1.65; }
+
+@media (max-width: 1100px) {
+    .bitmo-banner { gap: 20px; padding: 20px 56px 20px 20px; grid-template-columns: minmax(0, 1fr) 380px; }
+    .bitmo-presentacion { gap: 16px; }
+    .bitmo-icono { flex-basis: 80px; min-height: 88px; }
+    .bitmo-icono img { width: 72px; height: 72px; }
+}
+@media (max-width: 900px) {
+    .bitmo-banner { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+    .bitmo-descargas { padding-top: 20px; border-top: 1px solid var(--control-border); }
+}
+@media (max-width: 480px) {
+    .bitmo-banner { padding: 20px; }
+    .bitmo-cerrar { width: 40px; height: 40px; }
+    .bitmo-etiqueta { padding-right: 24px; }
+    .bitmo-descargas { display: flex; flex-direction: column; gap: 9px; }
+    .bitmo-boton { font-size: 14px; padding: 12px 16px; }
+    .bitmo-nota + .bitmo-boton { margin-top: 5px; }
+    .bitmo-presentacion { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px 16px; }
+    .bitmo-icono { grid-row: 1 / 3; width: 64px; min-height: 76px; border-radius: 18px; }
+    .bitmo-icono img { width: 62px; height: 62px; }
+    .bitmo-copy { display: contents; }
+    .bitmo-etiqueta { grid-column: 2; align-self: end; margin: 0; }
+    .bitmo-copy h2 { grid-column: 2; margin: 0; font-size: 22px; }
+    .bitmo-descripcion { grid-column: 1 / -1; margin-top: 8px; }
+    .bitmo-detalle { grid-column: 1 / -1; margin-top: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .bitmo-boton { transition: none; }
+}
+
 /* ==========================================================================
    Portada: elegir plataforma
 

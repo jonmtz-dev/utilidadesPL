@@ -13,12 +13,12 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.94.0';
+const VERSION = '1.95.2';
 // Actualizar este resumen junto con VERSION en cada entrega, en lenguaje de usuario.
 const NOVEDADES = [
-    'Integrador HTML: recupera las fórmulas que algunos Word guardan como imagen con el código LaTeX en un comentario.',
-    'Las expresiones importadas conservan los delimitadores $$…$$ requeridos por Moodle 3.11.',
-    'Nuevo: QA de Cuestionarios (Moodle 3.11). Coteja el cuestionario montado contra el guion, incluidas las fechas contra los ajustes.'
+    'Integrador HTML: recupera fórmulas guardadas como imagen con LaTeX en un comentario y conserva los delimitadores $$…$$ de Moodle 3.11.',
+    'Nuevo: QA de Cuestionarios (Moodle 3.11). Coteja el cuestionario montado contra el guion, incluidas las fechas contra los ajustes.',
+    'BitMo: cierra el anuncio y el panel recuerda tu elección; puedes recuperarlo con Mostrar BitMo.'
 ];
 const CACHE = `panel-herramientas-v${VERSION}`;
 
@@ -33,6 +33,8 @@ const APP_SHELL = [
     'assets/launcher.css',
     'assets/launcher.js',
     'assets/tools.js',
+    'assets/bitmo/icon128.png',
+    'assets/bitmo/bitmo-firefox-0.5.9.xpi',
     'assets/version-moodle.js',
     'assets/volver.js',
     'assets/reparto.js',
