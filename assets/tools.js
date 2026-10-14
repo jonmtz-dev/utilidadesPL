@@ -256,7 +256,7 @@ const BITMO = {
     moodle: '5.1',
     icono: 'assets/bitmo/icon128.png',
     chrome: 'https://chromewebstore.google.com/detail/bitmo-%C2%B7-asistente-de-mont/ldoedlinlkejfcnolphchnaonppklfbd?hl=es',
-    firefox: 'assets/bitmo/bitmo-firefox-0.5.9.xpi',
-    versionFirefox: '0.5.9',
+    firefox: 'assets/bitmo/ee68241f6e0d4682bda2-0.5.10.xpi',
+    versionFirefox: '0.5.10',
     firefoxMinimo: '140'
 };

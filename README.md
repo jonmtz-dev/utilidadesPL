@@ -16,9 +16,11 @@ junto al buscador, permite recuperarla. La preferencia se guarda localmente
 Si el navegador bloquea localStorage, la elección dura esta visita.
 
 Los enlaces y la versión se mantienen en `BITMO`, al final de `assets/tools.js`.
-El archivo `assets/bitmo/bitmo-firefox-0.5.9.xpi` procede de la versión aprobada
-por Mozilla 6573568, archivo 5117704. SHA-256:
-`10ff1c9a4776b7bf482f22a8bab42c9d4004d5185d47395d21f04ea46a023764`.
+El archivo `assets/bitmo/ee68241f6e0d4682bda2-0.5.10.xpi` es el XPI descargado
+de Mozilla y colocado por el responsable del panel. Contiene la versión 0.5.10,
+las entradas de firma de Mozilla y el mismo contenido del paquete enviado
+(salvo el manifiesto procesado durante la firma). SHA-256:
+`b8544b65747aa99c41690567652fbf3365f35c08d6f4c9a9e87c66cdfdb427f9`.
 Para actualizarlo, sustituye el XPI por una versión firmada, actualiza `BITMO`
 y su ruta en `APP_SHELL` de `sw.js`, y sube `VERSION` con sus novedades. No uses
 el ZIP de desarrollo. El XPI se distribuye sin listado público en Mozilla;

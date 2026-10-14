@@ -13,12 +13,10 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.95.2';
+const VERSION = '1.95.3';
 // Actualizar este resumen junto con VERSION en cada entrega, en lenguaje de usuario.
 const NOVEDADES = [
-    'Integrador HTML: recupera fórmulas guardadas como imagen con LaTeX en un comentario y conserva los delimitadores $$…$$ de Moodle 3.11.',
-    'Nuevo: QA de Cuestionarios (Moodle 3.11). Coteja el cuestionario montado contra el guion, incluidas las fechas contra los ajustes.',
-    'BitMo: cierra el anuncio y el panel recuerda tu elección; puedes recuperarlo con Mostrar BitMo.'
+    'BitMo para Firefox: descarga la versión 0.5.10, con parámetros de revisión sincronizados desde la hoja de configuración y Tutoría como foro general.'
 ];
 const CACHE = `panel-herramientas-v${VERSION}`;
 
@@ -34,7 +32,7 @@ const APP_SHELL = [
     'assets/launcher.js',
     'assets/tools.js',
     'assets/bitmo/icon128.png',
-    'assets/bitmo/bitmo-firefox-0.5.9.xpi',
+    'assets/bitmo/ee68241f6e0d4682bda2-0.5.10.xpi',
     'assets/version-moodle.js',
     'assets/volver.js',
     'assets/reparto.js',
