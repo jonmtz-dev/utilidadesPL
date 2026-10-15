@@ -602,6 +602,41 @@ Bootstrap `ratio ratio-1x1`: un contenedor flex intermedio la alinea abajo y
 hereda los 40–130 px con que Word la dibujaba en la hoja. Así las ilustraciones
 aprovechan su columna y las proporciones distintas no desnivelan los botones.
 
+### La botonera de una fila (`<Botón>` … `<Contenido botón>`)
+
+Otra forma del mismo componente, cotejada en *01S.03 Expresar posibilidades en
+inglés*: la marca `<Crear un grupo de botones de 3 elementos…>`, debajo una
+tabla de **una sola fila** y `<Termina botonera>` al final. Cada celda es un
+botón completo: entre `<Botón>` y `<Fin botón>` va la **cara** y después de
+`<Contenido botón>` lo que se despliega (con sus viñetas, negritas y cursivas,
+porque se lee por párrafos y no aplanado).
+
+La cara decide el «Se ve como»: solo imagen → **Imagen** (la imagen es el
+disparador, al 75 %); imagen y rótulo → **Imagen + botón**; solo rótulo →
+**Botón** (el rótulo en dos idiomas conserva su salto como `<br>`). Columnas =
+número de celdas.
+
+Por qué hizo falta: con una fila no pasa por el asistente, y caía en la regla
+de «tabla de una fila = barra de título», así que los tres botones salían
+amontonados en un título. Se exige la forma completa en **todas** las celdas
+con contenido para no confundirla con una tabla que solo mencione «botón». Lo
+que el usuario decida en el asistente sigue mandando.
+
+### Dónde empieza el contenido: barra o `<h1>`
+
+`inicioDelContenido()` salta las fichas de control. Antes solo buscaba la barra
+(primera tabla de una celda con texto); en un guion **sin** barra, esa tabla
+era la caja de «Nota» del final y la página arrancaba ahí: de 38 elementos se
+leían 7. Ahora gana lo que salga primero, la barra o la marca `<h1>` (que llega
+como `**<h1>**`, con las negritas del Word). Y si entre `<h1>` y el título se
+cuela una indicación al alumno («Haz clic en las palabras color púrpura…»),
+esa sale como texto y la marca sigue esperando al título de verdad.
+
+En la previa, un disparador `<a href="#id">` (caras Imagen y Texto resaltado)
+**cancela la liga** igual que Bootstrap: dentro de un `srcdoc` el `#id` se
+resolvía contra la dirección de la herramienta y el clic cargaba la
+herramienta entera dentro de la previa.
+
 ### Dos clases del aula que la copia de la hoja no trae
 
 `flecha_btn` y `texto-titulo` **no están** en `hoja-moodle-default.js`. En Moodle
@@ -771,12 +806,13 @@ que hay que publicar:
 
 | Marca en el Word | Qué hace la herramienta |
 |---|---|
-| `<h1>` | El título de la página |
+| `<h1>` | El título de la página. También marca **dónde empieza** el contenido en los guiones sin barra sombreada (ver abajo) |
 | `<Texto regular en negritas con ícono de interactividad a la izquierda>` … `<Termina …>` | Caja de instrucción amarilla con lo que va en medio |
 | `<Lista numerada; son las instrucciones>` … `<Termina …>` | **Abre la caja de pasos** (ver abajo): los párrafos numerados son los pasos y lo indentado cuelga del paso |
 | `<Texto regular centrado>` … `<Termina …>` | Párrafos centrados (`<p class="text-center">`), respetando las negritas del Word |
 | `<Figura>` / `<Termina figura>` | Bloque de imagen vacío, listo para poner el archivo |
 | `<Crear un grupo de 5 botones…>` | Bloque de tarjetas con esas 5 ventanas |
+| `<Crear un grupo de botones de N elementos…>` + tabla de **una fila** con `<Botón>` … `<Fin botón>` `<Contenido botón>` … en cada celda, hasta `<Termina botonera>` | **Botón desplegable**, un botón por celda (ver abajo). Las dos marcas no se publican |
 | `<Tabla>` | Se queda esperando: si abajo viene una tabla de verdad, **es esa** (antes salían las dos, la vacía y la real). Si nunca llega, queda la tabla vacía con la nota |
 | `<Pop-up>`, `<Video>` | El bloque correspondiente, vacío |
 | Cualquier otra | Se guarda como indicación, no se publica |

@@ -244,6 +244,10 @@ document.addEventListener('click', function (e) {
            href en vez de data-bs-target — así están publicados los botones
            desplegables con imagen y con texto resaltado. Sin esta caída, en la
            previa no abrían: el atributo venía null. */
+        /* Y como Bootstrap, se cancela la liga: en un srcdoc el "#id" se
+           resuelve contra la dirección de la herramienta y el clic cargaba
+           la herramienta entera DENTRO de la previa. */
+        if (b.tagName === 'A') e.preventDefault();
         var destino = b.getAttribute('data-bs-target') || b.getAttribute('href');
         var panel = destino && /^#/.test(destino) ? document.querySelector(destino) : null;
         if (!panel) return;
@@ -2826,11 +2830,20 @@ document.addEventListener('click', function (e) {
      * publicable arranca en el TÍTULO, que en estos guiones es la primera tabla
      * de una sola celda con texto (la barra sombreada) o, si no hay, el primer
      * párrafo con texto tras las fichas. Igual que en el Integrador HTML.
+     *
+     * Los guiones sin barra anuncian el título con una marca `<h1>` suelta, y
+     * gana la que salga primero. Antes solo se buscaba la barra, y en un guion
+     * sin ella la primera tabla de una celda era la caja de "Nota" del final:
+     * la página arrancaba ahí y se perdía todo lo de arriba.
      */
     function inicioDelContenido(bloques) {
         const barra = bloques.findIndex(b =>
             b.tipo === 'tabla' && b.celdas === 1 && (b.texto || '').trim());
-        if (barra >= 0) return barra;
+        const marcaH1 = bloques.findIndex(b =>
+            // El texto llega con las negritas del Word: `**<h1>**`.
+            b.tipo !== 'tabla' && /^<\s*h1\s*>$/i.test((b.texto || '').replace(/\*/g, '').trim()));
+        const candidatos = [barra, marcaH1].filter(i => i >= 0);
+        if (candidatos.length) return Math.min(...candidatos);
         const ficha = bloques.findIndex(b => b.tipo !== 'tabla' && (b.texto || '').trim());
         return ficha > 0 ? ficha : 0;
     }
@@ -3640,6 +3653,66 @@ document.addEventListener('click', function (e) {
     }
 
     /**
+     * La botonera de UNA fila: cada celda es un botón desplegable completo.
+     *
+     *   <Botón>  (imagen, o el rótulo en una o dos líneas)  <Fin botón>
+     *   <Contenido botón>  lo que se despliega
+     *
+     * Viene anunciada con `<Crear un grupo de botones de N elementos…>` y se
+     * cierra con `<Termina botonera>`. Como tiene una sola fila no pasa por el
+     * asistente, y antes caía en la regla de "tabla de una fila = barra de
+     * título": los tres botones salían amontonados en un título.
+     *
+     * La cara decide cómo se ve: solo imagen → la imagen es el disparador;
+     * imagen y rótulo → imagen arriba y botón debajo; solo rótulo → botón.
+     * Se exige la forma completa en TODAS las celdas con contenido, para no
+     * confundirla con una tabla cualquiera que mencione la palabra "botón".
+     */
+    const ES_MARCA_BOTON = /^[<«]\s*bot[oó]n\s*[>»]$/i;
+    const ES_FIN_BOTON = /^[<«]\s*fin\s+bot[oó]n\s*[>»]$/i;
+    const ES_CONTENIDO_BOTON = /^[<«]\s*contenido\s+bot[oó]n\s*[>»]$/i;
+
+    function botoneraDeTabla(crudo, sueltas) {
+        const celdas = (crudo.filas || []).flat().filter(c => (c.texto || '').trim() ||
+            (c.contenido || []).some(p => (p.imagenes || []).length));
+        if (!celdas.length) return null;
+        const items = celdas.map(c => desplegableDeCelda(c, sueltas));
+        if (!items.every(Boolean)) return null;
+        const conImagen = items.every(it => it.img);
+        const conRotulo = items.every(it => it.etiqueta);
+        const estilo = conImagen ? (conRotulo ? 'imagen-boton' : 'imagen') : 'boton';
+        return Object.assign(crearBloque('desplegable', false), {
+            estilo,
+            cuantas: String(Math.min(6, Math.max(2, items.length))),
+            ancho: estilo === 'imagen' ? '75' : '100',
+            panel: 'blanco', tamano: 'normal', flecha: true, items
+        });
+    }
+
+    function desplegableDeCelda(celda, sueltas) {
+        const piezas = (celda.contenido || []).filter(p => p.tipo !== 'tabla');
+        const limpio = p => String(p.texto || '').replace(/\*/g, '').trim();
+        const fin = piezas.findIndex(p => ES_FIN_BOTON.test(limpio(p)));
+        const contenido = piezas.findIndex((p, i) => i > fin && ES_CONTENIDO_BOTON.test(limpio(p)));
+        if (fin < 0 || contenido < 0) return null;
+
+        const cara = piezas.slice(0, fin).filter(p => !ES_MARCA_BOTON.test(limpio(p)));
+        // Sin negritas: el botón ya tiene su peso; un rótulo en dos idiomas
+        // ("Affirmative form / Forma afirmativa") conserva su salto.
+        const etiqueta = cara.map(p => sinMarcas(String(p.texto || '').replace(/\*/g, '')))
+            .filter(Boolean).join('\n');
+        const conImg = cara.find(p => (p.imagenes || []).length);
+        const img = conImg ? srcDeMontaje(conImg.imagenes[0], conImg.comentarios) : '';
+
+        const cuerpo = piezas.slice(contenido + 1)
+            .filter(p => String(p.texto || '').trim() || (p.imagenes || []).length);
+        if ((!etiqueta && !img) || !cuerpo.length) return null;
+        const hijos = bloquesDesdeLineas(cuerpo, sueltas);
+        asignarIds(hijos);
+        return { titulo: '', img, alt: '', etiqueta, color: 'primary', hijos };
+    }
+
+    /**
      * Arma la página con lo que se leyó del Word.
      *
      * Lo que hace que esto no sea un recorrido plano son las REGIONES que el
@@ -3745,6 +3818,15 @@ document.addEventListener('click', function (e) {
             if (crudo.tipo === 'tabla') {
                 const decision = decisiones.get(i);
                 if (decision === 'omitir') { tablaPendiente = null; tituloTabla = ''; return; }
+                // La botonera de una fila (`<Botón>…<Contenido botón>`). Lo que
+                // el usuario decidió en el asistente manda; esta no se pregunta.
+                const botonera = decision ? null : botoneraDeTabla(crudo, sueltas);
+                if (botonera) {
+                    vaciarSueltos();
+                    tablaPendiente = null; tituloTabla = '';
+                    empujarDestino(botonera);
+                    return;
+                }
                 // Tabla de una sola celda = barra de título del guion. Un título
                 // nuevo cierra la caja de pasos: ya empezó otra sección.
                 if (crudo.celdas === 1 || (crudo.filas || []).length < 2) {
@@ -3810,6 +3892,17 @@ document.addEventListener('click', function (e) {
                     tituloPendiente = termina ? null : clave;
                     return;
                 }
+                /* `<Crear un grupo de botones…>` justo antes de una botonera de
+                   una fila solo la anuncia: la tabla de abajo ya trae los
+                   botones. Y `<Termina botonera>` la cierra; no hay nada que
+                   publicar de ninguna de las dos. */
+                if (/termina\s+botonera/.test(clave)) { vaciarSueltos(); return; }
+                const siguiente = propuesta.bloques[i + 1];
+                if (/grupo de\b.*\bbot/.test(clave) && siguiente && siguiente.tipo === 'tabla' &&
+                    !decisiones.get(i + 1) && botoneraDeTabla(siguiente, [])) {
+                    vaciarSueltos();
+                    return;
+                }
                 if (/^tabla\b/.test(clave)) {   // <Tabla>: la de verdad viene abajo
                     vaciarSueltos();
                     tablaPendiente = m[1];
@@ -3832,8 +3925,12 @@ document.addEventListener('click', function (e) {
 
             /* El párrafo que sigue a un `<h1>`/`<h2>`. Si la barra ya dio el
                título de la página, un `<h1>` posterior es un título de sección:
-               por eso baja a `h2` en vez de pelearse con el de arriba. */
-            if (tituloPendiente && !crudo.lista) {
+               por eso baja a `h2` en vez de pelearse con el de arriba.
+               Una indicación al alumno ("Haz clic en las palabras color
+               púrpura…") a veces se cuela entre la marca y el título: esa no
+               es el título, sale como texto y la marca sigue esperando. */
+            const esIndicacionAlAlumno = /^(haz|da|d[eé])\s+clic\b/i.test(sinMarcas(texto).replace(/\*/g, '').trim());
+            if (tituloPendiente && !crudo.lista && !esIndicacionAlAlumno) {
                 const nivel = tituloPendiente;
                 tituloPendiente = null;
                 const limpio = sinMarcas(texto);

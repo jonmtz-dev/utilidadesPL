@@ -13,9 +13,10 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.95.3';
+const VERSION = '1.95.4';
 // Actualizar este resumen junto con VERSION en cada entrega, en lenguaje de usuario.
 const NOVEDADES = [
+    'Guion a Página: ahora lee completos los guiones que no traen barra de título, y los grupos de botones de una sola fila salen como botones desplegables.',
     'BitMo para Firefox: descarga la versión 0.5.10, con parámetros de revisión sincronizados desde la hoja de configuración y Tutoría como foro general.'
 ];
 const CACHE = `panel-herramientas-v${VERSION}`;
