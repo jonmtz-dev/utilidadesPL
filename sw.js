@@ -13,11 +13,10 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.95.4';
+const VERSION = '1.95.5';
 // Actualizar este resumen junto con VERSION en cada entrega, en lenguaje de usuario.
 const NOVEDADES = [
-    'Guion a Página: ahora lee completos los guiones que no traen barra de título, y los grupos de botones de una sola fila salen como botones desplegables.',
-    'BitMo para Firefox: descarga la versión 0.5.10, con parámetros de revisión sincronizados desde la hoja de configuración y Tutoría como foro general.'
+    'BitMo para Firefox: descarga la versión 0.5.11, que corrige la alerta incorrecta cuando Moodle muestra el límite del sitio de 20 MB.'
 ];
 const CACHE = `panel-herramientas-v${VERSION}`;
 
@@ -33,7 +32,7 @@ const APP_SHELL = [
     'assets/launcher.js',
     'assets/tools.js',
     'assets/bitmo/icon128.png',
-    'assets/bitmo/ee68241f6e0d4682bda2-0.5.10.xpi',
+    'assets/bitmo/ee68241f6e0d4682bda2-0.5.11.xpi',
     'assets/version-moodle.js',
     'assets/volver.js',
     'assets/reparto.js',
