@@ -13,10 +13,10 @@
    app sigue abriendo sin conexión.
    ========================================================================== */
 
-const VERSION = '1.95.5';
+const VERSION = '1.95.6';
 // Actualizar este resumen junto con VERSION en cada entrega, en lenguaje de usuario.
 const NOVEDADES = [
-    'BitMo para Firefox: descarga la versión 0.5.11, que corrige la alerta incorrecta cuando Moodle muestra el límite del sitio de 20 MB.'
+    'QA 3.11 y Adaptador de Rúbricas: ahora reconocen los puntajes en filas separadas aunque el Word no tenga combinado el nombre del criterio. Un aviso indica los criterios interpretados así para revisarlos; se conservan los formatos anteriores.'
 ];
 const CACHE = `panel-herramientas-v${VERSION}`;
 

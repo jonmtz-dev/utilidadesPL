@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
             el.addEventListener('click', () => {
                 filasContainer.querySelectorAll('.fila-opcion').forEach(x => x.classList.remove('activa'));
                 el.classList.add('activa');
-                matriz = analizarRubrica(estructura, parseInt(el.dataset.index, 10));
+                matriz = analizarRubrica(estructura, parseInt(el.dataset.index, 10), { filasPuntosSinCombinar: true });
                 pintarPreview();
                 activarTab('preview');
             });
@@ -217,6 +217,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalDetectado = matriz.criterios.find(c => c.esTotal);
 
         const avisos = [];
+        const avisoLectura = avisoDeLecturaRubrica(matriz);
+        if (avisoLectura) {
+            avisos.push(`<div class="aviso aviso-warn" role="status"><i class="ph ph-warning" aria-hidden="true"></i>
+                <span><strong>Revisa la lectura del Word.</strong> ${escapar(avisoLectura)}</span></div>`);
+        }
         if (totalDetectado) {
             avisos.push(`<div class="aviso aviso-info"><i class="ph ph-info"></i>
                 <span>Se detectó una fila <strong>"${escapar(totalDetectado.nombre)}"</strong> y se

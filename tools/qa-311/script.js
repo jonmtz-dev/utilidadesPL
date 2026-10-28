@@ -119,7 +119,7 @@
                 (b.filas[0] ? b.filas[0].celdas.length : 0) - (a.filas[0] ? a.filas[0].celdas.length : 0))[0];
             const estructura = { filas: tabla.filas };
             const cabecera = filaDeNiveles(estructura);
-            datos.rubrica = analizarRubrica(estructura, cabecera);
+            datos.rubrica = analizarRubrica(estructura, cabecera, { filasPuntosSinCombinar: true });
             datos.rubrica.filaCabecera = cabecera;
 
             /* El nombre del nivel va ANTEPUESTO en el primer criterio:
@@ -259,11 +259,13 @@
         if (datos.rubrica) {
             const r = datos.rubrica;
             const cuenta = r.criterios.filter(c => c.incluir).length;
+            const avisoLectura = avisoDeLecturaRubrica(r);
             partes.push(`
                 <div class="resumen-bloque">
                     <h3><span class="resumen-titulo"><i class="ph ph-list-checks"></i> Rúbrica</span>
                         <button class="btn-quitar" type="button" data-quitar="rubrica"
                                 title="Quitar la rúbrica"><i class="ph ph-x"></i></button></h3>
+                    ${avisoLectura ? `<p class="check-nota" role="status"><strong><i class="ph ph-warning" aria-hidden="true"></i> Revisa la lectura del Word.</strong> ${escapar(avisoLectura)}</p>` : ''}
                     <div class="resumen-dato"><span>Archivo</span><span><code>${escapar(archivos.rubrica)}</code></span></div>
                     <div class="resumen-dato"><span>Niveles</span><span>${escapar(r.niveles.join(' · '))}</span></div>
                     <div class="resumen-dato"><span>Criterios por cotejar</span><span>${cuenta}</span></div>

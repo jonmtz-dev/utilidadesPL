@@ -98,8 +98,11 @@ function tablaHtmlAEstructura(tabla) {
 /**
  * A partir de la estructura neutral arma la matriz criterio x nivel.
  * Devuelve { niveles, criterios: [{ nombre, esTotal, incluir, celdas:[{texto,puntos}] }] }
+ * `filasPuntosSinCombinar` admite además una fila de puntos inmediatamente
+ * después del criterio, con la primera celda vacía y sin combinación vertical.
+ * Es opcional para conservar el contrato de los consumidores existentes.
  */
-function analizarRubrica(estructura, headerIndex) {
+function analizarRubrica(estructura, headerIndex, { filasPuntosSinCombinar = false } = {}) {
     const filas = estructura.filas;
     const header = filas[headerIndex];
     if (!header) return null;
@@ -108,11 +111,32 @@ function analizarRubrica(estructura, headerIndex) {
 
     // Agrupar filas por criterio: una fila con vMergeSigue pertenece al criterio de arriba.
     const grupos = [];
+    const filasPuntosAsociadas = [];
     filas.slice(headerIndex + 1).forEach(fila => {
         const primera = fila.celdas[0] || { texto: '', vMergeSigue: false };
         if (primera.vMergeSigue && grupos.length) {
             grupos[grupos.length - 1].filas.push(fila);
         } else {
+            const anterior = grupos[grupos.length - 1];
+            const puntos = fila.celdas.slice(1);
+            // Algunos Word separan texto y puntos sin combinar el nombre del
+            // criterio. Solo asociamos la fila inmediata, alineada y numérica;
+            // nunca otro criterio, un total o una segunda fila de puntajes.
+            const esContinuacionDePuntos = filasPuntosSinCombinar
+                && !(primera.texto || '').trim() && !primera.vMergeInicio
+                && anterior && anterior.nombre && anterior.filas.length === 1
+                && !/^total(es)?$/.test(normalizarNombre(anterior.nombre))
+                && fila.celdas.length === header.celdas.length
+                && anterior.filas[0].celdas.length === header.celdas.length
+                && puntos.some(c => RE_SOLO_PUNTOS.test(c.texto || ''))
+                && puntos.every(c => !(c.texto || '').trim() || RE_SOLO_PUNTOS.test(c.texto))
+                && anterior.filas[0].celdas.slice(1).some(c => (c.texto || '').trim())
+                && anterior.filas[0].celdas.slice(1).every(c => !RE_PUNTOS_AL_FINAL.test(c.texto || ''));
+            if (esContinuacionDePuntos) {
+                anterior.filas.push(fila);
+                filasPuntosAsociadas.push(anterior.nombre);
+                return;
+            }
             grupos.push({ nombre: (primera.texto || '').replace(/\s+/g, ' ').trim(), filas: [fila] });
         }
     });
@@ -144,5 +168,14 @@ function analizarRubrica(estructura, headerIndex) {
         return { nombre: grupo.nombre, esTotal, incluir: !esTotal && !!grupo.nombre, celdas };
     }).filter(c => c.nombre || c.celdas.some(x => x.texto));
 
-    return { niveles, criterios };
+    return { niveles, criterios, ...(filasPuntosSinCombinar ? { filasPuntosAsociadas } : {}) };
+}
+
+/** Aviso de importación común al Adaptador y al QA; no es un error de Moodle. */
+function avisoDeLecturaRubrica(matriz) {
+    const nombres = matriz.filasPuntosAsociadas || [];
+    return nombres.length
+        ? 'Se encontraron puntajes en filas separadas sin combinar; se asociaron al criterio anterior en: '
+            + nombres.join(', ') + '. Revisa estos puntajes contra el Word antes de continuar.'
+        : '';
 }
