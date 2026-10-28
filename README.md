@@ -549,6 +549,19 @@ Es **opcional a propósito**: quien genera HTML (Guion Instruccional a Página)
 quiere la lista como estructura, no un `• ` literal metido en el párrafo. Solo
 `leerTablasDeDocx()` —que usa la rúbrica— pide las viñetas.
 
+**También hay rúbricas con filas de puntos sin celdas combinadas.** El Adaptador
+y el QA 3.11 activan `analizarRubrica(..., { filasPuntosSinCombinar: true })`:
+si inmediatamente debajo del criterio hay una fila con el nombre vacío, las
+mismas columnas y solo puntajes (o celdas vacías), se asocia a ese criterio.
+No se asocia a «Total», a un criterio que ya tiene puntos ni a través de filas
+intermedias. Un puntaje vacío sigue vacío: nunca se inventa un cero.
+La lectura con `vMerge` y los puntos al final del texto se conserva; la opción
+está apagada por omisión en el lector compartido. Regresión sin dependencias:
+`node --test pruebas/rubricas.test.cjs`.
+Ambas herramientas muestran un aviso persistente de lectura con los criterios
+asociados (`filasPuntosAsociadas`), para cotejarlos contra el Word. Ese aviso no
+se cuenta como un fallo del montaje en Moodle.
+
 ### Guion Instruccional a Página (`tools/guion-a-pagina/`)
 
 Los guiones llegan en Word y hay que montarlos como recurso **Página** de 5.1.
